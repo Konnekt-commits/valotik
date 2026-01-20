@@ -448,9 +448,9 @@ const D3ECollectionApp = () => {
         const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/case-files');
         if (response.ok) {
           const result = await response.json();
-          if (result.success && result.data) {
+          if (result.success && result.data?.caseFiles) {
             // Transformer les données de l'API vers le format attendu par l'interface
-            const transformedCaseFiles = result.data.map((cf: any) => ({
+            const transformedCaseFiles = result.data.caseFiles.map((cf: any) => ({
               id: cf.id,
               reference: cf.reference,
               client: cf.request?.client?.raisonSociale || 'Client inconnu',
