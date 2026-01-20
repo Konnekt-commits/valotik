@@ -487,7 +487,7 @@
         async function loadWarehouseData() {
             try {
                 console.log('Chargement des donnees de l\'entrepot...');
-                const response = await fetch('http://localhost:5000/api/case-files?limit=100&includeInventory=true');
+                const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/case-files?limit=100&includeInventory=true');
                 const data = await response.json();
 
                 if (!data.success) {

@@ -351,7 +351,7 @@ const D3ECollectionApp = () => {
           dateFin: dateFin.toISOString(),
         });
 
-        const response = await fetch(`http://localhost:8002/api/sales/stats?${params}`);
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/sales/stats?${params}`);
         if (response.ok) {
           const data = await response.json();
           setSalesStats(data.data);
@@ -420,7 +420,7 @@ const D3ECollectionApp = () => {
           dateFin: dateFin.toISOString(),
         });
 
-        const response = await fetch(`http://localhost:8002/api/sales/case-files?${params}`);
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/sales/case-files?${params}`);
         if (response.ok) {
           const data = await response.json();
           setSalesCaseFiles(data.data || []);
@@ -445,7 +445,7 @@ const D3ECollectionApp = () => {
 
       setIsLoadingCaseFiles(true);
       try {
-        const response = await fetch('http://localhost:8002/api/case-files');
+        const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/case-files');
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data) {
@@ -537,7 +537,7 @@ const D3ECollectionApp = () => {
           dateFin: dateFin.toISOString(),
         });
 
-        const response = await fetch(`http://localhost:8002/api/sales?${params}`);
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/sales?${params}`);
         if (response.ok) {
           const data = await response.json();
           setCaseFileSales(data.data.sales || []);
@@ -561,8 +561,8 @@ const D3ECollectionApp = () => {
       try {
         // Charger les utilisateurs et les stats en parallèle
         const [usersResponse, statsResponse] = await Promise.all([
-          fetch('http://localhost:8002/api/users'),
-          fetch('http://localhost:8002/api/users/statistics')
+          fetch('https://valotik-api-546691893264.europe-west1.run.app/api/users'),
+          fetch('https://valotik-api-546691893264.europe-west1.run.app/api/users/statistics')
         ]);
 
         if (usersResponse.ok) {
@@ -637,7 +637,7 @@ const D3ECollectionApp = () => {
     try {
       setIsLoadingDetails(true);
 
-      const response = await fetch(`http://localhost:8002/api/case-files/${caseFileId}`);
+      const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/case-files/${caseFileId}`);
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -1234,7 +1234,7 @@ Catégories disponibles:
       try {
         setIsLoadingCaseFiles(true);
         // Demander tous les dossiers avec leur inventaire
-        const response = await fetch('http://localhost:8002/api/case-files?limit=100&includeInventory=true');
+        const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/case-files?limit=100&includeInventory=true');
         const result = await response.json();
 
         if (result.success && result.data.caseFiles) {
@@ -1307,7 +1307,7 @@ Catégories disponibles:
     const loadCategories = async () => {
       try {
         setIsLoadingCategories(true);
-        const response = await fetch('http://localhost:8002/api/categories');
+        const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/categories');
         const result = await response.json();
 
         if (result.success && result.data) {
@@ -1396,7 +1396,7 @@ Catégories disponibles:
 
       try {
         setIsLoadingUsers(true);
-        const response = await fetch(`http://localhost:8002/api/case-files/${selectedCaseFile}/users`);
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/case-files/${selectedCaseFile}/users`);
         const result = await response.json();
 
         if (result.success && result.data) {
@@ -4988,7 +4988,7 @@ Catégories disponibles:
       e.preventDefault();
 
       try {
-        const response = await fetch(`http://localhost:8002/api/quotations/${quotation.id}/lines`, {
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/quotations/${quotation.id}/lines`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -5027,7 +5027,7 @@ Catégories disponibles:
       if (!editingLineId) return;
 
       try {
-        const response = await fetch(`http://localhost:8002/api/quotations/${quotation.id}/lines/${editingLineId}`, {
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/quotations/${quotation.id}/lines/${editingLineId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -5071,7 +5071,7 @@ Catégories disponibles:
       }
 
       try {
-        const response = await fetch(`http://localhost:8002/api/quotations/${quotation.id}/lines/${lineId}`, {
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/quotations/${quotation.id}/lines/${lineId}`, {
           method: 'DELETE',
         });
 
@@ -5106,7 +5106,7 @@ Catégories disponibles:
       if (!selectedCaseFile) return;
 
       try {
-        const response = await fetch(`http://localhost:8002/api/case-files/${selectedCaseFile}`);
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/case-files/${selectedCaseFile}`);
         const result = await response.json();
 
         if (result.success && result.data) {
@@ -6255,7 +6255,7 @@ Catégories disponibles:
       formData.append('file', files[0]);
 
       try {
-        const response = await fetch(`http://localhost:8002/api/case-files/${selectedCaseFile}/documents`, {
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/case-files/${selectedCaseFile}/documents`, {
           method: 'POST',
           body: formData,
         });
@@ -6282,13 +6282,13 @@ Catégories disponibles:
 
     // Fonction pour visualiser un document
     const handleViewDocument = (doc: any) => {
-      window.open(`http://localhost:8002${doc.url}`, '_blank');
+      window.open(`https://valotik-api-546691893264.europe-west1.run.app${doc.url}`, '_blank');
     };
 
     // Fonction pour télécharger un document
     const handleDownloadDocument = (doc: any) => {
       const link = document.createElement('a');
-      link.href = `http://localhost:8002${doc.url}`;
+      link.href = `https://valotik-api-546691893264.europe-west1.run.app${doc.url}`;
       link.download = doc.nomFichier;
       document.body.appendChild(link);
       link.click();
@@ -6300,7 +6300,7 @@ Catégories disponibles:
       if (!confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) return;
 
       try {
-        const response = await fetch(`http://localhost:8002/api/documents/${docId}`, {
+        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/documents/${docId}`, {
           method: 'DELETE',
         });
 
@@ -6453,7 +6453,7 @@ Catégories disponibles:
                   >
                     <div className="relative overflow-hidden">
                       <img
-                        src={photo.url.startsWith('http') ? photo.url : `http://localhost:8002${photo.url}`}
+                        src={photo.url.startsWith('http') ? photo.url : `https://valotik-api-546691893264.europe-west1.run.app${photo.url}`}
                         alt={photo.nomFichier}
                         className="w-full h-auto object-cover group-hover:scale-110 transition-transform duration-300"
                       />
@@ -6467,7 +6467,7 @@ Catégories disponibles:
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const imageUrl = photo.url.startsWith('http') ? photo.url : `http://localhost:8002${photo.url}`;
+                              const imageUrl = photo.url.startsWith('http') ? photo.url : `https://valotik-api-546691893264.europe-west1.run.app${photo.url}`;
                               openAIRecognitionWithImage(imageUrl);
                             }}
                             className="p-2 bg-gradient-to-r from-purple-500 to-indigo-500 backdrop-blur-sm hover:from-purple-600 hover:to-indigo-600 rounded-lg transition-all shadow-lg shadow-purple-500/30"
@@ -7154,13 +7154,13 @@ Catégories disponibles:
                           <div
                             key={photo.id}
                             onClick={() => {
-                              const imageUrl = photo.url.startsWith('http') ? photo.url : `http://localhost:8002${photo.url}`;
+                              const imageUrl = photo.url.startsWith('http') ? photo.url : `https://valotik-api-546691893264.europe-west1.run.app${photo.url}`;
                               setSelectedImageForAI(imageUrl);
                             }}
                             className={`relative overflow-hidden rounded-xl cursor-pointer group ${border('border-slate-700', 'border-gray-200')} border-2 hover:border-purple-500 transition-all shadow-lg hover:shadow-2xl hover:shadow-purple-500/30`}
                           >
                             <img
-                              src={photo.url.startsWith('http') ? photo.url : `http://localhost:8002${photo.url}`}
+                              src={photo.url.startsWith('http') ? photo.url : `https://valotik-api-546691893264.europe-west1.run.app${photo.url}`}
                               alt={photo.nomFichier}
                               className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-500"
                             />
@@ -8402,7 +8402,7 @@ Catégories disponibles:
                     type="button"
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:8002/api/components/${selectedComponent.id}`, {
+                        const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/components/${selectedComponent.id}`, {
                           method: 'PUT',
                           headers: {
                             'Content-Type': 'application/json',
@@ -8991,12 +8991,12 @@ Catégories disponibles:
                                     onClick={async () => {
                                       if (confirm(`Êtes-vous sûr de vouloir supprimer ${user.nom} ?`)) {
                                         try {
-                                          const response = await fetch(`http://localhost:8002/api/users/${user.id}`, {
+                                          const response = await fetch(`https://valotik-api-546691893264.europe-west1.run.app/api/users/${user.id}`, {
                                             method: 'DELETE',
                                           });
                                           if (response.ok) {
                                             // Recharger la liste
-                                            const usersResponse = await fetch('http://localhost:8002/api/users');
+                                            const usersResponse = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/users');
                                             if (usersResponse.ok) {
                                               const usersData = await usersResponse.json();
                                               setHrPersonnel(usersData.data.users || []);
@@ -9123,8 +9123,8 @@ Catégories disponibles:
                     e.preventDefault();
                     try {
                       const url = editingUser
-                        ? `http://localhost:8002/api/users/${editingUser.id}`
-                        : 'http://localhost:8002/api/users';
+                        ? `https://valotik-api-546691893264.europe-west1.run.app/api/users/${editingUser.id}`
+                        : 'https://valotik-api-546691893264.europe-west1.run.app/api/users';
 
                       const method = editingUser ? 'PUT' : 'POST';
 
@@ -9136,8 +9136,8 @@ Catégories disponibles:
 
                       if (response.ok) {
                         const [usersResponse, statsResponse] = await Promise.all([
-                          fetch('http://localhost:8002/api/users'),
-                          fetch('http://localhost:8002/api/users/statistics')
+                          fetch('https://valotik-api-546691893264.europe-west1.run.app/api/users'),
+                          fetch('https://valotik-api-546691893264.europe-west1.run.app/api/users/statistics')
                         ]);
 
                         if (usersResponse.ok) {

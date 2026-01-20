@@ -15,7 +15,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const API_URL = 'http://localhost:8002/api/insertion';
+const API_URL = 'https://valotik-api-546691893264.europe-west1.run.app/api/insertion';
 
 // Types complets
 interface InsertionEmployee {
@@ -225,7 +225,7 @@ export default function RHInsertionApp() {
   }, [activeTab, selectedEmployee?.id, parcoursData, loadParcours]);
 
   // OBJECTIFS
-  const OBJECTIF_API = 'http://localhost:8002/api/objectifs';
+  const OBJECTIF_API = 'https://valotik-api-546691893264.europe-west1.run.app/api/objectifs';
 
   const loadObjectifConfig = useCallback(async () => {
     try {
@@ -317,7 +317,7 @@ export default function RHInsertionApp() {
   };
 
   // ORGANISME
-  const ORGANISME_API = 'http://localhost:8002/api/organisme';
+  const ORGANISME_API = 'https://valotik-api-546691893264.europe-west1.run.app/api/organisme';
 
   const loadOrganisme = useCallback(async () => {
     setOrganismeLoading(true);
@@ -503,7 +503,7 @@ export default function RHInsertionApp() {
   }, [activeTab, selectedEmployee?.id, loadObjectifsIndividuels]);
 
   // POINTAGES
-  const POINTAGE_API = 'http://localhost:8002/api/pointage';
+  const POINTAGE_API = 'https://valotik-api-546691893264.europe-west1.run.app/api/pointage';
 
   const loadPointages = useCallback(async () => {
     setPointagesLoading(true);

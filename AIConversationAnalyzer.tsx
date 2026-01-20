@@ -210,7 +210,7 @@ Réponds uniquement avec ce JSON (sans markdown) :
 }`;
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/analyze-conversation', {
+      const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/ai/analyze-conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -240,7 +240,7 @@ Réponds uniquement avec ce JSON (sans markdown) :
     setIsSaving(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/create-pickup-from-conversation', {
+      const response = await fetch('https://valotik-api-546691893264.europe-west1.run.app/api/ai/create-pickup-from-conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
