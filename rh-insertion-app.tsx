@@ -3375,20 +3375,28 @@ Cette attestation est délivrée pour servir et valoir ce que de droit.`;
                             <span className="text-xs font-medium">{Math.round(pointage.heuresContrat)}h</span>
                           </td>
                           {/* Jours */}
-                          {pointagesData.joursMois.map((j: any) => {
+                          {pointagesData.joursMois.map((j: any, jourIndex: number) => {
                             const heures = pointageValues[emp.id]?.[j.date] || 0;
+                            const empIndex = pointagesData.pointages.findIndex((pt: any) => pt.employee.id === emp.id);
+                            // TabIndex vertical: colonne par colonne (jour d'abord, puis employé)
+                            const tabIdx = jourIndex * pointagesData.pointages.length + empIndex + 1;
                             return (
                               <td key={j.date} className={`px-0 py-1 text-center ${j.estWeekend ? bg('bg-slate-700/30', 'bg-gray-100') : ''}`}>
                                 {j.estWeekend ? (
                                   <span className="text-xs text-slate-500">-</span>
                                 ) : isEditing ? (
                                   <input
-                                    type="number"
-                                    step="0.5"
-                                    min="0"
-                                    max="12"
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="[0-9]*\.?[0-9]*"
+                                    tabIndex={tabIdx}
                                     value={heures || ''}
-                                    onChange={(e) => handlePointageChange(emp.id, j.date, e.target.value)}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                        handlePointageChange(emp.id, j.date, val);
+                                      }
+                                    }}
                                     onBlur={() => handlePointageBlur(emp.id, pointage.id, j.date)}
                                     className={`w-10 px-1 py-0.5 text-center text-xs rounded ${bg('bg-slate-600 text-white', 'bg-gray-100 text-gray-900')} border-0 focus:ring-1 focus:ring-blue-500`}
                                   />
