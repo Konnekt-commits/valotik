@@ -21,24 +21,8 @@ app.use(compression());
 app.use(morgan('dev'));
 
 // CORS - Autoriser les requêtes depuis le frontend
-const allowedOrigins = [
-  'http://localhost:8001',
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:3002',
-  'http://localhost:5173',
-  'http://localhost:5174',
-];
-
 app.use(cors({
-  origin: (origin, callback) => {
-    // Autoriser les requêtes sans origine (comme les requêtes Postman) ou depuis les origines autorisées
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true,
   credentials: true,
 }));
 
