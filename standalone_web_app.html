@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent IA - Valorisation Matériel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto p-6 max-w-4xl">
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <h1 class="text-3xl font-bold mb-2">🤖 Agent IA - Valorisation Matériel</h1>
+                <p class="text-blue-100">Analyse automatique avec OpenAI GPT-4 Vision</p>
+                <div class="mt-3 bg-blue-700 bg-opacity-50 rounded-lg p-2 text-xs">
+                    <span class="font-semibold" id="statusIndicator">⚙️ Configuration requise</span>
+                </div>
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="p-6 bg-yellow-50 border-b border-yellow-200" id="configSection">
+                <h3 class="font-bold text-lg mb-3 flex items-center gap-2">
+                    🔑 Configuration de l'API
+                </h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Clé API OpenAI :</label>
+                        <input 
+                            type="password" 
+                            id="apiKeyInput" 
+                            placeholder="sk-proj-..."
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Modèle :</label>
+                        <select id="modelSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                            <option value="gpt-4o-mini">GPT-4o Mini (Rapide & Économique)</option>
+                            <option value="gpt-4o">GPT-4o (Plus précis)</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        </select>
+                    </div>
+                    <button 
+                        onclick="saveConfig()" 
+                        class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+                    >
+                        ✅ Enregistrer la configuration
+                    </button>
+                    <p class="text-xs text-gray-600">
+                        💡 Votre clé est stockée localement dans votre navigateur et n'est jamais envoyée ailleurs qu'à OpenAI.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="p-6" id="uploadSection" style="display: none;">
+                <div class="border-3 border-dashed border-gray-300 rounded-xl p-8 text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                    <div id="uploadPlaceholder">
+                        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="text-xl font-semibold text-gray-700">Télécharger une photo</p>
+                        <p class="text-sm text-gray-500 mt-2">JPG, PNG - Max 20MB</p>
+                    </div>
+                    <div id="imagePreview" style="display: none;">
+                        <img id="previewImg" class="max-h-64 mx-auto rounded-lg shadow-md">
+                        <p class="text-sm text-gray-600 mt-2">Cliquez pour changer l'image</p>
+                    </div>
+                </div>
+
+                <button 
+                    id="analyzeBtn" 
+                    onclick="analyzeImage()" 
+                    style="display: none;"
+                    class="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg"
+                >
+                    📸 Analyser avec GPT-4 Vision
+                </button>
+
+                <!-- Loading -->
+                <div id="loadingSection" style="display: none;" class="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6 text-center">
+                    <svg class="animate-spin h-12 w-12 mx-auto text-blue-600 mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-lg font-semibold text-blue-800">Analyse en cours...</p>
+                    <p class="text-sm text-blue-600 mt-2">GPT-4 Vision identifie votre produit</p>
+                </div>
+
+                <!-- Error -->
+                <div id="errorSection" style="display: none;" class="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
+                    <p class="font-semibold text-red-800">❌ Erreur d'analyse</p>
+                    <p class="text-sm text-red-600 mt-1" id="errorMessage"></p>
+                    <button onclick="analyzeImage()" class="mt-2 text-sm text-red-700 underline">Réessayer</button>
+                </div>
+
+                <!-- Results -->
+                <div id="resultsSection" style="display: none;" class="mt-6 space-y-4 animate-fadeIn"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentImage = null;
+        let apiKey = localStorage.getItem('openai_api_key');
+        let model = localStorage.getItem('openai_model') || 'gpt-4o-mini';
+
+        // Initialisation
+        window.onload = function() {
+            if (apiKey) {
+                document.getElementById('apiKeyInput').value = apiKey;
+                document.getElementById('modelSelect').value = model;
+                saveConfig();
+            }
+        };
+
+        function saveConfig() {
+            apiKey = document.getElementById('apiKeyInput').value.trim();
+            model = document.getElementById('modelSelect').value;
+
+            if (!apiKey) {
+                alert('Veuillez entrer une clé API OpenAI valide');
+                return;
+            }
+
+            localStorage.setItem('openai_api_key', apiKey);
+            localStorage.setItem('openai_model', model);
+
+            document.getElementById('configSection').style.display = 'none';
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('statusIndicator').innerHTML = '✅ API Configurée';
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage = e.target.result;
+                document.getElementById('uploadPlaceholder').style.display = 'none';
+                document.getElementById('imagePreview').style.display = 'block';
+                document.getElementById('previewImg').src = currentImage;
+                document.getElementById('analyzeBtn').style.display = 'block';
+                document.getElementById('resultsSection').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function analyzeImage() {
+            if (!currentImage || !apiKey) return;
+
+            document.getElementById('analyzeBtn').style.display = 'none';
+            document.getElementById('loadingSection').style.display = 'block';
+            document.getElementById('errorSection').style.display = 'none';
+            document.getElementById('resultsSection').style.display = 'none';
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            {
+                                role: "system",
+                                content: `Tu es un agent qui détecte des images de matériel à recycler: matériel D3E, matériel informatique, mobilier de bureau que l'on prend en photo dans des entreprises qui veulent se débarrasser de leur matériel et le recycler.
+
+Analyse l'image et réponds UNIQUEMENT au format JSON suivant (sans texte avant ou après):
+{
+  "category": "informatique|electrique|mobilier",
+  "subcategory": "sous-catégorie exacte",
+  "product": "Nom/modèle du produit",
+  "description": "Description détaillée pour vente en ligne (150-200 mots), incluant caractéristiques, état, utilisation recommandée",
+  "condition": "Excellent état|Très bon état|Bon état|État correct|Usagé",
+  "estimatedPrice": "Fourchette de prix estimé en euros (ex: 150-200€)",
+  "material": "Matériaux principaux",
+  "dimensions": "Dimensions estimées si pertinent"
+}
+
+Catégories disponibles:
+- informatique: Ordinateurs portables, Ordinateurs de bureau, Écrans, Claviers, Souris, Imprimantes, Scanners, Serveurs, Composants PC, Accessoires informatiques
+- electrique: Multiprises, Câbles d'alimentation, Adaptateurs, Onduleurs, Lampes de bureau, Ventilateurs, Chauffages, Rallonges électriques
+- mobilier: Bureaux, Chaises de bureau, Fauteuils, Armoires, Étagères, Caissons, Tables de réunion, Cloisons, Rangements`
+                            },
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: "Analyse ce matériel de bureau et fournis les informations au format JSON demandé."
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: {
+                                            url: currentImage
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 1000,
+                        temperature: 0.3
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'Erreur API OpenAI');
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                
+                let jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) throw new Error('Format de réponse invalide');
+                
+                const result = JSON.parse(jsonMatch[0]);
+                displayResults(result);
+
+            } catch (error) {
+                document.getElementById('loadingSection').style.display = 'none';
+                document.getElementById('errorSection').style.display = 'block';
+                document.getElementById('errorMessage').textContent = error.message;
+                document.getElementById('analyzeBtn').style.display = 'block';
+            }
+        }
+
+        function displayResults(result) {
+            document.getElementById('loadingSection').style.display = 'none';
+            
+            const categories = {
+                informatique: "Matériel Informatique",
+                electrique: "Matériel Électrique",
+                mobilier: "Mobilier de Bureau"
+            };
+
+            const html = `
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                    <svg class="w-6 h-6 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <p class="font-semibold text-green-800">Analyse terminée avec succès !</p>
+                        <p class="text-sm text-green-600">Analysé par ${model}</p>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+                        <p class="text-sm font-semibold text-purple-900 mb-2">📁 Catégorie</p>
+                        <p class="text-lg font-bold text-purple-800">${categories[result.category] || result.category}</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-4 border border-pink-200">
+                        <p class="text-sm font-semibold text-pink-900 mb-2">🏷️ Sous-catégorie</p>
+                        <p class="text-lg font-bold text-pink-800">${result.subcategory}</p>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                    <h3 class="text-xl font-bold text-blue-900 mb-4">📝 ${result.product}</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700 mb-2">Description pour la vente :</p>
+                            <p class="text-gray-800 leading-relaxed bg-white p-4 rounded-lg border border-blue-100">${result.description}</p>
+                        </div>
+
+                        <div class="grid md:grid-cols-3 gap-4">
+                            <div class="bg-white p-4 rounded-lg border border-blue-100">
+                                <p class="text-sm font-semibold text-gray-700">État</p>
+                                <p class="text-lg font-bold text-blue-800 mt-1">${result.condition}</p>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg border border-blue-100">
+                                <p class="text-sm font-semibold text-gray-700">Prix estimé</p>
+                                <p class="text-lg font-bold text-green-600 mt-1">${result.estimatedPrice}</p>
+                            </div>
+                            ${result.material ? `
+                            <div class="bg-white p-4 rounded-lg border border-blue-100">
+                                <p class="text-sm font-semibold text-gray-700">Matériau</p>
+                                <p class="text-lg font-bold text-amber-700 mt-1">${result.material}</p>
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        ${result.dimensions ? `
+                        <div class="bg-white p-4 rounded-lg border border-blue-100">
+                            <p class="text-sm font-semibold text-gray-700">Dimensions</p>
+                            <p class="text-gray-800 mt-1">${result.dimensions}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-3 gap-3">
+                    <button onclick="resetApp()" class="bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+                        🔄 Nouvelle analyse
+                    </button>
+                    <button onclick="copyDescription('${result.description.replace(/'/g, "\\'")}');" class="bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all">
+                        📋 Copier description
+                    </button>
+                    <button onclick="exportJSON(${JSON.stringify(result).replace(/"/g, '&quot;')})" class="bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all">
+                        💾 Exporter JSON
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('resultsSection').innerHTML = html;
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+
+        function copyDescription(desc) {
+            navigator.clipboard.writeText(desc);
+            alert('✅ Description copiée dans le presse-papier !');
+        }
+
+        function exportJSON(data) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${data.product.replace(/\s+/g, '_')}.json`;
+            a.click();
+        }
+
+        function resetApp() {
+            currentImage = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('uploadPlaceholder').style.display = 'block';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('analyzeBtn').style.display = 'none';
+            document.getElementById('resultsSection').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

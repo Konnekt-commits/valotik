@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sauvegarder Clé API OpenAI</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            font-weight: bold;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .success {
+            color: #10b981;
+            font-weight: bold;
+            margin-top: 1rem;
+            display: none;
+        }
+        .info {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔑 Sauvegarder Clé API OpenAI</h1>
+        <p>Cliquez sur le bouton ci-dessous pour sauvegarder votre clé API OpenAI dans le localStorage.</p>
+        <button id="saveBtn" onclick="saveKey()">Sauvegarder la clé API</button>
+        <div id="success" class="success">✅ Clé API sauvegardée avec succès !</div>
+        <p class="info">Une fois sauvegardée, fermez cette fenêtre et retournez à l'application.</p>
+    </div>
+
+    <script>
+        function saveKey() {
+            const apiKey = 'your-openai-api-key-here';
+            const model = 'gpt-4o-mini';
+
+            localStorage.setItem('openai_api_key', apiKey);
+            localStorage.setItem('openai_model', model);
+
+            document.getElementById('success').style.display = 'block';
+            document.getElementById('saveBtn').disabled = true;
+            document.getElementById('saveBtn').textContent = 'Clé sauvegardée ✓';
+
+            console.log('✅ Clé API OpenAI sauvegardée !');
+            console.log('Clé:', apiKey);
+            console.log('Modèle:', model);
+        }
+    </script>
+</body>
+</html>

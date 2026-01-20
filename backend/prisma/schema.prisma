@@ -1,0 +1,1203 @@
+// Prisma Schema pour D3E Collection App
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Modèle Client Company
+model ClientCompany {
+  id                String   @id @default(cuid())
+  raisonSociale     String   @db.VarChar(255)
+  siret             String?  @unique @db.VarChar(20)
+  adresseFacturation String  @db.Text
+  secteur           String?  @db.VarChar(100)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  sites    ClientSite[]
+  contacts Contact[]
+  caseFiles CaseFile[]
+  pickupRequests PickupRequest[]
+
+  @@map("client_companies")
+}
+
+// Modèle Site Client
+model ClientSite {
+  id              String   @id @default(cuid())
+  clientId        String
+  nom             String   @db.VarChar(255)
+  adresseComplete String   @db.Text
+  latitude        Float?
+  longitude       Float?
+  typeSite        String?  @db.VarChar(50)
+  contactSiteId   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client       ClientCompany @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  pickupRequests PickupRequest[]
+  transportOrdersSource TransportOrder[] @relation("SourceSite")
+  transportOrdersDestination TransportOrder[] @relation("DestinationSite")
+
+  @@map("client_sites")
+}
+
+// Modèle Contact
+model Contact {
+  id                     String   @id @default(cuid())
+  clientId               String
+  nom                    String   @db.VarChar(255)
+  fonction               String?  @db.VarChar(100)
+  telephone              String   @db.VarChar(20)
+  email                  String   @db.VarChar(255)
+  preferencesNotification String? @db.Text
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  client ClientCompany @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  pickupRequests PickupRequest[]
+
+  @@map("contacts")
+}
+
+// Modèle Demande d'Enlèvement
+model PickupRequest {
+  id                  String   @id @default(cuid())
+  clientId            String
+  siteId              String
+  contactId           String
+  descriptionInitiale String   @db.Text
+  categoriePrincipale String   @db.VarChar(100)
+  volumeEstime        String?  @db.VarChar(50)
+  valeurEstimee       Float?   // Valeur estimée des équipements (€)
+  valeurRevente       Float?   // Valeur de revente potentielle (€)
+  priorite            String   @default("medium") @db.VarChar(20) // high, medium, low
+  statut              String   @default("diagnostic_pending") @db.VarChar(50)
+  plannedVisitAt      DateTime?
+  accessNotes         String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  client  ClientCompany @relation(fields: [clientId], references: [id])
+  site    ClientSite    @relation(fields: [siteId], references: [id])
+  contact Contact       @relation(fields: [contactId], references: [id])
+  caseFile CaseFile?
+
+  @@map("pickup_requests")
+}
+
+// Modèle Dossier (Case File)
+model CaseFile {
+  id                String   @id @default(cuid())
+  requestId         String   @unique
+  clientId          String
+  reference         String   @unique @db.VarChar(50)
+  statut            String   @default("diagnostic_pending") @db.VarChar(50)
+  poidsEstime       Float?
+  poidsReel         Float?
+  valeurTotale      Float?
+  createdAt         DateTime @default(now())
+  closedAt          DateTime?
+  updatedAt         DateTime @updatedAt
+
+  request       PickupRequest  @relation(fields: [requestId], references: [id])
+  client        ClientCompany  @relation(fields: [clientId], references: [id])
+  diagnosis     Diagnosis?
+  lots          Lot[]
+  quotations    Quotation[]
+  transportOrders TransportOrder[]
+  documents     Document[]
+  sales         Sale[]
+
+  @@map("case_files")
+}
+
+// Modèle Diagnostic
+model Diagnosis {
+  id               String   @id @default(cuid())
+  caseFileId       String   @unique
+  technicienId     String?
+  dateVisite       DateTime
+  notes            String?  @db.Text
+  signatureClientUrl String? @db.VarChar(500)
+  dureeVisite      Int?     // en minutes
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  caseFile CaseFile @relation(fields: [caseFileId], references: [id], onDelete: Cascade)
+  lots     Lot[]
+
+  @@map("diagnoses")
+}
+
+// Modèle Lot
+model Lot {
+  id             String   @id @default(cuid())
+  caseFileId     String
+  diagnosisId    String?
+  code           String   @unique @db.VarChar(50)
+  categorieId    String
+  categorieName  String   @db.VarChar(100)
+  grade          String   @db.VarChar(5) // A, B, C, D
+  orientation    String   @db.VarChar(50) // resale, refurbishment, dismantling, waste
+  poidsEstime    Float
+  poidsReel      Float?
+  volume         Float?
+  statut         String   @default("pending") @db.VarChar(50)
+  qrCode         String   @unique @db.VarChar(100)
+  photos         String?  @db.Text // URLs des photos (JSON string)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  caseFile  CaseFile   @relation(fields: [caseFileId], references: [id], onDelete: Cascade)
+  diagnosis Diagnosis? @relation(fields: [diagnosisId], references: [id])
+  components Component[]
+  inventoryItems InventoryItem[]
+  transportOrders TransportOrder[]
+  sales Sale[]
+
+  @@map("lots")
+}
+
+// Modèle Devis
+model Quotation {
+  id                 String   @id @default(cuid())
+  caseFileId         String
+  version            Int      @default(1)
+  statut             String   @default("draft") @db.VarChar(20) // draft, sent, approved, rejected
+  montantHT          Float
+  montantTVA         Float
+  montantTTC         Float
+  validiteAt         DateTime?
+  approvateurId      String?
+  clientSignatureUrl String?  @db.VarChar(500)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  caseFile CaseFile        @relation(fields: [caseFileId], references: [id], onDelete: Cascade)
+  lines    QuotationLine[]
+
+  @@map("quotations")
+}
+
+// Modèle Ligne de Devis
+model QuotationLine {
+  id          String  @id @default(cuid())
+  quotationId String
+  typeLigne   String  @db.VarChar(50) // service, material, package
+  description String  @db.Text
+  unite       String  @db.VarChar(20)
+  quantite    Float
+  prixUnitaire Float
+  tauxTVA     Float   @default(20)
+  ordreAffichage Int
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("quotation_lines")
+}
+
+// Modèle Ordre de Transport
+model TransportOrder {
+  id              String   @id @default(cuid())
+  caseFileId      String
+  lotId           String?
+  type            String   @db.VarChar(50) // enlèvement, livraison
+  siteSourceId    String
+  siteDestinationId String
+  transporteurId  String?
+  transporteurName String?  @db.VarChar(255)
+  vehicule        String?  @db.VarChar(100)
+  conducteur      String?  @db.VarChar(255)
+  datePlanifiee   DateTime
+  statut          String   @default("planned") @db.VarChar(50) // planned, in_progress, completed, delayed
+  documents       String?  @db.Text // URLs des documents (JSON string)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  caseFile        CaseFile   @relation(fields: [caseFileId], references: [id], onDelete: Cascade)
+  lot             Lot?       @relation(fields: [lotId], references: [id])
+  siteSource      ClientSite @relation("SourceSite", fields: [siteSourceId], references: [id])
+  siteDestination ClientSite @relation("DestinationSite", fields: [siteDestinationId], references: [id])
+
+  @@map("transport_orders")
+}
+
+// Modèle Emplacement de Stockage
+model StorageLocation {
+  id       String  @id @default(cuid())
+  siteId   String
+  zone     String  @db.VarChar(50)
+  allee    String  @db.VarChar(50)
+  rack     String  @db.VarChar(50)
+  niveau   String  @db.VarChar(50)
+  position String  @db.VarChar(50)
+  capacite Float?
+  unite    String? @db.VarChar(20)
+
+  inventoryItems InventoryItem[]
+
+  @@unique([siteId, zone, allee, rack, niveau, position])
+  @@map("storage_locations")
+}
+
+// Modèle Inventaire
+model InventoryItem {
+  id                String    @id @default(cuid())
+  lotId             String
+  composantId       String?
+  qrCode            String    @unique @db.VarChar(100)
+  storageLocationId String
+  statut            String    @default("in_stock") @db.VarChar(50)
+  dateEntree        DateTime  @default(now())
+  dateSortie        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  lot             Lot             @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  component       Component?      @relation(fields: [composantId], references: [id])
+  storageLocation StorageLocation @relation(fields: [storageLocationId], references: [id])
+
+  @@map("inventory_items")
+}
+
+// Modèle Catégorie de Produit
+model Category {
+  id          String   @id @default(cuid())
+  nom         String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  icone       String?  @db.VarChar(50)
+  ordre       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subCategories SubCategory[]
+
+  @@map("categories")
+}
+
+// Modèle Sous-Catégorie de Produit
+model SubCategory {
+  id          String   @id @default(cuid())
+  categoryId  String
+  nom         String   @db.VarChar(100)
+  description String?  @db.Text
+  ordre       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  components Component[]
+
+  @@unique([categoryId, nom])
+  @@map("sub_categories")
+}
+
+// Modèle Composant/Matériel (équipement complet)
+model Component {
+  id              String   @id @default(cuid())
+  lotId           String
+  categorieId     String?  // Ancien champ (sera migré)
+  categorieName   String?  @db.VarChar(100) // Ancien champ (sera migré)
+  poids           Float?   // Ancien champ (sera migré vers poidsUnitaire)
+  valeurEstimee   Float?   // Ancien champ (sera migré vers valeurUnitaire)
+  subCategoryId   String?
+  nom             String?  @db.VarChar(255) // Ex: "PC Dell OptiPlex 7090"
+  quantite        Int      @default(1)
+  grade           String   @db.VarChar(5)
+  poidsUnitaire   Float?
+  valeurUnitaire  Float?
+  qrCode          String   @unique @db.VarChar(100)
+  statut          String   @default("extracted") @db.VarChar(50)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lot            Lot             @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  subCategory    SubCategory?    @relation(fields: [subCategoryId], references: [id])
+  inventoryItems InventoryItem[]
+  sales          Sale[]
+
+  @@map("components")
+}
+
+// Modèle Enregistrement de Pesée
+model WeighingRecord {
+  id          String   @id @default(cuid())
+  entiteType  String   @db.VarChar(50) // lot, component
+  entiteId    String
+  poids       Float
+  balanceId   String?
+  modeSaisie  String   @default("manual") @db.VarChar(20) // manual, automatic
+  horodatage  DateTime @default(now())
+  operateurId String?
+
+  @@map("weighing_records")
+}
+
+// Modèle Document
+model Document {
+  id         String   @id @default(cuid())
+  caseFileId String
+  type       String   @db.VarChar(50) // devis, bon_pesée, photo, certificat
+  nomFichier String   @db.VarChar(255)
+  url        String   @db.VarChar(500)
+  taille     Int?
+  auteurId   String?
+  createdAt  DateTime @default(now())
+
+  caseFile CaseFile @relation(fields: [caseFileId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+// Modèle Utilisateur (simplifié)
+model User {
+  id       String   @id @default(cuid())
+  nom      String   @db.VarChar(255)
+  email    String   @unique @db.VarChar(255)
+  role     String   @db.VarChar(50) // admin, planificateur, technicien, logisticien
+  actif    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  caseFileAssignments CaseFileAssignment[]
+
+  @@map("users")
+}
+
+// Modèle Association Utilisateur-Dossier
+model CaseFileAssignment {
+  id         String   @id @default(cuid())
+  caseFileId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([caseFileId, userId])
+  @@map("case_file_assignments")
+}
+
+// Modèle Audit Log
+model AuditLog {
+  id          String   @id @default(cuid())
+  entite      String   @db.VarChar(100)
+  entiteId    String
+  action      String   @db.VarChar(100)
+  payload     Json?    // Native JSON type for MySQL
+  userId      String?
+  horodatage  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// Modèle Magasin/Canal de Vente
+model SalesChannel {
+  id          String   @id @default(cuid())
+  nom         String   @unique @db.VarChar(255) // Ex: "Magasin Paris 15", "Site e-commerce", "Marketplace eBay"
+  type        String   @db.VarChar(50) // physical, online, marketplace
+  adresse     String?  @db.Text // Pour les magasins physiques
+  url         String?  @db.VarChar(500) // Pour les canaux en ligne
+  responsable String?  @db.VarChar(255) // Nom du responsable
+  commission  Float    @default(0) // % de commission
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sales Sale[]
+
+  @@map("sales_channels")
+}
+
+// Modèle Client Final (End User - Acheteur de produits reconditionnés)
+model EndCustomer {
+  id              String   @id @default(cuid())
+  nom             String   @db.VarChar(255) // Nom complet ou raison sociale
+  type            String   @db.VarChar(50) // particulier, entreprise
+  email           String?  @db.VarChar(255)
+  telephone       String?  @db.VarChar(20)
+  adresse         String?  @db.Text
+  codePostal      String?  @db.VarChar(10)
+  ville           String?  @db.VarChar(100)
+  pays            String   @default("France") @db.VarChar(100)
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sales Sale[]
+
+  @@map("end_customers")
+}
+
+// Modèle Vente
+model Sale {
+  id              String   @id @default(cuid())
+  reference       String   @unique @db.VarChar(50) // Ex: "VT-2025-001"
+  caseFileId      String   // Référence à la demande
+  lotId           String?  // Référence au lot (optionnel)
+  componentId     String?  // Référence au composant/matériel (optionnel)
+  salesChannelId  String   // Magasin physique ou virtuel
+  endCustomerId   String?  // Référence au client final
+
+  // Informations produit
+  productName     String   @db.VarChar(255) // Nom du produit vendu
+  quantity        Int      @default(1)
+  grade           String?  @db.VarChar(5) // A, B, C, D
+
+  // Informations financières
+  prixUnitaire    Float    // Prix de vente unitaire HT
+  montantHT       Float    // Montant total HT
+  montantTVA      Float    // Montant TVA
+  montantTTC      Float    // Montant total TTC
+  tauxTVA         Float    @default(20)
+
+  // Informations client acheteur (déprécié - utiliser endCustomer à la place)
+  acheteurNom     String?  @db.VarChar(255)
+  acheteurEmail   String?  @db.VarChar(255)
+  acheteurTelephone String? @db.VarChar(20)
+
+  // Informations de vente
+  dateVente       DateTime @default(now())
+  statut          String   @default("completed") @db.VarChar(20) // completed, cancelled, refunded
+  vendeurId       String?  // Référence au vendeur (User)
+  vendeurNom      String?  @db.VarChar(255) // Nom du vendeur
+  modePaiement    String?  @db.VarChar(50) // card, cash, transfer, other
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  caseFile      CaseFile      @relation(fields: [caseFileId], references: [id])
+  lot           Lot?          @relation(fields: [lotId], references: [id])
+  component     Component?    @relation(fields: [componentId], references: [id])
+  salesChannel  SalesChannel  @relation(fields: [salesChannelId], references: [id])
+  endCustomer   EndCustomer?  @relation(fields: [endCustomerId], references: [id])
+
+  @@map("sales")
+}
+
+// ============================================
+// MODULE RH - SUIVI DES SALARIÉS EN INSERTION
+// ============================================
+
+// Modèle Salarié en Insertion
+model InsertionEmployee {
+  id                  String   @id @default(cuid())
+
+  // Informations personnelles
+  civilite            String   @db.VarChar(10) // M., Mme
+  nom                 String   @db.VarChar(100)
+  prenom              String   @db.VarChar(100)
+  nomUsage            String?  @db.VarChar(100)
+  dateNaissance       DateTime
+  lieuNaissance       String?  @db.VarChar(100)
+  nationalite         String   @db.VarChar(50) @default("Française")
+  numeroSecu          String?  @db.VarChar(15) // Numéro de sécurité sociale
+
+  // Coordonnées
+  adresse             String   @db.Text
+  codePostal          String   @db.VarChar(10)
+  ville               String   @db.VarChar(100)
+  telephone           String   @db.VarChar(20)
+  telephoneSecondaire String?  @db.VarChar(20)
+  email               String?  @db.VarChar(255)
+
+  // Situation personnelle
+  situationFamiliale  String?  @db.VarChar(50) // célibataire, marié, pacsé, divorcé, veuf
+  nombreEnfants       Int      @default(0)
+  permisConduire      Boolean  @default(false)
+  typePermis          String?  @db.VarChar(20) // A, B, C, D, etc.
+  vehicule            Boolean  @default(false)
+
+  // Situation administrative
+  typePieceIdentite   String?  @db.VarChar(50) // CNI, Passeport, Titre de séjour
+  numeroPieceIdentite String?  @db.VarChar(50)
+  dateExpirationPiece DateTime?
+  inscritFranceTravail Boolean @default(false)
+  numeroFranceTravail String?  @db.VarChar(20)
+  beneficiaireRSA     Boolean  @default(false)
+  beneficiaireASS     Boolean  @default(false)
+  beneficiaireAAH     Boolean  @default(false)
+  reconnaissanceTH    Boolean  @default(false) // Travailleur handicapé
+
+  // Informations IAE
+  passInclusionNumero String?  @db.VarChar(50)
+  passInclusionDate   DateTime?
+  passInclusionExpiration DateTime?
+  eligibiliteIAE      String?  @db.VarChar(100) // Critère d'éligibilité
+
+  // Contrat
+  dateEntree          DateTime
+  dateSortie          DateTime?
+  typeContrat         String   @db.VarChar(50) @default("CDDI") // CDDI, CDD Insertion, etc.
+  dureeHebdo          Float    @default(26) // Heures par semaine
+  poste               String?  @db.VarChar(100)
+  salaireBrut         Float?
+
+  // Statut
+  statut              String   @db.VarChar(20) @default("actif") // actif, sorti, suspendu
+  motifSortie         String?  @db.VarChar(100)
+  typeSortie          String?  @db.VarChar(50) // positive, négative, neutre
+
+  // Photo
+  photoUrl            String?  @db.VarChar(500)
+
+  // Métadonnées
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdById         String?
+
+  // Relations
+  fichePro            FichePro?
+  suivis              SuiviEntretien[]
+  conventionsPMSMP    ConventionPMSMP[]
+  documents           InsertionDocument[]
+  contrats            ContratInsertion[]
+  avertissements      Avertissement[]
+  formations          Formation[]
+  pointages           PointageMensuel[]
+  objectifsIndividuels ObjectifIndividuel[]
+
+  @@map("insertion_employees")
+}
+
+// Fiche PRO - Diagnostic socio-professionnel
+model FichePro {
+  id                  String   @id @default(cuid())
+  employeeId          String   @unique
+
+  // Diagnostic initial
+  dateCreation        DateTime @default(now())
+  conseillerId        String?  // CIP référent
+
+  // Parcours antérieur
+  niveauEtude         String?  @db.VarChar(50) // Sans diplôme, CAP/BEP, Bac, Bac+2, etc.
+  diplomes            String?  @db.Text // Liste des diplômes
+  experiencesPro      String?  @db.Text // Expériences professionnelles
+  competencesCles     String?  @db.Text // Compétences identifiées
+
+  // Freins identifiés
+  freinsMobilite      Boolean  @default(false)
+  freinsLogement      Boolean  @default(false)
+  freinsSante         Boolean  @default(false)
+  freinsGardeEnfants  Boolean  @default(false)
+  freinsLangue        Boolean  @default(false)
+  freinsNumerique     Boolean  @default(false)
+  freinsAutres        String?  @db.Text
+
+  // Projet professionnel
+  projetPro           String?  @db.Text // Description du projet
+  metiersVises        String?  @db.Text // Métiers ciblés
+  secteursVises       String?  @db.Text // Secteurs d'activité
+
+  // Objectifs du parcours
+  objectifsCourt      String?  @db.Text // Objectifs à court terme (3 mois)
+  objectifsMoyen      String?  @db.Text // Objectifs à moyen terme (6 mois)
+  objectifsLong       String?  @db.Text // Objectifs à long terme (fin de contrat)
+
+  // Bilan
+  bilanSortie         String?  @db.Text
+  competencesAcquises String?  @db.Text
+  situationSortie     String?  @db.VarChar(100) // Emploi durable, Formation, Autre SIAE, etc.
+  dateBilan           DateTime?
+
+  // CV
+  cvUrl               String?  @db.VarChar(500)
+  cvDateMaj           DateTime?
+
+  updatedAt           DateTime @updatedAt
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("fiches_pro")
+}
+
+// Suivi des entretiens
+model SuiviEntretien {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  dateEntretien       DateTime
+  typeEntretien       String   @db.VarChar(50) // Hebdomadaire, Mensuel, Bilan, Urgent
+  duree               Int?     // Durée en minutes
+  conseillerId        String?
+  conseillerNom       String?  @db.VarChar(100)
+
+  // Contenu
+  objetEntretien      String   @db.Text
+  pointsAbordes       String?  @db.Text
+  difficultesSignalees String? @db.Text
+  actionsDecidees     String?  @db.Text
+
+  // Suivi des objectifs
+  objectifsAtteints   String?  @db.Text
+  nouveauxObjectifs   String?  @db.Text
+
+  // Prochaine étape
+  prochaineAction     String?  @db.Text
+  dateProchainRdv     DateTime?
+
+  createdAt           DateTime @default(now())
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("suivis_entretiens")
+}
+
+// Conventions PMSMP (Période de Mise en Situation en Milieu Professionnel)
+model ConventionPMSMP {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  // Entreprise d'accueil
+  entrepriseNom       String   @db.VarChar(255)
+  entrepriseSiret     String?  @db.VarChar(20)
+  entrepriseAdresse   String?  @db.Text
+  tuteurNom           String?  @db.VarChar(100)
+  tuteurFonction      String?  @db.VarChar(100)
+  tuteurTelephone     String?  @db.VarChar(20)
+  tuteurEmail         String?  @db.VarChar(255)
+
+  // Période
+  dateDebut           DateTime
+  dateFin             DateTime
+  dureeJours          Int?
+  horaires            String?  @db.VarChar(100)
+
+  // Objectifs
+  objectifDecouverte  String?  @db.Text // Découverte métier
+  objectifValidation  String?  @db.Text // Validation projet
+  activitesPrevues    String?  @db.Text
+
+  // Bilan
+  bilanRealise        Boolean  @default(false)
+  bilanDate           DateTime?
+  bilanCommentaire    String?  @db.Text
+  evaluationEntreprise String? @db.VarChar(50) // Très satisfaisant, Satisfaisant, À améliorer
+  suiteEnvisagee      String?  @db.VarChar(100) // Embauche, Autre PMSMP, Formation, etc.
+
+  // Document
+  conventionUrl       String?  @db.VarChar(500)
+  bilanUrl            String?  @db.VarChar(500)
+
+  statut              String   @db.VarChar(20) @default("en_cours") // planifiee, en_cours, terminee, annulee
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("conventions_pmsmp")
+}
+
+// Documents du salarié
+model InsertionDocument {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  // Catégorie
+  categorie           String   @db.VarChar(20) // PRO, ADMIN, RH
+  typeDocument        String   @db.VarChar(50) // CNI, CV, Contrat, etc.
+  nomDocument         String   @db.VarChar(255)
+
+  // Fichier
+  url                 String   @db.VarChar(500)
+  taille              Int?     // Taille en octets
+  mimeType            String?  @db.VarChar(100)
+
+  // Validité
+  dateDocument        DateTime?
+  dateExpiration      DateTime?
+  estObligatoire      Boolean  @default(false)
+  estValide           Boolean  @default(true)
+
+  notes               String?  @db.Text
+
+  uploadedById        String?
+  createdAt           DateTime @default(now())
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("insertion_documents")
+}
+
+// Contrats (pour gérer les renouvellements)
+model ContratInsertion {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  typeContrat         String   @db.VarChar(50) // CDDI, CDD Insertion
+  numeroContrat       String?  @db.VarChar(50)
+
+  dateDebut           DateTime
+  dateFin             DateTime
+  dureeHeures         Float    // Heures hebdomadaires
+
+  motif               String?  @db.VarChar(100) // Initial, Renouvellement 1, Renouvellement 2
+
+  // DPAE
+  dpaeNumero          String?  @db.VarChar(50)
+  dpaeDate            DateTime?
+
+  // Signature
+  dateSignature       DateTime?
+  contratUrl          String?  @db.VarChar(500)
+
+  // Fin de contrat
+  dateSortieEffective DateTime?
+  motifFin            String?  @db.VarChar(100)
+  soldeToutCompteUrl  String?  @db.VarChar(500)
+  certificatTravailUrl String? @db.VarChar(500)
+
+  statut              String   @db.VarChar(20) @default("actif") // actif, termine, rompu
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("contrats_insertion")
+}
+
+// Avertissements
+model Avertissement {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  dateAvertissement   DateTime
+  type                String   @db.VarChar(50) // Verbal, Écrit, Mise à pied
+  motif               String   @db.Text
+  description         String?  @db.Text
+
+  // Procédure
+  dateConvocation     DateTime?
+  dateEntretien       DateTime?
+  decision            String?  @db.Text
+
+  documentUrl         String?  @db.VarChar(500)
+
+  createdAt           DateTime @default(now())
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("avertissements")
+}
+
+// Formations suivies
+model Formation {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  intitule            String   @db.VarChar(255)
+  organisme           String?  @db.VarChar(255)
+  type                String?  @db.VarChar(50) // Interne, Externe, E-learning
+
+  dateDebut           DateTime
+  dateFin             DateTime?
+  dureeHeures         Float?
+
+  objectifs           String?  @db.Text
+  competencesVisees   String?  @db.Text
+
+  // Résultat
+  statut              String   @db.VarChar(20) @default("planifiee") // planifiee, en_cours, terminee, abandonnee
+  resultat            String?  @db.VarChar(50) // Validée, Non validée, En cours
+  attestationUrl      String?  @db.VarChar(500)
+
+  notes               String?  @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("formations")
+}
+
+// Pointage Mensuel - Résumé mensuel des heures avec banque d'heures
+model PointageMensuel {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  // Période
+  mois                Int      // 1-12
+  annee               Int
+
+  // Heures contractuelles (calculées: dureeHebdo * nb semaines du mois)
+  heuresContrat       Float    // Heures dues sur le mois
+
+  // Heures pointées
+  heuresPointees      Float    @default(0) // Total heures travaillées ce mois
+
+  // Pourcentage
+  pourcentage         Float    @default(0) // heuresPointees / heuresContrat * 100
+
+  // Banque d'heures
+  heuresBanqueEntree  Float    @default(0) // Heures en banque au début du mois
+  heuresBanqueSortie  Float    @default(0) // Heures en banque à la fin du mois (après régulation)
+  heuresRegularisees  Float    @default(0) // Heures prises dans la banque ce mois
+
+  // Statut
+  statut              String   @db.VarChar(20) @default("en_cours") // en_cours, valide, cloture
+  dateValidation      DateTime?
+  validePar           String?  @db.VarChar(100)
+
+  // Notes
+  notes               String?  @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  journees            PointageJournalier[]
+
+  @@unique([employeeId, mois, annee])
+  @@map("pointages_mensuels")
+}
+
+// Pointage Journalier - Détail jour par jour
+model PointageJournalier {
+  id                  String   @id @default(cuid())
+  pointageMensuelId   String
+
+  // Date
+  date                DateTime @db.Date
+
+  // Heures travaillées
+  heureDebut          String?  @db.VarChar(5) // Format HH:MM
+  heureFin            String?  @db.VarChar(5) // Format HH:MM
+  pauseMinutes        Int      @default(0) // Pause en minutes
+  heuresTravaillees   Float    @default(0) // Total heures de la journée
+
+  // Type de journée
+  typeJournee         String   @db.VarChar(20) @default("travail") // travail, absence, conge, maladie, formation, ferie
+  motifAbsence        String?  @db.VarChar(100)
+  justificatif        Boolean  @default(false)
+
+  // Notes
+  notes               String?  @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  pointageMensuel     PointageMensuel @relation(fields: [pointageMensuelId], references: [id], onDelete: Cascade)
+
+  @@unique([pointageMensuelId, date])
+  @@map("pointages_journaliers")
+}
+
+// ============================================
+// CONFIGURATION DES OBJECTIFS
+// ============================================
+
+// Configuration globale des critères de progression
+model ObjectifConfiguration {
+  id                  String   @id @default(cuid())
+
+  // Nom de la configuration (ex: "Configuration par défaut")
+  nom                 String   @db.VarChar(100)
+  estActif            Boolean  @default(true)
+
+  // Pondération des critères automatiques (en points)
+  poidsAnciennete         Int      @default(20)   // Max points pour ancienneté
+  pointsParMoisAnciennete Int      @default(2)    // Points gagnés par mois
+
+  poidsSuivis             Int      @default(15)   // Max points pour suivis
+  pointsParSuivi          Int      @default(2)    // Points par entretien
+
+  poidsPMSMP              Int      @default(25)   // Max points pour PMSMP
+  pointsParPMSMP          Int      @default(12)   // Points par PMSMP réussie
+
+  poidsFormations         Int      @default(25)   // Max points pour formations
+  pointsFormationSimple   Int      @default(5)    // Points par formation simple
+  pointsFormationQualif   Int      @default(15)   // Points par formation qualifiante
+
+  poidsObjectifsIndiv     Int      @default(15)   // Max points pour objectifs individuels
+
+  // Seuils
+  seuilProgressionMax     Int      @default(85)   // Max % avant sortie positive
+  sortiePositiveAuto100   Boolean  @default(true) // Sortie positive = 100% auto
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("objectif_configurations")
+}
+
+// Objectifs individuels par salarié
+model ObjectifIndividuel {
+  id                  String   @id @default(cuid())
+  employeeId          String
+
+  // Détails de l'objectif
+  titre               String   @db.VarChar(200)
+  description         String?  @db.Text
+  categorie           String   @db.VarChar(50) // emploi, formation, administratif, social, personnel
+
+  // Échéances
+  dateCreation        DateTime @default(now())
+  dateEcheance        DateTime?
+  dateRealisation     DateTime?
+
+  // Statut et progression
+  statut              String   @db.VarChar(20) @default("en_cours") // en_cours, atteint, abandonne, reporte
+  progression         Int      @default(0) // 0-100%
+
+  // Points
+  pointsAttribues     Int      @default(5) // Points gagnés si objectif atteint
+
+  // Priorité
+  priorite            String   @db.VarChar(20) @default("normale") // basse, normale, haute, critique
+
+  // Notes et historique
+  notes               String?  @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  employee            InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("objectifs_individuels")
+}
+
+// ============================================
+// MODULE ORGANISME - ANNEXE FINANCIÈRE ACI
+// ============================================
+
+// Organisme / Structure d'insertion
+model Organisme {
+  id                  String   @id @default(cuid())
+
+  // Identité de la structure
+  raisonSociale       String   @db.VarChar(255)
+  siret               String   @unique @db.VarChar(20)
+  formeJuridique      String?  @db.VarChar(100) // Association, SCIC, etc.
+  codeAPE             String?  @db.VarChar(10)
+  numeroRNA           String?  @db.VarChar(20) // Répertoire National des Associations
+
+  // Adresse du siège social
+  adresseSiege        String   @db.Text
+  codePostalSiege     String   @db.VarChar(10)
+  villeSiege          String   @db.VarChar(100)
+  telephoneSiege      String?  @db.VarChar(20)
+  emailSiege          String?  @db.VarChar(255)
+
+  // Représentant légal
+  representantNom     String?  @db.VarChar(100)
+  representantPrenom  String?  @db.VarChar(100)
+  representantFonction String? @db.VarChar(100)
+
+  // Contact administratif
+  contactAdminNom     String?  @db.VarChar(100)
+  contactAdminEmail   String?  @db.VarChar(255)
+  contactAdminTel     String?  @db.VarChar(20)
+
+  // Coordonnées bancaires
+  iban                String?  @db.VarChar(34)
+  bic                 String?  @db.VarChar(11)
+  nomBanque           String?  @db.VarChar(100)
+  titulaireCompte     String?  @db.VarChar(255)
+
+  // Métadonnées
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  conventions         ConventionACI[]
+  ateliers            AtelierChantier[]
+
+  @@map("organismes")
+}
+
+// Convention ACI (Atelier Chantier d'Insertion)
+model ConventionACI {
+  id                  String   @id @default(cuid())
+  organismeId         String
+
+  // Numéro et période
+  numeroConvention    String   @db.VarChar(50)
+  annee               Int
+  dateDebut           DateTime
+  dateFin             DateTime
+
+  // Type de structure
+  typeStructure       String   @db.VarChar(20) @default("ACI") // ACI, AI, EI, ETTI
+
+  // Effectifs autorisés
+  effectifETPAutorise Float    // Nombre de postes ETP autorisés
+  effectifPhysique    Int?     // Nombre de personnes physiques max
+
+  // Aide au poste
+  aidePosteUnitaire   Float    // Montant annuel par ETP (ex: 23 921€)
+  aidePosteTotale     Float    // Total calculé = effectifETP * aidePosteUnitaire
+
+  // Autres financements
+  aideRegion          Float?   @default(0)
+  aideDepartement     Float?   @default(0)
+  aideCommune         Float?   @default(0)
+  autresAides         Float?   @default(0)
+  autresAidesDetail   String?  @db.Text
+
+  // Informations comptables
+  chiffreAffaires     Float?   // N-1
+  resultatNet         Float?   // N-1
+  fondsAssociatifs    Float?
+  dettesFinancieres   Float?
+
+  // Référent DDETS
+  referentDDETSNom    String?  @db.VarChar(100)
+  referentDDETSEmail  String?  @db.VarChar(255)
+  referentDDETSTel    String?  @db.VarChar(20)
+
+  // Statut
+  statut              String   @db.VarChar(20) @default("active") // active, cloturee, suspendue
+
+  // Documents
+  conventionUrl       String?  @db.VarChar(500)
+  annexeFinanciereUrl String?  @db.VarChar(500)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organisme           Organisme @relation(fields: [organismeId], references: [id], onDelete: Cascade)
+  objectifsNegocies   ObjectifNegocie[]
+
+  @@unique([organismeId, annee])
+  @@map("conventions_aci")
+}
+
+// Ateliers et Chantiers (activités support)
+model AtelierChantier {
+  id                  String   @id @default(cuid())
+  organismeId         String
+
+  // Identification
+  nom                 String   @db.VarChar(255)
+  code                String?  @db.VarChar(20)
+
+  // Secteur d'activité
+  secteurActivite     String   @db.VarChar(100) // Recyclage, Espaces verts, BTP, etc.
+  codeROME            String?  @db.VarChar(10)
+
+  // Localisation
+  adresse             String?  @db.Text
+  codePostal          String?  @db.VarChar(10)
+  ville               String?  @db.VarChar(100)
+
+  // Effectifs
+  effectifETP         Float?   // ETP affectés
+  effectifEncadrants  Int?     // Nombre d'encadrants techniques
+
+  // Description
+  description         String?  @db.Text
+  activites           String?  @db.Text
+
+  // Statut
+  actif               Boolean  @default(true)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organisme           Organisme @relation(fields: [organismeId], references: [id], onDelete: Cascade)
+
+  @@map("ateliers_chantiers")
+}
+
+// ============================================
+// OBJECTIFS NÉGOCIÉS - Tableau de suivi annuel
+// ============================================
+
+// Objectifs négociés avec l'État (DDETS)
+model ObjectifNegocie {
+  id                  String   @id @default(cuid())
+  conventionId        String
+
+  // Période
+  annee               Int
+
+  // OBJECTIF 1: Nombre prévisionnel de sorties
+  nombreSortiesPrevisionnel Int // Ex: 14
+
+  // OBJECTIF 2: Taux de sorties dynamiques (emploi + formation qualifiante)
+  tauxSortiesDynamiquesCible Float // Ex: 60.00%
+
+  // OBJECTIF 3: Taux de sorties emploi durable (CDI, CDD>6mois, création entreprise)
+  tauxEmploiDurableCible Float // Ex: 25.00%
+
+  // OBJECTIF 4: Taux de sorties emploi transition (CDD<6mois, intérim, autre SIAE)
+  tauxEmploiTransitionCible Float // Ex: 20.00%
+
+  // OBJECTIF 5: Taux de sorties positives (emploi durable + transition + formation)
+  tauxSortiesPositivesCible Float // Ex: 15.00%
+
+  // Notes
+  notes               String?  @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  convention          ConventionACI @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+  suivis              SuiviObjectifNegocie[]
+
+  @@unique([conventionId, annee])
+  @@map("objectifs_negocies")
+}
+
+// Suivi mensuel/trimestriel des objectifs négociés
+model SuiviObjectifNegocie {
+  id                  String   @id @default(cuid())
+  objectifNegocieId   String
+
+  // Période de suivi
+  mois                Int      // 1-12 (ou 0 pour bilan annuel)
+  annee               Int
+
+  // Effectifs au moment du suivi
+  effectifEntree      Int      @default(0) // Entrées du mois
+  effectifSortie      Int      @default(0) // Sorties du mois
+  effectifPresent     Int      @default(0) // Effectif présent fin de mois
+
+  // Sorties par type (cumulées depuis début d'année)
+  sortiesEmploiDurable    Int @default(0) // CDI, CDD>6mois
+  sortiesEmploiTransition Int @default(0) // CDD<6mois, intérim, autre SIAE
+  sortiesFormation        Int @default(0) // Formation qualifiante
+  sortiesAutresPositives  Int @default(0) // Autres sorties positives
+  sortiesNegatives        Int @default(0) // Sorties négatives (abandon, licenciement)
+
+  // Calculs automatiques (stockés pour historique)
+  totalSorties            Int @default(0)
+  tauxSortiesDynamiques   Float @default(0) // (emploiDurable + transition + formation) / totalSorties
+  tauxEmploiDurable       Float @default(0) // emploiDurable / totalSorties
+  tauxEmploiTransition    Float @default(0) // emploiTransition / totalSorties
+  tauxSortiesPositives    Float @default(0) // (durable + transition + formation + autresPos) / totalSorties
+
+  // Comparaison avec objectifs
+  ecartDynamiques         Float @default(0) // Réel - Cible
+  ecartEmploiDurable      Float @default(0)
+  ecartEmploiTransition   Float @default(0)
+  ecartSortiesPositives   Float @default(0)
+
+  // Commentaires
+  commentaire             String?  @db.Text
+  actionsCorrectives      String?  @db.Text
+
+  // Validation
+  dateValidation          DateTime?
+  validePar               String?  @db.VarChar(100)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  objectifNegocie     ObjectifNegocie @relation(fields: [objectifNegocieId], references: [id], onDelete: Cascade)
+
+  @@unique([objectifNegocieId, mois, annee])
+  @@map("suivis_objectifs_negocies")
+}

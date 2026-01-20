@@ -1,0 +1,1352 @@
+[
+  {
+    "label": "Mobilier de bureau",
+    "value": "mobilier-bureau",
+    "children": [
+      {
+        "label": "Bureaux fixes",
+        "value": "bureaux-fixes",
+        "dismantling": {
+          "subassemblies": ["Plateau (bois/mélaminé)", "Piétements (acier/aluminium)", "Quincaillerie", "Passe-câbles (si présents)"],
+          "valuable": ["Acier/alu (piétements)", "Bois (réemploi/matière si propre)"],
+          "hazardous": [],
+          "notes": "Prioriser réemploi complet si état A/B; sinon séparation bois/métal."
+        }
+      },
+      {
+        "label": "Bureaux réglables motorisés",
+        "value": "bureaux-reglables-motorises",
+        "dismantling": {
+          "subassemblies": ["Plateau", "Colonnes motorisées", "Moteurs/actuateurs", "Boîtier de contrôle", "Alimentation + câbles"],
+          "valuable": ["Moteurs/contrôleur (réemploi)", "Alu/acier colonnes"],
+          "hazardous": ["Bloc d’alimentation (DEEE)", "Condensateurs (carte)"],
+          "notes": "Déconnecter alimentation/contrôleur avant dépose colonnes; tester réemploi."
+        }
+      },
+      {
+        "label": "Bureaux en L / angle",
+        "value": "bureaux-en-l-angle",
+        "dismantling": {
+          "subassemblies": ["Plateaux (x2)", "Équerres/jonctions", "Piétements", "Top access (si)"],
+          "valuable": ["Piétements métal", "Top access (réemploi)"],
+          "hazardous": [],
+          "notes": "Séparer quincaillerie; vérifier inserts métal dans plateaux."
+        }
+      },
+      {
+        "label": "Bench multi-postes",
+        "value": "bench-multi-postes",
+        "dismantling": {
+          "subassemblies": ["Plateaux modulaires", "Traverse centrale", "Piétements", "Électrification (si)"],
+          "valuable": ["Rails/traverses acier", "Blocs prises (réemploi/DEEE)"],
+          "hazardous": ["Éléments électriques (DEEE)"],
+          "notes": "Tracer câblage avant dépose; garder kits montage si réemploi."
+        }
+      },
+      {
+        "label": "Convertisseurs sit-stand (plateau)",
+        "value": "convertisseurs-sit-stand-plateau",
+        "dismantling": {
+          "subassemblies": ["Mécanisme gaz/ressort", "Plateau mobile", "Commandes (si électriques)"],
+          "valuable": ["Acier/alu", "Mécanismes réemploi"],
+          "hazardous": ["Cartouches gaz (si présentes)"],
+          "notes": "Vérifier présence vérins gaz; traiter selon filière habilitée."
+        }
+      },
+      {
+        "label": "Tables de réunion",
+        "value": "tables-de-reunion",
+        "dismantling": {
+          "subassemblies": ["Plateau", "Piétements", "Top access/boîtes de sol (si)"],
+          "valuable": ["Métal piétements", "Top access (réemploi)"],
+          "hazardous": ["Modules électriques/USB (DEEE)"],
+          "notes": "Débrancher alimentation avant dépose top access."
+        }
+      },
+      {
+        "label": "Tables hautes / mange-debout",
+        "value": "tables-hautes-mange-debout",
+        "dismantling": {
+          "subassemblies": ["Plateau", "Fût/piétement", "Embase"],
+          "valuable": ["Acier/alu", "Bois propre"],
+          "hazardous": [],
+          "notes": "Souvent monomatériau; tri simple."
+        }
+      },
+      {
+        "label": "Tables pliantes / formation (roulantes)",
+        "value": "tables-pliantes-formation-roulantes",
+        "dismantling": {
+          "subassemblies": ["Plateau", "Châssis pliant", "Roulettes", "Serrures/loquets"],
+          "valuable": ["Acier/alu châssis", "Roulettes (réemploi)"],
+          "hazardous": [],
+          "notes": "Contrôler état roulettes pour réemploi."
+        }
+      },
+      {
+        "label": "Comptoirs d’accueil / banques",
+        "value": "comptoirs-d-accueil-banques",
+        "dismantling": {
+          "subassemblies": ["Structure (bois/métal)", "Habillages (stratifié/verre)", "Éclairage intégré (si)", "Électrification"],
+          "valuable": ["Verre", "Métal", "Modules d’éclairage (réemploi/DEEE)"],
+          "hazardous": ["Alimentations/LED (DEEE)"],
+          "notes": "Dépose des verres/protège-écrans en priorité."
+        }
+      },
+      {
+        "label": "Crédences / meubles bas",
+        "value": "credences-meubles-bas",
+        "dismantling": {
+          "subassemblies": ["Caisson bois/métal", "Portes/tiriors", "Poignées/charnières"],
+          "valuable": ["Métal quincaillerie", "Bois propre (réemploi/matière)"],
+          "hazardous": [],
+          "notes": "Mono-flux fréquent; démontage rapide."
+        }
+      },
+      {
+        "label": "Tables d’appoint / coffee tables",
+        "value": "tables-d-appoint-coffee-tables",
+        "dismantling": {
+          "subassemblies": ["Plateau (bois/verre)", "Piétement (acier/alu/bois)"],
+          "valuable": ["Verre", "Métal"],
+          "hazardous": [],
+          "notes": "Protection bords verre à la dépose."
+        }
+      },
+      {
+        "label": "Fauteuils de travail (ergonomiques)",
+        "value": "fauteuils-de-travail-ergonomiques",
+        "dismantling": {
+          "subassemblies": ["Dossier/assise (mousse/tissu)", "Mécanisme synchro", "Vérin gaz", "Base/roulettes", "Accoudoirs"],
+          "valuable": ["Alu/acier base", "Roulettes/accoudoirs (réemploi)"],
+          "hazardous": ["Vérin gaz (traitement spécifique)"],
+          "notes": "Purger/déposer vérin via filière habilitée; mousses → CSR/valorisation si acceptée."
+        }
+      },
+      {
+        "label": "Chaises visiteurs / réunion",
+        "value": "chaises-visiteurs-reunion",
+        "dismantling": {
+          "subassemblies": ["Structure (tube acier/alu)", "Assise/dossier (plastique/tissu)", "Patins"],
+          "valuable": ["Métal", "Polypropylène (si filière)"],
+          "hazardous": [],
+          "notes": "Empilables; privilégier réemploi en lot."
+        }
+      },
+      {
+        "label": "Tabourets hauts / assis-debout",
+        "value": "tabourets-hauts-assis-debout",
+        "dismantling": {
+          "subassemblies": ["Assise (bois/plastique)", "Colonne", "Embase"],
+          "valuable": ["Métal", "Bois"],
+          "hazardous": [],
+          "notes": "Si vérin gaz → filière spécifique."
+        }
+      },
+      {
+        "label": "Canapés / banquettes / ottomans",
+        "value": "canapes-banquettes-ottomans",
+        "dismantling": {
+          "subassemblies": ["Structure bois/métal", "Mousses", "Revêtements tissu/simili", "Pieds"],
+          "valuable": ["Pieds métal/bois", "Structure métal"],
+          "hazardous": [],
+          "notes": "Réemploi si état A/B; mousses rarement valorisées en matière."
+        }
+      },
+      {
+        "label": "Caissons mobiles / fixes",
+        "value": "caissons-mobiles-fixes",
+        "dismantling": {
+          "subassemblies": ["Coque (acier/bois)", "Tiroirs", "Serrure", "Roulettes (si)"],
+          "valuable": ["Acier", "Roulettes/systèmes de guidage"],
+          "hazardous": [],
+          "notes": "Garder clés/serrures pour réemploi."
+        }
+      },
+      {
+        "label": "Armoires à portes battantes",
+        "value": "armoires-a-portes-battantes",
+        "dismantling": {
+          "subassemblies": ["Corps", "Portes", "Charnières/poignées", "Tablettes"],
+          "valuable": ["Acier", "Accessoires réemploi"],
+          "hazardous": [],
+          "notes": "Déposer portes pour transport sécurisé."
+        }
+      },
+      {
+        "label": "Armoires à rideaux (tambour)",
+        "value": "armoires-a-rideaux-tambour",
+        "dismantling": {
+          "subassemblies": ["Corps acier", "Rideau PVC/PP", "Glissières", "Serrure"],
+          "valuable": ["Acier"],
+          "hazardous": [],
+          "notes": "Séparer rideaux plastiques (PP/PVC) si filière."
+        }
+      },
+      {
+        "label": "Classeurs latéraux / dossiers suspendus",
+        "value": "classeurs-lateraux-dossiers-suspendus",
+        "dismantling": {
+          "subassemblies": ["Corps acier", "Tiroirs", "Guides", "Serrures"],
+          "valuable": ["Acier", "Guides réemploi"],
+          "hazardous": [],
+          "notes": "Vider documents avant manutention ; confidentialité."
+        }
+      },
+      {
+        "label": "Rayonnages / étagères",
+        "value": "rayonnages-etageres",
+        "dismantling": {
+          "subassemblies": ["Montants", "Tablettes", "Entretoises"],
+          "valuable": ["Acier/alu"],
+          "hazardous": [],
+          "notes": "Conserver visseries par travées."
+        }
+      },
+      {
+        "label": "Lockers / casiers standards",
+        "value": "lockers-casiers-standards",
+        "dismantling": {
+          "subassemblies": ["Corps", "Portes", "Serrures/charnières"],
+          "valuable": ["Acier", "Accessoires"],
+          "hazardous": [],
+          "notes": "Déverrouiller/neutraliser serrures."
+        }
+      },
+      {
+        "label": "Lockers connectés (électroniques)",
+        "value": "lockers-connectes-electroniques",
+        "dismantling": {
+          "subassemblies": ["Corps acier", "Modules électroniques", "Écran/lecteurs", "Alimentation/câblage"],
+          "valuable": ["Cartes/écran (réemploi DEEE)", "Acier"],
+          "hazardous": ["Alimentations (DEEE)"],
+          "notes": "Isoler modules avant dépose portes."
+        }
+      },
+      {
+        "label": "Cloisons de séparation sur pied",
+        "value": "cloisons-de-separation-sur-pied",
+        "dismantling": {
+          "subassemblies": ["Cadre (alu/acier)", "Panneau (tissu/plexi/bois)", "Pieds"],
+          "valuable": ["Alu/acier", "Plexi"],
+          "hazardous": [],
+          "notes": "Déposer panneaux fragiles en premier."
+        }
+      },
+      {
+        "label": "Écrans de bureau / séparateurs",
+        "value": "ecrans-de-bureau-separateurs",
+        "dismantling": {
+          "subassemblies": ["Cadre", "Âme (tissu/mousse/bois)", "Équerres de fixation"],
+          "valuable": ["Alu/acier"],
+          "hazardous": [],
+          "notes": "Réemploi possible comme accessoires bench."
+        }
+      },
+      {
+        "label": "Panneaux acoustiques (muraux/suspendus)",
+        "value": "panneaux-acoustiques-muraux-suspendus",
+        "dismantling": {
+          "subassemblies": ["Cadre/rail", "Panneau (PET/feutre/mousse)", "Suspentes"],
+          "valuable": ["Alu (rails)"],
+          "hazardous": [],
+          "notes": "Vérifier composition (PET recyclé)."
+        }
+      },
+      {
+        "label": "Cabines acoustiques (phone booths)",
+        "value": "cabines-acoustiques-phone-booths",
+        "dismantling": {
+          "subassemblies": ["Structure/panneaux", "Ventilation", "Éclairage LED", "Électrification/prises"],
+          "valuable": ["Modules LED/ventilos (réemploi)", "Alu/acier"],
+          "hazardous": ["Alimentations (DEEE)"],
+          "notes": "Débrancher circuit; sortir vitrages avec EPI."
+        }
+      },
+      {
+        "label": "Blocs prises encastrés / top access",
+        "value": "blocs-prises-encastres-top-access",
+        "dismantling": {
+          "subassemblies": ["Module prises 230V", "USB/chargeurs", "Châssis/volet", "Câble/alimentation"],
+          "valuable": ["Modules fonctionnels (réemploi)", "Cuivre (câbles)"],
+          "hazardous": ["Éléments électriques (DEEE)"],
+          "notes": "Tester; boucher découpe plateau si réemploi sans module."
+        }
+      },
+      {
+        "label": "Colonnettes / boîtiers de sol",
+        "value": "colonnettes-boitiers-de-sol",
+        "dismantling": {
+          "subassemblies": ["Coque (plastique/métal)", "Prises/ports", "Câblage"],
+          "valuable": ["Cuivre", "Modules (réemploi)"],
+          "hazardous": ["DEEE"],
+          "notes": "Déconnecter alimentation/baie avant dépose."
+        }
+      },
+      {
+        "label": "Goulottes / chemins de câbles",
+        "value": "goulottes-chemins-de-cables",
+        "dismantling": {
+          "subassemblies": ["Corps (PVC/alu)", "Couvercles", "Clips/supports"],
+          "valuable": ["Alu (si)", "Cuivre résiduel (si câbles)"],
+          "hazardous": [],
+          "notes": "Séparer PVC/alu si tri matière."
+        }
+      },
+      {
+        "label": "Spines / descentes de câbles",
+        "value": "spines-descentes-de-cables",
+        "dismantling": {
+          "subassemblies": ["Chaîne (plastique)", "Contrepoids", "Clips"],
+          "valuable": [],
+          "hazardous": [],
+          "notes": "Réemploi fréquent."
+        }
+      },
+      {
+        "label": "Multiprises / parafoudre",
+        "value": "multiprises-parafoudre",
+        "dismantling": {
+          "subassemblies": ["Bloc prises", "Câble/fiche", "Protection (varistances)"],
+          "valuable": ["Cuivre", "Bloc réemploi si conforme"],
+          "hazardous": ["DEEE"],
+          "notes": "Tester sécurité; sinon DEEE démantèlement."
+        }
+      },
+      {
+        "label": "Chargeurs sans fil intégrés",
+        "value": "chargeurs-sans-fil-integres",
+        "dismantling": {
+          "subassemblies": ["Bobine/PCB", "Driver/alimentation", "Châssis"],
+          "valuable": ["PCB (réemploi)", "Cuivre bobine"],
+          "hazardous": ["DEEE"],
+          "notes": "Déposer proprement du plateau."
+        }
+      },
+      {
+        "label": "Bras écrans",
+        "value": "bras-ecrans",
+        "dismantling": {
+          "subassemblies": ["Bras (alu/acier)", "Ressorts/gaz", "Fixations VESA", "Serre-joint/embase"],
+          "valuable": ["Alu/acier", "Pièces réemploi"],
+          "hazardous": ["Vérin gaz (si)"],
+          "notes": "Tester maintien; purger vérins si démontage matière."
+        }
+      },
+      {
+        "label": "Supports UC / tiroirs clavier",
+        "value": "supports-uc-tiroirs-clavier",
+        "dismantling": {
+          "subassemblies": ["Châssis métal", "Rails/coulisses", "Accessoires"],
+          "valuable": ["Acier/alu"],
+          "hazardous": [],
+          "notes": "Réemploi courant."
+        }
+      },
+      {
+        "label": "Stations d’accueil intégrées (dock)",
+        "value": "stations-d-accueil-integrees-dock",
+        "dismantling": {
+          "subassemblies": ["PCB/connectique", "Boîtier", "Alimentation (si)"],
+          "valuable": ["Dock (réemploi)", "Connecteurs/métaux précieux (matière)"],
+          "hazardous": ["Alims/PCB (DEEE)"],
+          "notes": "Vérifier compatibilité USB-C/Thunderbolt."
+        }
+      },
+      {
+        "label": "Porte-câbles / paniers sous bureau",
+        "value": "porte-cables-paniers-sous-bureau",
+        "dismantling": {
+          "subassemblies": ["Panier (fil acier)", "Équerres", "Serre-câbles"],
+          "valuable": ["Acier"],
+          "hazardous": [],
+          "notes": "Réemploi facile."
+        }
+      },
+      {
+        "label": "Repose-pieds / accessoires ergonomiques",
+        "value": "repose-pieds-accessoires-ergonomiques",
+        "dismantling": {
+          "subassemblies": ["Plateau", "Structure", "Surfaces antidérapantes"],
+          "valuable": ["Plastique/métal (selon)"],
+          "hazardous": [],
+          "notes": "Trier par matière."
+        }
+      },
+      {
+        "label": "Murs médias / meubles TV",
+        "value": "murs-medias-meubles-tv",
+        "dismantling": {
+          "subassemblies": ["Structure", "Support VESA", "Gestion câbles"],
+          "valuable": ["Acier/alu"],
+          "hazardous": [],
+          "notes": "Lister quincaillerie pour réemploi."
+        }
+      },
+      {
+        "label": "Chariots écrans (motorisés ou non)",
+        "value": "chariots-ecrans-motorises-ou-non",
+        "dismantling": {
+          "subassemblies": ["Châssis/roulettes", "Mât support", "Moteur/contrôleur (si)"],
+          "valuable": ["Acier/alu", "Moteur (réemploi)"],
+          "hazardous": ["Alimentation (DEEE)"],
+          "notes": "Bloquer roues; retirer écran avant démontage."
+        }
+      },
+      {
+        "label": "Pupitres / lutrins",
+        "value": "pupitres-lutrins",
+        "dismantling": {
+          "subassemblies": ["Plateau", "Pied", "Gestion câbles (si)"],
+          "valuable": ["Métal/bois"],
+          "hazardous": [],
+          "notes": "Variante AV intégrée → voir DEEE."
+        }
+      },
+      {
+        "label": "Tableaux blancs / whiteboards",
+        "value": "tableaux-blancs-whiteboards",
+        "dismantling": {
+          "subassemblies": ["Surface (acier/émail/verre)", "Cadre alu", "Support mural"],
+          "valuable": ["Alu", "Acier"],
+          "hazardous": [],
+          "notes": "Précautions coupe/bris."
+        }
+      },
+      {
+        "label": "Tableaux en verre / panneaux liège",
+        "value": "tableaux-en-verre-panneaux-liege",
+        "dismantling": {
+          "subassemblies": ["Verre/liege", "Cadre/support"],
+          "valuable": ["Verre (si filière)", "Alu"],
+          "hazardous": [],
+          "notes": "Emballer verre; EPI."
+        }
+      },
+      {
+        "label": "Chariots de charge (PC/Chromebook)",
+        "value": "chariots-de-charge-pc-chromebook",
+        "dismantling": {
+          "subassemblies": ["Armoire/roues", "Multiprises/chargeurs", "Ventilation", "Contrôleur (si)"],
+          "valuable": ["Chargeurs/prises (réemploi/DEEE)", "Acier"],
+          "hazardous": ["Éléments électriques (DEEE)"],
+          "notes": "Débrancher alimentation générale."
+        }
+      },
+      {
+        "label": "Imprimantes — dessertes / meubles",
+        "value": "imprimantes-dessertes-meubles",
+        "dismantling": {
+          "subassemblies": ["Chariot/etagères", "Roues", "Goulottes"],
+          "valuable": ["Acier/alu"],
+          "hazardous": [],
+          "notes": "Équipement actif (imprimante) traité à part (DEEE)."
+        }
+      },
+      {
+        "label": "Trieurs / mobilier courrier",
+        "value": "trieurs-mobilier-courrier",
+        "dismantling": {
+          "subassemblies": ["Corps (bois/métal)", "Étagères/pigeonniers"],
+          "valuable": ["Métal", "Bois"],
+          "hazardous": [],
+          "notes": "Réemploi offices."
+        }
+      },
+      {
+        "label": "Portemanteaux / patères / parapluies",
+        "value": "portemanteaux-pateres-parapluies",
+        "dismantling": {
+          "subassemblies": ["Fût/pieds", "Crochets", "Bac parapluies"],
+          "valuable": ["Métal/bois"],
+          "hazardous": [],
+          "notes": "Tri simple."
+        }
+      },
+      {
+        "label": "Jardinières / bacs décoratifs",
+        "value": "jardinieres-bacs-decoratifs",
+        "dismantling": {
+          "subassemblies": ["Bac (plastique/métal)", "Insert/pot", "Galets/décor"],
+          "valuable": ["Métal", "Plastique"],
+          "hazardous": [],
+          "notes": "Vider substrats/terre avant."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Équipements informatiques et telecom",
+    "value": "informatique-telecom",
+    "children": [
+      {
+        "label": "Unités centrales (desktop)",
+        "value": "unites-centrales-desktop",
+        "dismantling": {
+          "subassemblies": ["Boîtier acier/alu", "Alimentation PSU", "Carte mère/CPU", "RAM", "Stockage (HDD/SSD)", "Cartes PCIe"],
+          "valuable": ["Cartes (métaux précieux)", "Cuivre PSU", "Alu/acier boîtier"],
+          "hazardous": ["Batterie CMOS (bouton)"],
+          "notes": "Isoler supports de données; effacement ou broyage selon protocole."
+        }
+      },
+      {
+        "label": "Stations de travail (workstations)",
+        "value": "stations-de-travail-workstations",
+        "dismantling": {
+          "subassemblies": ["Boîtier renforcé", "PSU haute puissance", "GPU(s)", "RAM ECC", "Stockage pro", "Refroidissement"],
+          "valuable": ["GPU/CPU (réemploi)", "Cartes (valorisation)", "PSU"],
+          "hazardous": ["Batterie CMOS"],
+          "notes": "Tester composants haut de gamme pour réemploi/remarketing."
+        }
+      },
+      {
+        "label": "PC portables (laptops)",
+        "value": "pc-portables-laptops",
+        "dismantling": {
+          "subassemblies": ["Écran/LCD", "Carte mère", "Batterie Li-ion", "SSD/RAM", "Clavier/touchpad", "Charnières/coque"],
+          "valuable": ["SSD/RAM (réemploi)", "LCD (si OK)"],
+          "hazardous": ["Batterie Li-ion (ADR)"],
+          "notes": "Retirer batterie en premier; tester écran/clavier; effacement SSD."
+        }
+      },
+      {
+        "label": "Ultrabooks / 2-en-1",
+        "value": "ultrabooks-2-en-1",
+        "dismantling": {
+          "subassemblies": ["LCD/touch", "Batterie Li-ion collée", "Carte mère compacte", "SSD M.2", "Charnières"],
+          "valuable": ["SSD M.2", "Écran"],
+          "hazardous": ["Batterie Li-ion (collage)"],
+          "notes": "Procédure chauffe/levier pour batteries adhésives (EPI)."
+        }
+      },
+      {
+        "label": "Chromebooks / thin clients",
+        "value": "chromebooks-thin-clients",
+        "dismantling": {
+          "subassemblies": ["Carte mère simple", "Stockage eMMC/SSD", "Batterie (selon)", "LCD"],
+          "valuable": ["Cartes", "Écrans"],
+          "hazardous": ["Batteries"],
+          "notes": "Valeur moindre mais flux stable."
+        }
+      },
+      {
+        "label": "Tablettes",
+        "value": "tablettes",
+        "dismantling": {
+          "subassemblies": ["Écran/tactile", "Batterie Li-ion", "Carte mère", "Coque"],
+          "valuable": ["Écrans", "Cartes (Au/Ag)"],
+          "hazardous": ["Batteries Li-ion"],
+          "notes": "Ouverture contrôlée; risque percement batterie."
+        }
+      },
+      {
+        "label": "Écrans / moniteurs 22-24\"",
+        "value": "ecrans-moniteurs-22-24",
+        "dismantling": {
+          "subassemblies": ["Dalle LCD", "Carte alimentation", "Carte signal", "Châssis/plastiques", "Câbles"],
+          "valuable": ["Cartes (métaux)", "Cuivre câbles"],
+          "hazardous": [],
+          "notes": "Tester réemploi; attention rétro-éclairage (anciens CCFL)."
+        }
+      },
+      {
+        "label": "Écrans / moniteurs 27-34\"",
+        "value": "ecrans-moniteurs-27-34",
+        "dismantling": {
+          "subassemblies": ["Dalle LCD/IPS/VA", "Alim interne/externe", "Cartes", "Pied support"],
+          "valuable": ["Dalles réemploi", "Cartes"],
+          "hazardous": [],
+          "notes": "Valeur réemploi supérieure sur grandes tailles."
+        }
+      },
+      {
+        "label": "Moniteurs spécialisés (gaming/graphisme)",
+        "value": "moniteurs-specialises-gaming-graphisme",
+        "dismantling": {
+          "subassemblies": ["Dalle hautes perfs", "Électronique avancée", "Alim", "Pied ergonomique"],
+          "valuable": ["Dalle/Pied (réemploi premium)", "Cartes"],
+          "hazardous": [],
+          "notes": "Tester pixels/rafraîchissement."
+        }
+      },
+      {
+        "label": "Claviers / souris",
+        "value": "claviers-souris",
+        "dismantling": {
+          "subassemblies": ["PCB", "Coques plastiques", "Câbles/dongles"],
+          "valuable": ["Dongles (réemploi)", "Cuivre"],
+          "hazardous": [],
+          "notes": "Nettoyage pour réemploi grade B."
+        }
+      },
+      {
+        "label": "Webcams / micros",
+        "value": "webcams-micros",
+        "dismantling": {
+          "subassemblies": ["Capteur/carte", "Coque", "Câble"],
+          "valuable": ["Modules complets (réemploi)"],
+          "hazardous": [],
+          "notes": "Tester image/son."
+        }
+      },
+      {
+        "label": "Casques audio / oreillettes",
+        "value": "casques-audio-oreillettes",
+        "dismantling": {
+          "subassemblies": ["Arceau/écouteurs", "Câble/dongle", "Batterie (BT)"],
+          "valuable": ["Modules BT/dongles", "Cuivre"],
+          "hazardous": ["Batteries Li-ion (si)"],
+          "notes": "Changer mousses pour réemploi."
+        }
+      },
+      {
+        "label": "Stations d’accueil (dock USB/Thunderbolt)",
+        "value": "stations-d-accueil-dock-usb-thunderbolt",
+        "dismantling": {
+          "subassemblies": ["PCB haute densité", "Boîtier", "Alimentation (si ext.)"],
+          "valuable": ["Dock réemploi", "Cartes (métaux)"],
+          "hazardous": ["Alimentation (DEEE)"],
+          "notes": "Tester ports/vidéo/alim."
+        }
+      },
+      {
+        "label": "Lecteurs cartes / smartcard",
+        "value": "lecteurs-cartes-smartcard",
+        "dismantling": {
+          "subassemblies": ["Mécanique lecture", "Carte électronique", "Coque"],
+          "valuable": ["Cartes (Au/Ag)", "Câble cuivre"],
+          "hazardous": [],
+          "notes": "Données non persistantes."
+        }
+      },
+      {
+        "label": "Imprimantes laser",
+        "value": "imprimantes-laser",
+        "dismantling": {
+          "subassemblies": ["Unité four/hébergeur", "Mécanique papier", "Cartes", "Moteurs", "Toners"],
+          "valuable": ["Cartes/moteurs", "Métal châssis"],
+          "hazardous": ["Toner/résidus", "Tambours (si)"],
+          "notes": "Extraire consommables en premier; confinement poussières."
+        }
+      },
+      {
+        "label": "Imprimantes jet d’encre",
+        "value": "imprimantes-jet-d-encre",
+        "dismantling": {
+          "subassemblies": ["Têtes d’impression", "Cartes", "Châssis/plastique", "Réservoirs"],
+          "valuable": ["Cartes/moteurs"],
+          "hazardous": ["Encres/réservoirs"],
+          "notes": "Gérer encres/éponges en filière appropriée."
+        }
+      },
+      {
+        "label": "Multifonctions (MFP)",
+        "value": "multifonctions-mfp",
+        "dismantling": {
+          "subassemblies": ["Scanner/ADF", "Moteurs/engrenages", "Cartes", "Unité impression"],
+          "valuable": ["Cartes", "Moteurs", "Métal"],
+          "hazardous": ["Toners/encres"],
+          "notes": "Procédures MFP = laser + scanner."
+        }
+      },
+      {
+        "label": "Traceurs / plotters",
+        "value": "traceurs-plotters",
+        "dismantling": {
+          "subassemblies": ["Barres/rails", "Chariot tête", "Électronique", "Bac encres"],
+          "valuable": ["Alu/acier", "Cartes"],
+          "hazardous": ["Encres"],
+          "notes": "Pièces large format à valeur réemploi."
+        }
+      },
+      {
+        "label": "Scanners",
+        "value": "scanners",
+        "dismantling": {
+          "subassemblies": ["Capteurs/optique", "Moteurs/entraînement", "Cartes", "Alimentation"],
+          "valuable": ["Cartes/optique"],
+          "hazardous": [],
+          "notes": "Attention pièces optiques fragiles."
+        }
+      },
+      {
+        "label": "Disques durs (HDD)",
+        "value": "disques-durs-hdd",
+        "dismantling": {
+          "subassemblies": ["Boîtier/plateaux", "Carte contrôleur", "Moteur", "Aimants (NdFeB)"],
+          "valuable": ["Alu boîtier", "Aimants néodyme", "Cartes (Au)"],
+          "hazardous": [],
+          "notes": "Broyage/effacement certifié avant matière."
+        }
+      },
+      {
+        "label": "SSD / NVMe",
+        "value": "ssd-nvme",
+        "dismantling": {
+          "subassemblies": ["PCB", "Modules NAND/contrôleur"],
+          "valuable": ["Réemploi si sain", "Métaux précieux PCB"],
+          "hazardous": [],
+          "notes": "Effacement sécurisé; sinon démantèlement cartes."
+        }
+      },
+      {
+        "label": "Mémoire RAM",
+        "value": "memoire-ram",
+        "dismantling": {
+          "subassemblies": ["PCB barrettes", "Puces DRAM"],
+          "valuable": ["Réemploi", "Métaux précieux PCB"],
+          "hazardous": [],
+          "notes": "Tri par génération (DDR3/4/5)."
+        }
+      },
+      {
+        "label": "Cartes graphiques (GPU)",
+        "value": "cartes-graphiques-gpu",
+        "dismantling": {
+          "subassemblies": ["PCB", "Radiateurs/ventilateurs", "Connecteurs"],
+          "valuable": ["Réemploi", "Cuivre/alu radiateurs"],
+          "hazardous": [],
+          "notes": "Tester; nettoyage pâte thermique."
+        }
+      },
+      {
+        "label": "Alimentations (PSU)",
+        "value": "alimentations-psu",
+        "dismantling": {
+          "subassemblies": ["Transformateur/inductances", "Cartes puissance", "Câbles"],
+          "valuable": ["Cuivre", "Cartes"],
+          "hazardous": ["Condensateurs (décharge)"],
+          "notes": "Décharge sécurisée avant ouverture."
+        }
+      },
+      {
+        "label": "Cartes mères / CPU",
+        "value": "cartes-meres-cpu",
+        "dismantling": {
+          "subassemblies": ["PCB multi-couches", "Socket CPU/CPU", "Radiateurs"],
+          "valuable": ["CPU (réemploi)", "Métaux précieux PCB"],
+          "hazardous": [],
+          "notes": "Protéger pins/sockets; tester CPU."
+        }
+      },
+      {
+        "label": "Switches (L2/L3, PoE)",
+        "value": "switches-l2-l3-poe",
+        "dismantling": {
+          "subassemblies": ["Châssis", "Cartes réseau", "Alim (interne)", "Ventilateurs"],
+          "valuable": ["Réemploi", "Cartes/alu"],
+          "hazardous": [],
+          "notes": "Effacer config; PoE → cartes puissance."
+        }
+      },
+      {
+        "label": "Routeurs / pare-feu",
+        "value": "routeurs-pare-feu",
+        "dismantling": {
+          "subassemblies": ["Cartes CPU/ASIC", "Alim", "Châssis"],
+          "valuable": ["Réemploi", "Cartes (matière)"],
+          "hazardous": [],
+          "notes": "Reset configs/licences."
+        }
+      },
+      {
+        "label": "Points d’accès Wi-Fi",
+        "value": "points-d-acces-wi-fi",
+        "dismantling": {
+          "subassemblies": ["PCB radio", "Antennes", "Boîtier"],
+          "valuable": ["Réemploi", "Cartes"],
+          "hazardous": [],
+          "notes": "PoE 802.3af/at."
+        }
+      },
+      {
+        "label": "Contrôleurs Wi-Fi",
+        "value": "controleurs-wi-fi",
+        "dismantling": {
+          "subassemblies": ["Cartes", "Alim", "Châssis"],
+          "valuable": ["Réemploi", "Métaux PCB"],
+          "hazardous": [],
+          "notes": "Proche switch/routeur."
+        }
+      },
+      {
+        "label": "Modems / ONT",
+        "value": "modems-ont",
+        "dismantling": {
+          "subassemblies": ["PCB", "Alim (ext)", "Coque"],
+          "valuable": ["Cartes", "Cuivre alim/câbles"],
+          "hazardous": [],
+          "notes": "Restitution opérateur parfois obligatoire."
+        }
+      },
+      {
+        "label": "Téléphones IP / DECT",
+        "value": "telephones-ip-dect",
+        "dismantling": {
+          "subassemblies": ["PCB", "Écran/clavier", "Combiné", "Batterie (DECT)"],
+          "valuable": ["Réemploi", "Cartes"],
+          "hazardous": ["Batteries (si)"],
+          "notes": "Tester codec/PoE; chargeurs DECT à part."
+        }
+      },
+      {
+        "label": "Serveurs rack",
+        "value": "serveurs-rack",
+        "dismantling": {
+          "subassemblies": ["Châssis", "Cartes/CPU/RAM", "RAID/stockage", "PSU redondants", "Ventilos"],
+          "valuable": ["CPU/RAM (réemploi)", "Cartes (matière)", "PSU"],
+          "hazardous": [],
+          "notes": "Effacement certifié; vérifier rails/racks 19\"."
+        }
+      },
+      {
+        "label": "Serveurs tour / blade",
+        "value": "serveurs-tour-blade",
+        "dismantling": {
+          "subassemblies": ["Châssis", "Nœuds blades", "Backplane", "PSU"],
+          "valuable": ["Nœuds réemploi", "PSU/ventilos"],
+          "hazardous": [],
+          "notes": "Châssis blade lourd; logistique adaptée."
+        }
+      },
+      {
+        "label": "Baies / racks 19\"",
+        "value": "baies-racks-19",
+        "dismantling": {
+          "subassemblies": ["Structure acier", "Portes/panneaux", "PDU", "Ventilation"],
+          "valuable": ["Acier", "PDU réemploi"],
+          "hazardous": [],
+          "notes": "Déposer portes pour manutention."
+        }
+      },
+      {
+        "label": "NAS / SAN / DAS",
+        "value": "nas-san-das",
+        "dismantling": {
+          "subassemblies": ["Châssis", "Contrôleurs", "Disques", "Alim"],
+          "valuable": ["Disques (effacement/réemploi)", "Cartes"],
+          "hazardous": [],
+          "notes": "Tracer séries disques; RAID à effacer."
+        }
+      },
+      {
+        "label": "PDU / onduleurs (UPS)",
+        "value": "pdu-onduleurs-ups",
+        "dismantling": {
+          "subassemblies": ["PDU (barrette)", "UPS (cartes, transfo)", "Batteries plomb/VRLA"],
+          "valuable": ["Cuivre", "Batteries (valeur)"],
+          "hazardous": ["Acide/plomb (batt.)"],
+          "notes": "Déconnexion sûre; ADR pour batteries."
+        }
+      },
+      {
+        "label": "KVM / consoles",
+        "value": "kvm-consoles",
+        "dismantling": {
+          "subassemblies": ["Cartes", "Écran/clavier intégrés (console)", "Châssis"],
+          "valuable": ["Réemploi", "Cartes"],
+          "hazardous": [],
+          "notes": "Tester ports/affichage."
+        }
+      },
+      {
+        "label": "Câbles réseau (cuivre)",
+        "value": "cables-reseau-cuivre",
+        "dismantling": {
+          "subassemblies": ["Gaîne PVC", "Paires cuivre", "RJ45"],
+          "valuable": ["Cuivre"],
+          "hazardous": [],
+          "notes": "Décâblage propre pour valorisation cuivre."
+        }
+      },
+      {
+        "label": "Câbles fibre optique",
+        "value": "cables-fibre-optique",
+        "dismantling": {
+          "subassemblies": ["Gaîne", "Fibres", "Connecteurs"],
+          "valuable": [],
+          "hazardous": [],
+          "notes": "Peu de valeur matière; réemploi connecteurs possible."
+        }
+      },
+      {
+        "label": "Câbles vidéo (HDMI/DP)",
+        "value": "cables-video-hdmi-dp",
+        "dismantling": {
+          "subassemblies": ["Gaîne", "Conducteurs cuivre", "Connecteurs"],
+          "valuable": ["Cuivre"],
+          "hazardous": [],
+          "notes": "Tester fonctionnalité pour réemploi."
+        }
+      },
+      {
+        "label": "Adaptateurs / convertisseurs",
+        "value": "adaptateurs-convertisseurs",
+        "dismantling": {
+          "subassemblies": ["PCB", "Connecteurs"],
+          "valuable": ["Réemploi", "Cartes (métaux)"],
+          "hazardous": [],
+          "notes": "Tri par interface."
+        }
+      },
+      {
+        "label": "Sacs / housses / supports PC",
+        "value": "sacs-housses-supports-pc",
+        "dismantling": {
+          "subassemblies": ["Textiles/mousses", "Pièces plastiques", "Éléments métal"],
+          "valuable": ["Réemploi (accessoires)"],
+          "hazardous": [],
+          "notes": "Nettoyage; tri textiles si filière."
+        }
+      },
+      {
+        "label": "Disques à détruire (effacement / broyage)",
+        "value": "disques-a-detruire-effacement-broyage",
+        "dismantling": {
+          "subassemblies": ["Support données (HDD/SSD)", "Étiquettes/traçabilité"],
+          "valuable": ["Alu (HDD)", "Métaux précieux (PCB)"],
+          "hazardous": [],
+          "notes": "Chaîne de garde + certificat d’effacement/destruction."
+        }
+      },
+      {
+        "label": "Badges / lecteurs d’accès",
+        "value": "badges-lecteurs-d-acces",
+        "dismantling": {
+          "subassemblies": ["PCB lecteur", "Coque", "Câble/alim"],
+          "valuable": ["Cartes", "Cuivre"],
+          "hazardous": [],
+          "notes": "Effacer/retirer identifiants."
+        }
+      },
+      {
+        "label": "Cartes / modules IoT",
+        "value": "cartes-modules-iot",
+        "dismantling": {
+          "subassemblies": ["PCB radio/senseurs", "Boîtier", "Alim/batterie (si)"],
+          "valuable": ["Cartes (Au/Ag)", "Réemploi modules"],
+          "hazardous": ["Batteries"],
+          "notes": "Inventorier firmwares/licences."
+        }
+      },
+      {
+        "label": "Raspberry Pi / mini PC",
+        "value": "raspberry-pi-mini-pc",
+        "dismantling": {
+          "subassemblies": ["PCB", "Boîtier", "Alim"],
+          "valuable": ["Réemploi total", "Cartes (matière)"],
+          "hazardous": [],
+          "notes": "Forte demande réemploi."
+        }
+      },
+      {
+        "label": "Accessoires divers (dongles, hubs)",
+        "value": "accessoires-divers-dongles-hubs",
+        "dismantling": {
+          "subassemblies": ["PCB", "Coque", "Câble (si)"],
+          "valuable": ["Réemploi", "Cuivre"],
+          "hazardous": [],
+          "notes": "Tester ports."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Audiovisuel grand public",
+    "value": "audiovisuel-grand-public",
+    "children": [
+      {
+        "label": "Televiseurs / projecteurs",
+        "value": "televiseurs-projecteurs",
+        "dismantling": {
+          "subassemblies": ["Dalle/optique", "Alimentation", "Cartes vidéo", "Haut-parleurs", "Coque"],
+          "valuable": ["Cartes", "Haut-parleurs (cuivre)", "Alu radiateurs"],
+          "hazardous": [],
+          "notes": "Anciens TV CCFL: attention tubes; vidéoprojecteurs: lampe (Hg) à part."
+        }
+      },
+      {
+        "label": "Consoles de jeux",
+        "value": "consoles-jeux",
+        "dismantling": {
+          "subassemblies": ["Carte mère/SoC", "Alimentation", "Stockage", "Coque"],
+          "valuable": ["Réemploi", "Cartes (métaux)"],
+          "hazardous": [],
+          "notes": "Effacement données; tester lecteurs."
+        }
+      },
+      {
+        "label": "Chaines hi-fi / amplis",
+        "value": "hifi-amplis",
+        "dismantling": {
+          "subassemblies": ["Alimentation/transformateur", "Étages audio", "Boîtier métal"],
+          "valuable": ["Cuivre transfo", "Boîtier métal"],
+          "hazardous": ["Condensateurs"],
+          "notes": "Décharge avant intervention."
+        }
+      },
+      {
+        "label": "Lecteurs DVD / Blu-ray",
+        "value": "lecteurs-dvd-bluray",
+        "dismantling": {
+          "subassemblies": ["Mécanique optique", "Cartes", "Alimentation"],
+          "valuable": ["Cartes", "Moteurs"],
+          "hazardous": [],
+          "notes": "Laser/optique fragile."
+        }
+      },
+      {
+        "label": "Enceintes / casques",
+        "value": "enceintes-casques",
+        "dismantling": {
+          "subassemblies": ["Haut-parleurs", "Filtres/PCB", "Boîtier/évents"],
+          "valuable": ["Cuivre bobines", "Aimants"],
+          "hazardous": [],
+          "notes": "Casques BT → batteries Li-ion à retirer."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Éclairage",
+    "value": "eclairage",
+    "children": [
+      {
+        "label": "Tubes fluorescents / neons",
+        "value": "tubes-fluorescents-neons",
+        "dismantling": {
+          "subassemblies": ["Tube verre", "Embases", "Ballast/Starter (luminaire)"],
+          "valuable": ["Alu (culots)", "Cuivre ballast"],
+          "hazardous": ["Mercure (tube)"],
+          "notes": "Flux spécifique DEEE lampes; manutention prudente."
+        }
+      },
+      {
+        "label": "Lampes fluocompactes",
+        "value": "lampes-fluocompactes",
+        "dismantling": {
+          "subassemblies": ["Bulbe", "Électronique base"],
+          "valuable": ["Métaux divers"],
+          "hazardous": ["Mercure résiduel"],
+          "notes": "Filière lampes obligatoire."
+        }
+      },
+      {
+        "label": "Ampoules LED",
+        "value": "ampoules-led",
+        "dismantling": {
+          "subassemblies": ["LED/driver", "Radiateur", "Culot"],
+          "valuable": ["Alu radiateur"],
+          "hazardous": [],
+          "notes": "Sans Hg; driver = DEEE cartes."
+        }
+      },
+      {
+        "label": "Luminaires",
+        "value": "luminaires",
+        "dismantling": {
+          "subassemblies": ["Corps (alu/acier)", "Driver/ballast", "Optiques/diffuseurs"],
+          "valuable": ["Alu/acier"],
+          "hazardous": ["Drivers/ballasts (DEEE)"],
+          "notes": "Anciens ballasts PCB (rare) → dangereux."
+        }
+      },
+      {
+        "label": "Ballasts / drivers",
+        "value": "ballasts-drivers",
+        "dismantling": {
+          "subassemblies": ["Cartes/inductances", "Boîtier"],
+          "valuable": ["Cuivre", "Cartes"],
+          "hazardous": ["Ancien PCB (très rare)"],
+          "notes": "Identifier générations."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Outils electriques / electroniques",
+    "value": "outils-electriques-electroniques",
+    "children": [
+      {
+        "label": "Perceuses / visseuses",
+        "value": "perceuses-visseuses",
+        "dismantling": {
+          "subassemblies": ["Moteur/engrenages", "Batterie (si sans fil)", "Mandrin", "Coque"],
+          "valuable": ["Cuivre moteur", "Acier mandrin"],
+          "hazardous": ["Batteries Li-ion/NiMH"],
+          "notes": "Séparer blocs batterie."
+        }
+      },
+      {
+        "label": "Scies / ponceuses / meuleuses",
+        "value": "scies-ponceuses-meuleuses",
+        "dismantling": {
+          "subassemblies": ["Moteur", "Réducteurs", "Plateaux/disques", "Cordon"],
+          "valuable": ["Cuivre", "Acier"],
+          "hazardous": [],
+          "notes": "Retirer accessoires coupants avec EPI."
+        }
+      },
+      {
+        "label": "Outils de jardin motorises",
+        "value": "outils-jardin-motorises",
+        "dismantling": {
+          "subassemblies": ["Moteur", "Batterie/cordon", "Lame/fil", "Carter"],
+          "valuable": ["Cuivre", "Acier"],
+          "hazardous": ["Batteries"],
+          "notes": "Nettoyer résidus végétaux/terre."
+        }
+      },
+      {
+        "label": "Compresseurs / nettoyeurs HP",
+        "value": "compresseurs-nettoyeurs-hp",
+        "dismantling": {
+          "subassemblies": ["Pompe/culasse", "Moteur", "Cuves/tuyaux", "Électronique (si)"],
+          "valuable": ["Cuivre/alu", "Acier cuves"],
+          "hazardous": [],
+          "notes": "Purges avant dépose."
+        }
+      },
+      {
+        "label": "Batteries d’outillage",
+        "value": "batteries-outillage",
+        "dismantling": {
+          "subassemblies": ["Cellules Li-ion/NiMH", "BMS/PCB", "Boîtier"],
+          "valuable": ["Métaux (Co/Ni) via filière", "Connecteurs"],
+          "hazardous": ["Risque thermique/ADR"],
+          "notes": "Stockage en bacs inertés."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Équipements medicaux",
+    "value": "equipements-medicaux",
+    "children": [
+      {
+        "label": "Imagerie / diagnostic (non implantables)",
+        "value": "imagerie-diagnostic",
+        "dismantling": {
+          "subassemblies": ["Modules capteurs", "Cartes/PC", "Alims", "Châssis"],
+          "valuable": ["Cartes (métaux)", "Alu/acier"],
+          "hazardous": [],
+          "notes": "Respect hygiène/traçabilité; sans dispositifs implantables."
+        }
+      },
+      {
+        "label": "Appareils de soins",
+        "value": "appareils-soins",
+        "dismantling": {
+          "subassemblies": ["Cartes", "Pompes/moteurs", "Alims", "Boîtiers"],
+          "valuable": ["Cartes", "Cuivre"],
+          "hazardous": [],
+          "notes": "Décontamination préalable si exigée."
+        }
+      },
+      {
+        "label": "Instruments de laboratoire",
+        "value": "instruments-laboratoire",
+        "dismantling": {
+          "subassemblies": ["Optique/pesons", "Cartes/firmware", "Mécanismes fins"],
+          "valuable": ["Cartes/alliages", "Acier inox"],
+          "hazardous": [],
+          "notes": "Historique d’usage à vérifier (réactifs)."
+        }
+      },
+      {
+        "label": "Lits medicalises electriques",
+        "value": "lits-medicalises",
+        "dismantling": {
+          "subassemblies": ["Cadre acier", "Vérins/moteurs", "Télécommande", "Câblage"],
+          "valuable": ["Acier", "Moteurs (réemploi)"],
+          "hazardous": ["Alims/boîtiers (DEEE)"],
+          "notes": "Réemploi EHPAD si conforme."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Surveillance / controle",
+    "value": "surveillance-controle",
+    "children": [
+      {
+        "label": "Multimetres / oscilloscopes",
+        "value": "multimetres-oscilloscopes",
+        "dismantling": {
+          "subassemblies": ["Cartes mesure", "Afficheur", "Boîtier"],
+          "valuable": ["Cartes (Au)", "Afficheurs"],
+          "hazardous": [],
+          "notes": "Étalonnage possible en réemploi."
+        }
+      },
+      {
+        "label": "Cameras de securite / capteurs IoT",
+        "value": "cameras-securite-capteurs-iot",
+        "dismantling": {
+          "subassemblies": ["Capteur/optique", "PCB réseau/PoE", "Boîtier"],
+          "valuable": ["Réemploi", "Cartes"],
+          "hazardous": [],
+          "notes": "Effacer configurations."
+        }
+      },
+      {
+        "label": "Alarmes / controle d’acces",
+        "value": "alarmes-controle-acces",
+        "dismantling": {
+          "subassemblies": ["Centrales/lecteurs", "Capteurs", "Alim/batteries"],
+          "valuable": ["Cartes", "Cuivre"],
+          "hazardous": ["Batteries"],
+          "notes": "Neutraliser systèmes avant dépose."
+        }
+      },
+      {
+        "label": "Thermostats / regulateurs",
+        "value": "thermostats-regulateurs",
+        "dismantling": {
+          "subassemblies": ["PCB", "Afficheur", "Boîtier"],
+          "valuable": ["Réemploi", "Cartes"],
+          "hazardous": [],
+          "notes": "Retrait propre des platines murales."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Distributeurs / bornes",
+    "value": "distributeurs-bornes",
+    "children": [
+      {
+        "label": "Distributeurs de boissons / snacks",
+        "value": "distributeurs-boissons-snacks",
+        "dismantling": {
+          "subassemblies": ["Châssis", "Monétique", "Froid/compresseur (boissons)", "Moteurs", "Cartes"],
+          "valuable": ["Cuivre compresseur", "Monétique réemploi", "Acier"],
+          "hazardous": ["Fluide frigorigène (si)"],
+          "notes": "Opérations frigorigènes réglementées."
+        }
+      },
+      {
+        "label": "Bornes de recharge / paiement",
+        "value": "bornes-recharge-paiement",
+        "dismantling": {
+          "subassemblies": ["Écran", "Contrôleur", "Lecteurs cartes/NFC", "Alims"],
+          "valuable": ["Modules paiement (réemploi)", "Écrans"],
+          "hazardous": ["Alims (DEEE)"],
+          "notes": "Effacer clés/SE."
+        }
+      },
+      {
+        "label": "Kiosques interactifs",
+        "value": "kiosques-interactifs",
+        "dismantling": {
+          "subassemblies": ["Écran tactile", "PC interne/NUC", "Périphériques", "Châssis"],
+          "valuable": ["NUC/PC", "Écran"],
+          "hazardous": [],
+          "notes": "Réemploi fort si récent."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Batteries et accumulateurs",
+    "value": "batteries-accumulateurs",
+    "children": [
+      {
+        "label": "Plomb",
+        "value": "plomb",
+        "dismantling": {
+          "subassemblies": ["Enveloppe", "Plomb/électrolyte"],
+          "valuable": ["Plomb"],
+          "hazardous": ["Acide/plomb – ADR"],
+          "notes": "Filière agréée; palettes ADR."
+        }
+      },
+      {
+        "label": "NiCd / NiMH",
+        "value": "nicd-nimh",
+        "dismantling": {
+          "subassemblies": ["Piles/cellules", "Connecteurs"],
+          "valuable": ["Ni (filière)"],
+          "hazardous": ["Cd (toxique)"],
+          "notes": "Emballage étanche; filière dédiée."
+        }
+      },
+      {
+        "label": "Li-ion",
+        "value": "li-ion",
+        "dismantling": {
+          "subassemblies": ["Cellules", "BMS/PCB"],
+          "valuable": ["Co/Ni/Li (via filière)"],
+          "hazardous": ["Risque thermique – ADR"],
+          "notes": "Stockage inerté; suivi incendie."
+        }
+      },
+      {
+        "label": "Packs d’alimentation (outils, PC, VAE)",
+        "value": "packs-alimentation",
+        "dismantling": {
+          "subassemblies": ["Modules batteries", "BMS", "Boîtier"],
+          "valuable": ["Métaux stratégiques", "Connecteurs"],
+          "hazardous": ["ADR"],
+          "notes": "Identifier chimie; enlever facilement des appareils."
+        }
+      }
+    ]
+  },
+  {
+    "label": "Categories complementaires",
+    "value": "categories-complementaires",
+    "children": [
+      {
+        "label": "Cablage et faisceaux",
+        "value": "cablage-faisceaux",
+        "dismantling": {
+          "subassemblies": ["Gaines", "Conducteurs cuivre", "Connecteurs"],
+          "valuable": ["Cuivre"],
+          "hazardous": [],
+          "notes": "Dénudage mécanique; valorisation cuivre."
+        }
+      },
+      {
+        "label": "Cartes electroniques (PCB)",
+        "value": "cartes-electroniques-pcb",
+        "dismantling": {
+          "subassemblies": ["PCB divers", "Radiateurs", "Connecteurs"],
+          "valuable": ["Métaux précieux (Au/Ag/Pd)"],
+          "hazardous": [],
+          "notes": "Tri par grade (faible/riche)."
+        }
+      },
+      {
+        "label": "Equipements industriels / automates",
+        "value": "equipements-industriels-automates",
+        "dismantling": {
+          "subassemblies": ["Automates/PLC", "I/O modules", "Alims", "Boîtiers"],
+          "valuable": ["Modules réemploi", "Cartes"],
+          "hazardous": [],
+          "notes": "Effacer configs/licences."
+        }
+      },
+      {
+        "label": "Photovoltaique (panneaux, onduleurs)",
+        "value": "photovoltaique",
+        "dismantling": {
+          "subassemblies": ["Panneau (verre/silicium/alu)", "Boîte de jonction", "Onduleur (cartes/alim)"],
+          "valuable": ["Cadre alu", "Verre (PV)"],
+          "hazardous": [],
+          "notes": "Filière PV dédiée pour panneaux."
+        }
+      },
+      {
+        "label": "Mesure et controle environnemental",
+        "value": "mesure-controle-environnemental",
+        "dismantling": {
+          "subassemblies": ["Capteurs", "Enregistreurs/PCB", "Alims/batteries"],
+          "valuable": ["Cartes/capteurs"],
+          "hazardous": ["Batteries"],
+          "notes": "Calibrage/réemploi selon état."
+        }
+      }
+    ]
+  }
+]

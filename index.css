@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+
+  /* Custom scrollbar pour le panel de démantèlement - Theme Dark */
+  .custom-scrollbar-dark {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.6) rgba(15, 23, 42, 0.5);
+  }
+
+  .custom-scrollbar-dark::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  .custom-scrollbar-dark::-webkit-scrollbar-track {
+    @apply bg-slate-900/50;
+    border-radius: 10px;
+    margin: 8px 0;
+  }
+
+  .custom-scrollbar-dark::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(168, 85, 247, 0.8), rgba(6, 182, 212, 0.6));
+    border-radius: 10px;
+    border: 2px solid rgba(15, 23, 42, 0.3);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+  }
+
+  .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(168, 85, 247, 1), rgba(6, 182, 212, 0.8));
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
+  }
+
+  .custom-scrollbar-dark::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(180deg, rgba(147, 51, 234, 1), rgba(8, 145, 178, 1));
+  }
+
+  /* Custom scrollbar pour le panel de démantèlement - Theme Light */
+  .custom-scrollbar-light {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(147, 51, 234, 0.5) rgba(241, 245, 249, 0.8);
+  }
+
+  .custom-scrollbar-light::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  .custom-scrollbar-light::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+    border-radius: 10px;
+    margin: 8px 0;
+  }
+
+  .custom-scrollbar-light::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(147, 51, 234, 0.7), rgba(6, 182, 212, 0.5));
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 8px rgba(147, 51, 234, 0.2);
+  }
+
+  .custom-scrollbar-light::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(147, 51, 234, 0.9), rgba(6, 182, 212, 0.7));
+    box-shadow: 0 0 12px rgba(147, 51, 234, 0.4);
+  }
+
+  .custom-scrollbar-light::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(180deg, rgba(126, 34, 206, 1), rgba(8, 145, 178, 1));
+  }
+
+  @keyframes bounce-slow {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  .animate-bounce-slow {
+    animation: bounce-slow 2s ease-in-out infinite;
+  }
+}

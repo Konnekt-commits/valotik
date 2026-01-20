@@ -1,0 +1,2166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrepôt 3D - Navigation Immersive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a202c;
+            overflow: hidden;
+        }
+
+        #canvas3D {
+            width: 100%;
+            height: 100vh;
+            display: block;
+            cursor: none;
+        }
+
+        .hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            z-index: 100;
+            max-width: 300px;
+        }
+
+        .hud h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #60a5fa;
+        }
+
+        .hud-item {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hud-label {
+            color: #9ca3af;
+        }
+
+        .hud-value {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .controls-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            z-index: 100;
+        }
+
+        .controls-panel h4 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #60a5fa;
+        }
+
+        .control-item {
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .key-badge {
+            background: #374151;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            min-width: 30px;
+            text-align: center;
+            border: 1px solid #4b5563;
+        }
+
+        .minimap {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 280px;
+            height: 380px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 12px;
+            border: 2px solid rgba(96, 165, 250, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            padding: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .minimap-title {
+            color: white;
+            font-weight: 700;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-align: center;
+            color: #60a5fa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .minimap-canvas {
+            width: 100%;
+            height: calc(100% - 35px);
+            background: #0f172a;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+            top: 0;
+        }
+
+        .crosshair::after {
+            width: 20px;
+            height: 2px;
+            left: 0;
+            top: 9px;
+        }
+
+        .view-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .view-btn {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+
+        .view-btn:hover {
+            background: rgba(96, 165, 250, 0.3);
+            border-color: #60a5fa;
+            transform: translateY(-2px);
+        }
+
+        .view-btn.active {
+            background: #60a5fa;
+            border-color: #60a5fa;
+        }
+
+        .item-info {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            border: 2px solid #60a5fa;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            display: none;
+            min-width: 400px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .item-info.show {
+            display: block;
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .item-info h2 {
+            margin: 0 0 15px 0;
+            font-size: 24px;
+            color: #60a5fa;
+        }
+
+        .item-info p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .item-info button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            background: #60a5fa;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .item-info button:hover {
+            background: #3b82f6;
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a202c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .loading-bar {
+            width: 300px;
+            height: 8px;
+            background: #374151;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #60a5fa, #8b5cf6);
+            animation: loading 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading {
+            0% { width: 0%; }
+            50% { width: 100%; }
+            100% { width: 0%; }
+        }
+
+        .zone-label-3d {
+            position: fixed;
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .object-tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: none;
+            z-index: 150;
+            border: 2px solid #60a5fa;
+            box-shadow: 0 4px 20px rgba(96, 165, 250, 0.5);
+            display: none;
+            min-width: 200px;
+            backdrop-filter: blur(10px);
+        }
+
+        .object-tooltip.show {
+            display: block;
+            animation: tooltipFadeIn 0.2s ease-out;
+        }
+
+        @keyframes tooltipFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .tooltip-title {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: #60a5fa;
+        }
+
+        .tooltip-info {
+            margin: 3px 0;
+            font-size: 12px;
+            color: #d1d5db;
+        }
+
+        .tooltip-label {
+            color: #9ca3af;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div class="loading-text">🏭 Chargement de l'entrepôt...</div>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
+    </div>
+
+    <canvas id="canvas3D"></canvas>
+    <div class="crosshair"></div>
+
+    <div class="view-toggle">
+        <button class="view-btn active" onclick="switchView('fps')">🎮 Vue FPS</button>
+        <button class="view-btn" onclick="switchView('plan')">📋 Vue Plan</button>
+    </div>
+
+    <div class="hud">
+        <h3>📍 Position</h3>
+        <div class="hud-item">
+            <span class="hud-label">Zone:</span>
+            <span class="hud-value" id="currentZone">Extérieur</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Coordonnées:</span>
+            <span class="hud-value" id="coordinates">X: 0, Z: 0</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Rotation:</span>
+            <span class="hud-value" id="rotation">0°</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Objets visibles:</span>
+            <span class="hud-value" id="objectCount">0</span>
+        </div>
+        <div class="hud-item">
+            <span class="hud-label">Auto-avance:</span>
+            <span class="hud-value" id="autoMoveStatus" style="color: #ef4444;">OFF</span>
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <h4>⌨️ Contrôles</h4>
+        <div class="control-item">
+            <div class="key-badge">Z S Q D</div>
+            <span>Se déplacer</span>
+        </div>
+        <div class="control-item">
+            <div class="key-badge">←→</div>
+            <span>Tourner caméra</span>
+        </div>
+        <div class="control-item">
+            <div class="key-badge">Souris</div>
+            <span>Regarder autour</span>
+        </div>
+        <div class="control-item">
+            <div class="key-badge">E</div>
+            <span>Examiner objet</span>
+        </div>
+        <div class="control-item">
+            <div class="key-badge">Shift</div>
+            <span>Courir</span>
+        </div>
+        <div class="control-item">
+            <div class="key-badge">Clic</div>
+            <span>Auto-avance ON/OFF</span>
+        </div>
+    </div>
+
+    <div class="minimap">
+        <div class="minimap-title">🗺️ Radar Tactique</div>
+        <canvas id="minimapCanvas" class="minimap-canvas" width="260" height="340"></canvas>
+    </div>
+
+    <div class="item-info" id="itemInfo">
+        <h2 id="itemTitle">Composant détecté</h2>
+        <p><strong>📁 Dossier:</strong> <span id="itemId"></span></p>
+        <p><strong>🏢 Zone:</strong> <span id="itemZone"></span></p>
+        <p><strong>📦 Lot:</strong> <span id="itemRack"></span></p>
+        <p><strong>⭐ Info:</strong> <span id="itemLevel"></span></p>
+        <p><strong>🏷️ Catégorie:</strong> <span id="itemCategory"></span></p>
+        <button onclick="closeItemInfo()">Fermer [ESC]</button>
+    </div>
+
+    <div class="object-tooltip" id="objectTooltip">
+        <div class="tooltip-title" id="tooltipTitle"></div>
+        <div class="tooltip-info"><span class="tooltip-label">Dossier:</span> <span id="tooltipCaseFile"></span></div>
+        <div class="tooltip-info"><span class="tooltip-label">Client:</span> <span id="tooltipClient"></span></div>
+        <div class="tooltip-info"><span class="tooltip-label">Lot:</span> <span id="tooltipLot"></span></div>
+        <div class="tooltip-info"><span class="tooltip-label">Grade:</span> <span id="tooltipGrade"></span></div>
+        <div class="tooltip-info"><span class="tooltip-label">Zone:</span> <span id="tooltipZone"></span></div>
+        <div class="tooltip-info"><span class="tooltip-label">En stock:</span> <span id="tooltipDaysInStock"></span></div>
+    </div>
+
+
+    <script>
+        let warehouseConfig = null;
+        let warehouseSettings = null;
+        let isDataLoaded = false;
+
+        // Fonction pour charger la configuration de l'entrepôt
+        async function loadWarehouseSettings() {
+            try {
+                const response = await fetch('/warehouse-config.json');
+                warehouseSettings = await response.json();
+                console.log('Configuration de l\'entrepot chargee:', warehouseSettings);
+                return warehouseSettings;
+            } catch (error) {
+                console.error('Erreur lors du chargement de la configuration:', error);
+                // Configuration par défaut
+                return {
+                    warehouse: {
+                        rack: {
+                            height: 5.5,
+                            shelfSpacing: 0.5,
+                            shelfWidth: 1.5,
+                            shelfDepth: 1,
+                            shelfThickness: 0.1
+                        }
+                    }
+                };
+            }
+        }
+
+        // Fonction pour charger les données réelles depuis l'API
+        async function loadWarehouseData() {
+            try {
+                console.log('Chargement des donnees de l\'entrepot...');
+                const response = await fetch('http://localhost:5000/api/case-files?limit=100&includeInventory=true');
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error('Erreur lors du chargement des donnees');
+                }
+
+                const caseFiles = data.data.caseFiles;
+                console.log('Donnees chargees:', caseFiles.length, 'dossiers');
+
+                // DEBUG: Afficher les clients et dates de tous les dossiers
+                console.log('=== ANALYSE DES DOSSIERS ===');
+                caseFiles.forEach((cf, idx) => {
+                    console.log(`Dossier ${idx + 1}:`, {
+                        reference: cf.reference,
+                        client: cf.request?.client?.raisonSociale || 'Aucun',
+                        warehouseDate: cf.warehouseDate,
+                        createdAt: cf.createdAt,
+                        lotsCount: (cf.lots || []).length,
+                        componentsCount: (cf.lots || []).reduce((sum, lot) => sum + (lot.components || []).length, 0)
+                    });
+                });
+                console.log('===========================');
+
+                // Regrouper les composants par catégorie
+                const componentsByCategory = {};
+
+                caseFiles.forEach(caseFile => {
+                    const lots = caseFile.lots || [];
+                    lots.forEach(lot => {
+                        const components = lot.components || [];
+                        components.forEach(component => {
+                            if (component.subCategory && component.subCategory.category) {
+                                const categoryName = component.subCategory.category.nom;
+                                if (!componentsByCategory[categoryName]) {
+                                    componentsByCategory[categoryName] = [];
+                                }
+
+                                // UN composant = UN colis physique (affiche la quantité dans l'info)
+                                componentsByCategory[categoryName].push({
+                                    id: component.id,
+                                    componentId: component.id,
+                                    nom: component.nom,
+                                    lot: lot.code,
+                                    caseFile: caseFile.reference,
+                                    clientName: caseFile.request?.client?.raisonSociale || 'Client inconnu',
+                                    warehouseDate: caseFile.warehouseDate || caseFile.createdAt,
+                                    grade: component.grade,
+                                    quantite: component.quantite || 1,
+                                    categoryName: categoryName,
+                                    subCategoryName: component.subCategory?.nom || 'Non spécifié'
+                                });
+                            }
+                        });
+                    });
+                });
+
+                // Mélanger les composants dans chaque catégorie pour varier les clients
+                Object.keys(componentsByCategory).forEach(category => {
+                    const components = componentsByCategory[category];
+                    // Fisher-Yates shuffle algorithm
+                    for (let i = components.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [components[i], components[j]] = [components[j], components[i]];
+                    }
+                });
+
+                console.log('Composants par categorie:', Object.keys(componentsByCategory).map(cat => ({
+                    categorie: cat,
+                    nombre: componentsByCategory[cat].length
+                })));
+
+                // Générer la configuration de l'entrepôt
+                warehouseConfig = generateWarehouseConfig(componentsByCategory);
+                isDataLoaded = true;
+
+                console.log('Configuration de l\'entrepot generee!');
+
+                // Initialiser la scène 3D
+                init();
+
+                // Mettre à jour les statistiques d'occupation
+                updateOccupancyStats();
+            } catch (error) {
+                console.error('Erreur lors du chargement des donnees:', error);
+                // Fallback sur les données statiques
+                warehouseConfig = getStaticWarehouseConfig();
+                isDataLoaded = true;
+                init();
+                updateOccupancyStats();
+            }
+        }
+
+        // Fonction pour calculer et afficher les statistiques d'occupation globales
+        function updateOccupancyStats() {
+            if (!warehouseConfig || !warehouseConfig.warehouse) return;
+
+            let totalShelves = 0;
+            let occupiedShelves = 0;
+            let totalUsedWidth = 0;
+            let totalAvailableWidth = 0;
+
+            warehouseConfig.warehouse.zones.forEach(zone => {
+                zone.racks.forEach(rack => {
+                    rack.levels.forEach(level => {
+                        if (level.positions && level.positions.length > 0) {
+                            totalShelves++;
+                            if (level.occupancyRate > 0) {
+                                occupiedShelves++;
+                            }
+                            if (level.usedWidth !== undefined && level.totalWidth !== undefined) {
+                                totalUsedWidth += level.usedWidth;
+                                totalAvailableWidth += level.totalWidth;
+                            }
+                        }
+                    });
+                });
+            });
+
+            const globalOccupancy = totalAvailableWidth > 0
+                ? Math.round((totalUsedWidth / totalAvailableWidth) * 100)
+                : 0;
+
+            const availableSpace = (totalAvailableWidth - totalUsedWidth).toFixed(2);
+
+            // Interface des statistiques supprimée - juste logger les infos
+            // document.getElementById('globalOccupancy').textContent = `${globalOccupancy}%`;
+            // document.getElementById('occupiedShelves').textContent = `${occupiedShelves} / ${totalShelves}`;
+            // document.getElementById('availableSpace').textContent = `${availableSpace}m`;
+
+            console.log('Statistiques d\'occupation:', {
+                globalOccupancy: `${globalOccupancy}%`,
+                occupiedShelves: `${occupiedShelves}/${totalShelves}`,
+                totalUsedWidth: `${totalUsedWidth.toFixed(2)}m`,
+                totalAvailableWidth: `${totalAvailableWidth.toFixed(2)}m`,
+                availableSpace: `${availableSpace}m`
+            });
+        }
+
+        // Générer la configuration de l'entrepôt à partir des données réelles
+        function generateWarehouseConfig(componentsByCategory) {
+            // Utiliser les zones définies dans le fichier de configuration
+            const configZones = warehouseSettings?.warehouse?.zones || [];
+
+            const zones = configZones.map((zoneDef, zoneIndex) => {
+                // Skip zones without racks (entrance, facilities)
+                if (zoneDef.hasRacks === false) {
+                    return {
+                        ...zoneDef,
+                        racks: []
+                    };
+                }
+
+                // Filtrer les composants selon le type de zone
+                let components = [];
+                if (zoneDef.storageType === 'mixed') {
+                    // Zone mixte: TOUS les composants de toutes les catégories
+                    Object.values(componentsByCategory).forEach(categoryComponents => {
+                        components = components.concat(categoryComponents);
+                    });
+                    // Mélanger aléatoirement
+                    for (let i = components.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [components[i], components[j]] = [components[j], components[i]];
+                    }
+                } else if (zoneDef.storageType === 'category' && zoneDef.categories) {
+                    // Zone par catégorie: filtrer par mots-clés de sous-catégories
+                    Object.values(componentsByCategory).forEach(categoryComponents => {
+                        categoryComponents.forEach(comp => {
+                            // Vérifier si le nom du composant ou la sous-catégorie contient un des mots-clés
+                            const matchesCategory = zoneDef.categories.some(keyword =>
+                                comp.nom.toLowerCase().includes(keyword.toLowerCase()) ||
+                                comp.subCategoryName.toLowerCase().includes(keyword.toLowerCase())
+                            );
+                            if (matchesCategory) {
+                                components.push(comp);
+                            }
+                        });
+                    });
+                } else {
+                    // Zone par nom de catégorie exacte
+                    components = componentsByCategory[zoneDef.name] || [];
+                }
+
+                console.log(`Zone ${zoneDef.label}: ${components.length} composants trouvés`);
+
+                const zone = {
+                    ...zoneDef,
+                    racks: []
+                };
+
+                // Créer des racks pour cette zone UNIQUEMENT si elle a des composants
+                const numRacks = components.length > 0 ? Math.min(zoneDef.numberOfRacks || 4, Math.ceil(components.length / 30)) : 0;
+
+                // Préparer TOUS les composants avec leurs dimensions d'abord
+                const allComponentsWithDimensions = components.map(component => {
+                    // Parse color if it's a string
+                    const baseColor = typeof zoneDef.color === 'string' ? parseInt(zoneDef.color) : zoneDef.color;
+                    const gradeColors = {
+                        'A': baseColor,
+                        'B': baseColor - 0x111111,
+                        'C': baseColor - 0x222222,
+                        'D': baseColor - 0x333333,
+                    };
+
+                    // Utiliser la vraie catégorie du composant, pas le nom de la zone
+                    const dims = getObjectDimensions(component.nom, component.categoryName);
+
+                    return {
+                        id: `${component.id}`,
+                        stored_item: `${component.nom} (${component.lot})`,
+                        category: zoneDef.name.toLowerCase().replace(/ /g, '-'),
+                        color: gradeColors[component.grade] || zoneDef.color,
+                        componentName: component.nom,
+                        categoryName: zoneDef.name,
+                        dimensions: dims,
+                        metadata: {
+                            caseFile: component.caseFile,
+                            lot: component.lot,
+                            grade: component.grade,
+                            quantite: component.quantite || 1,
+                            clientName: component.clientName,
+                            warehouseDate: component.warehouseDate
+                        }
+                    };
+                });
+
+                // Créer les structures de racks vides
+                const rackStructures = [];
+                for (let rackIdx = 0; rackIdx < numRacks; rackIdx++) {
+                    const rackHeight = warehouseSettings?.warehouse?.rack?.height || 5.5;
+                    const shelfSpacing = warehouseSettings?.warehouse?.rack?.shelfSpacing || 0.5;
+                    const numberOfLevels = Math.floor(rackHeight / shelfSpacing);
+
+                    const levels = [];
+                    for (let levelIdx = 0; levelIdx < numberOfLevels; levelIdx++) {
+                        levels.push({
+                            id: `L${levelIdx + 1}`,
+                            height: (levelIdx + 1) * shelfSpacing,
+                            positions: [],
+                            items: []
+                        });
+                    }
+
+                    // Positionner les racks dans la zone définie
+                    const zonePosition = zoneDef.position || { x: 0, z: 0 };
+                    const zoneSize = zoneDef.size || { width: 6, depth: 15 };
+
+                    // Espacer les racks uniformément dans la zone (le long de la profondeur Z)
+                    const zSpacing = zoneSize.depth / (numRacks + 1);
+                    const zStart = zonePosition.z - (zoneSize.depth / 2) + zSpacing;
+
+                    rackStructures.push({
+                        id: `R${zoneIndex * 10 + rackIdx + 1}`,
+                        label: `Rack ${zoneDef.label}${rackIdx + 1}`,
+                        position: {
+                            x: zonePosition.x,  // Position X de la zone
+                            z: zStart + (rackIdx * zSpacing) // Espacé dans la profondeur de la zone
+                        },
+                        levels: levels,
+                        zoneColor: zoneDef.color,
+                        zoneName: zoneDef.label
+                    });
+                }
+
+                // Distribuer les composants en round-robin sur tous les racks et niveaux
+                allComponentsWithDimensions.forEach((component, idx) => {
+                    if (numRacks > 0) {
+                        const rackIdx = idx % numRacks;
+                        const rack = rackStructures[rackIdx];
+                        const levelIdx = Math.floor(idx / numRacks) % rack.levels.length;
+                        rack.levels[levelIdx].items.push(component);
+                    }
+                });
+
+                // Maintenant traiter chaque rack
+                for (let rackIdx = 0; rackIdx < numRacks; rackIdx++) {
+                    const rack = rackStructures[rackIdx];
+                    const levels = rack.levels;
+
+                    // Pour chaque niveau, calculer les positions optimales (bin packing)
+                    const shelfWidth = warehouseSettings?.warehouse?.rack?.shelfWidth || 1.5;
+
+                    levels.forEach(level => {
+                        if (!level.items || level.items.length === 0) return;
+
+                        // Trier les items par largeur décroissante pour meilleur bin packing
+                        level.items.sort((a, b) => b.dimensions.width - a.dimensions.width);
+
+                        let currentX = -shelfWidth / 2; // Commencer au bord gauche
+
+                        level.items.forEach(item => {
+                            // Vérifier si l'item rentre encore sur l'étagère
+                            if (currentX + item.dimensions.width <= shelfWidth / 2) {
+                                // Positionner l'item au centre de sa largeur
+                                item.x = currentX + item.dimensions.width / 2;
+                                level.positions.push(item);
+
+                                // Avancer pour le prochain item (coller les colis)
+                                currentX += item.dimensions.width + 0.05; // 5cm d'espace minimal
+                            }
+                        });
+
+                        // Calculer le taux d'occupation
+                        if (level.positions.length > 0) {
+                            const totalItemsWidth = level.positions.reduce((sum, item) => sum + item.dimensions.width, 0);
+                            level.occupancyRate = Math.round((totalItemsWidth / shelfWidth) * 100);
+                            level.usedWidth = totalItemsWidth;
+                            level.totalWidth = shelfWidth;
+                        }
+                    });
+
+                    rack.levels = levels.filter(level => level.positions.length > 0);
+                    // Ajouter le rack UNIQUEMENT s'il a des niveaux avec des produits
+                    if (rack.levels.length > 0) {
+                        zone.racks.push(rack);
+                    }
+                }
+
+                // Toujours ajouter la zone (même si vide)
+                return zone;
+            });
+
+            return {
+                warehouse: {
+                    name: "Entrepôt D3E Collection - Données Réelles",
+                    dimensions: { width: 28, height: 40 },
+                    zones: zones
+                }
+            };
+        }
+
+        // Configuration statique de fallback
+        function getStaticWarehouseConfig() {
+            return {
+            "warehouse": {
+                "name": "Entrepôt Nord",
+                "dimensions": { "width": 28, "height": 40 },
+                "zones": [
+                    {
+                        "id": "Z1",
+                        "label": "Zone A",
+                        "name": "Informatique & Télécom",
+                        "color": 0x8b5cf6,
+                        "position": { "x": 0, "z": -10 },
+                        "size": { "width": 28, "depth": 13 },
+                        "racks": [
+                            {
+                                "id": "R1",
+                                "label": "Rack A1",
+                                "position": { "x": -8, "z": -10 },
+                                "levels": [
+                                    { "id": "L1", "height": 1, "positions": [
+                                        { "id": "A1L1P1", "x": 0, "stored_item": "PC Dell 7490", "category": "informatique-telecom", "color": 0x6366f1 },
+                                        { "id": "A1L1P2", "x": 1.5, "stored_item": "Écran Samsung", "category": "informatique-telecom", "color": 0x6366f1 },
+                                        { "id": "A1L1P3", "x": 3, "stored_item": "Clavier Logitech", "category": "informatique-telecom", "color": 0x6366f1 }
+                                    ]},
+                                    { "id": "L2", "height": 2.5, "positions": [
+                                        { "id": "A1L2P1", "x": 0, "stored_item": "MacBook Pro", "category": "informatique-telecom", "color": 0x8b5cf6 },
+                                        { "id": "A1L2P2", "x": 1.5, "stored_item": "iPad Pro", "category": "informatique-telecom", "color": 0x8b5cf6 }
+                                    ]},
+                                    { "id": "L3", "height": 4, "positions": [
+                                        { "id": "A1L3P1", "x": 0, "stored_item": "Switch HP", "category": "informatique-telecom", "color": 0xa78bfa }
+                                    ]}
+                                ]
+                            },
+                            {
+                                "id": "R2",
+                                "label": "Rack A2",
+                                "position": { "x": 4, "z": -10 },
+                                "levels": [
+                                    { "id": "L1", "height": 1, "positions": [
+                                        { "id": "A2L1P1", "x": 0, "stored_item": "Imprimante HP", "category": "informatique-telecom", "color": 0x6366f1 },
+                                        { "id": "A2L1P2", "x": 1.5, "stored_item": "Scanner Epson", "category": "informatique-telecom", "color": 0x6366f1 }
+                                    ]},
+                                    { "id": "L2", "height": 2.5, "positions": [
+                                        { "id": "A2L2P1", "x": 0, "stored_item": "Téléphone IP", "category": "informatique-telecom", "color": 0x8b5cf6 }
+                                    ]}
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "Z2",
+                        "label": "Zone B",
+                        "name": "D3E & Batteries",
+                        "color": 0x3b82f6,
+                        "position": { "x": 0, "z": 7 },
+                        "size": { "width": 28, "depth": 14 },
+                        "racks": [
+                            {
+                                "id": "R3",
+                                "label": "Rack B1",
+                                "position": { "x": -8, "z": 7 },
+                                "levels": [
+                                    { "id": "L1", "height": 1, "positions": [
+                                        { "id": "B1L1P1", "x": 0, "stored_item": "Batteries Li-ion", "category": "batteries", "color": 0x10b981 },
+                                        { "id": "B1L1P2", "x": 1.5, "stored_item": "Onduleur APC", "category": "informatique-telecom", "color": 0x3b82f6 }
+                                    ]},
+                                    { "id": "L2", "height": 2.5, "positions": [
+                                        { "id": "B1L2P1", "x": 0, "stored_item": "PC recyclés", "category": "d3e", "color": 0x06b6d4 },
+                                        { "id": "B1L2P2", "x": 1.5, "stored_item": "Écrans HS", "category": "d3e", "color": 0x06b6d4 }
+                                    ]}
+                                ]
+                            },
+                            {
+                                "id": "R4",
+                                "label": "Rack B2",
+                                "position": { "x": 4, "z": 7 },
+                                "levels": [
+                                    { "id": "L1", "height": 1, "positions": [
+                                        { "id": "B2L1P1", "x": 0, "stored_item": "Serveur Dell", "category": "informatique-telecom", "color": 0x3b82f6 },
+                                        { "id": "B2L1P2", "x": 1.5, "stored_item": "Switch Cisco", "category": "informatique-telecom", "color": 0x3b82f6 }
+                                    ]}
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "Z3",
+                        "label": "Zone C",
+                        "name": "Mobilier",
+                        "color": 0xec4899,
+                        "position": { "x": 0, "z": 24 },
+                        "size": { "width": 28, "depth": 13 },
+                        "racks": [
+                            {
+                                "id": "R5",
+                                "label": "Rack C1",
+                                "position": { "x": -8, "z": 24 },
+                                "levels": [
+                                    { "id": "L1", "height": 1, "positions": [
+                                        { "id": "C1L1P1", "x": 0, "stored_item": "Chaises x10", "category": "mobilier-bureau", "color": 0xec4899 },
+                                        { "id": "C1L1P2", "x": 1.5, "stored_item": "Tables réunion", "category": "mobilier-bureau", "color": 0xec4899 }
+                                    ]},
+                                    { "id": "L2", "height": 2.5, "positions": [
+                                        { "id": "C1L2P1", "x": 0, "stored_item": "Étagères", "category": "mobilier-bureau", "color": 0xf472b6 },
+                                        { "id": "C1L2P2", "x": 1.5, "stored_item": "Fauteuils", "category": "mobilier-bureau", "color": 0xf472b6 }
+                                    ]}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+            };
+        }
+
+        let scene, camera, renderer, clock;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let canJump = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let rotation = 0;
+        let mouseX = 0, mouseY = 0;
+        let isRunning = false;
+        let allObjects = [];
+        let currentViewMode = 'fps';
+        let autoMove = false; // Auto-avancement activé/désactivé
+
+        // Système de sélection par visée (crosshair)
+        let selectedObject = null;
+        let previousSelectedObject = null;
+
+        const MOVE_SPEED = 8;
+        const RUN_MULTIPLIER = 2;
+        const ROTATION_SPEED = 2;
+
+        // Calculer le nombre de jours depuis une date
+        function calculateDaysInStock(warehouseDate) {
+            if (!warehouseDate) return 'N/A';
+
+            try {
+                const date = new Date(warehouseDate);
+                const now = new Date();
+                const diffTime = Math.abs(now - date);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 0) return 'Aujourd\'hui';
+                if (diffDays === 1) return '1 jour';
+                return `${diffDays} jours`;
+            } catch (error) {
+                return 'N/A';
+            }
+        }
+
+        // Système de dimensions par type d'objet (en mètres)
+        function getObjectDimensions(componentName, categoryName) {
+            const name = componentName.toLowerCase();
+
+            // Mobilier de bureau
+            if (categoryName.includes('Mobilier')) {
+                if (name.includes('bureau') || name.includes('table')) {
+                    return { width: 1.4, height: 0.75, depth: 0.8 }; // Bureau standard
+                }
+                if (name.includes('fauteuil') || name.includes('chaise')) {
+                    return { width: 0.6, height: 1.0, depth: 0.6 }; // Fauteuil
+                }
+                if (name.includes('armoire') || name.includes('étagère')) {
+                    return { width: 0.8, height: 1.8, depth: 0.5 }; // Armoire
+                }
+                if (name.includes('caisson') || name.includes('tiroir')) {
+                    return { width: 0.4, height: 0.6, depth: 0.5 }; // Caisson
+                }
+                return { width: 0.6, height: 0.8, depth: 0.6 }; // Mobilier générique
+            }
+
+            // Équipements informatiques et telecom
+            if (categoryName.includes('informatiques') || categoryName.includes('telecom')) {
+                if (name.includes('écran') || name.includes('moniteur') || name.includes('display')) {
+                    return { width: 0.5, height: 0.4, depth: 0.15 }; // Écran
+                }
+                if (name.includes('unité centrale') || name.includes('pc') || name.includes('ordinateur')) {
+                    return { width: 0.2, height: 0.4, depth: 0.45 }; // UC
+                }
+                if (name.includes('portable') || name.includes('laptop') || name.includes('macbook')) {
+                    return { width: 0.35, height: 0.02, depth: 0.25 }; // Laptop fermé
+                }
+                if (name.includes('clavier')) {
+                    return { width: 0.45, height: 0.03, depth: 0.15 }; // Clavier
+                }
+                if (name.includes('souris')) {
+                    return { width: 0.08, height: 0.04, depth: 0.12 }; // Souris
+                }
+                if (name.includes('imprimante')) {
+                    return { width: 0.4, height: 0.3, depth: 0.35 }; // Imprimante
+                }
+                if (name.includes('switch') || name.includes('routeur')) {
+                    return { width: 0.3, height: 0.05, depth: 0.2 }; // Switch réseau
+                }
+                if (name.includes('multiprise') || name.includes('prise') || name.includes('goulotte')) {
+                    return { width: 0.3, height: 0.05, depth: 0.08 }; // Multiprise
+                }
+                return { width: 0.3, height: 0.3, depth: 0.3 }; // IT générique
+            }
+
+            // Audiovisuel
+            if (categoryName.includes('Audiovisuel')) {
+                if (name.includes('projecteur') || name.includes('vidéoprojecteur')) {
+                    return { width: 0.35, height: 0.15, depth: 0.3 }; // Projecteur
+                }
+                if (name.includes('enceinte') || name.includes('haut-parleur')) {
+                    return { width: 0.25, height: 0.4, depth: 0.25 }; // Enceinte
+                }
+                if (name.includes('micro')) {
+                    return { width: 0.05, height: 0.2, depth: 0.05 }; // Micro
+                }
+                if (name.includes('caméra') || name.includes('webcam')) {
+                    return { width: 0.1, height: 0.08, depth: 0.08 }; // Caméra
+                }
+                return { width: 0.3, height: 0.25, depth: 0.25 }; // AV générique
+            }
+
+            // Éclairage
+            if (categoryName.includes('clairage')) {
+                if (name.includes('lampadaire')) {
+                    return { width: 0.3, height: 1.5, depth: 0.3 }; // Lampadaire
+                }
+                if (name.includes('lampe')) {
+                    return { width: 0.15, height: 0.4, depth: 0.15 }; // Lampe de bureau
+                }
+                if (name.includes('plafonnier') || name.includes('dalle')) {
+                    return { width: 0.6, height: 0.05, depth: 0.6 }; // Plafonnier
+                }
+                return { width: 0.2, height: 0.3, depth: 0.2 }; // Éclairage générique
+            }
+
+            // Défaut
+            return { width: 0.4, height: 0.4, depth: 0.4 };
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            scene.fog = new THREE.Fog(0x1a1a2e, 20, 50);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, -18);
+            camera.rotation.order = 'YXZ';
+
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('canvas3D'),
+                antialias: true,
+                powerPreference: 'high-performance'
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            clock = new THREE.Clock();
+
+            createLights();
+            createWarehouse();
+            setupEventListeners();
+            
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+            }, 1000);
+
+            animate();
+        }
+
+        function createLights() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            mainLight.position.set(10, 20, 10);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 2048;
+            mainLight.shadow.mapSize.height = 2048;
+            mainLight.shadow.camera.near = 0.5;
+            mainLight.shadow.camera.far = 100;
+            mainLight.shadow.camera.left = -30;
+            mainLight.shadow.camera.right = 30;
+            mainLight.shadow.camera.top = 30;
+            mainLight.shadow.camera.bottom = -30;
+            scene.add(mainLight);
+
+            if (warehouseConfig && warehouseConfig.warehouse && warehouseConfig.warehouse.zones) {
+                warehouseConfig.warehouse.zones.forEach(zone => {
+                    const zoneLight = new THREE.PointLight(zone.color, 0.5, 15);
+                    zoneLight.position.set(zone.position.x, 3, zone.position.z);
+                    scene.add(zoneLight);
+                });
+            }
+        }
+
+        function createWarehouse() {
+            // Dimensions: 20m de large (X), 40m de long (Z), 5m de haut (Y)
+            const warehouseWidth = 20;  // Largeur (X)
+            const warehouseLength = 40; // Longueur (Z)
+
+            const floorGeometry = new THREE.PlaneGeometry(warehouseWidth, warehouseLength);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a3e,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Grille: lignes tous les 1m
+            // GridHelper(size, divisions) - size est le total, divisions est le nombre de carrés
+            const gridSize = Math.max(warehouseWidth, warehouseLength);
+            const gridDivisions = gridSize;
+            const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444466, 0x333344);
+            scene.add(gridHelper);
+
+            if (warehouseConfig && warehouseConfig.warehouse && warehouseConfig.warehouse.zones) {
+                warehouseConfig.warehouse.zones.forEach(zone => {
+                    createZone(zone);
+                });
+            }
+        }
+
+        function createZone(zone) {
+            const zoneGroup = new THREE.Group();
+
+            // Créer un marquage coloré au sol pour la zone
+            if (zone.position && zone.size) {
+                const zoneColor = typeof zone.color === 'string' ? parseInt(zone.color) : zone.color;
+
+                // Plan au sol avec la couleur de la zone
+                const floorGeometry = new THREE.PlaneGeometry(zone.size.width, zone.size.depth);
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    color: zoneColor,
+                    transparent: true,
+                    opacity: 0.15,
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+                const zonePlane = new THREE.Mesh(floorGeometry, floorMaterial);
+                zonePlane.rotation.x = -Math.PI / 2;
+                zonePlane.position.set(zone.position.x, 0.01, zone.position.z);
+                zoneGroup.add(zonePlane);
+
+                // Bordure de la zone
+                const edgeGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(zone.size.width, 0.1, zone.size.depth));
+                const edgeMaterial = new THREE.LineBasicMaterial({
+                    color: zoneColor,
+                    linewidth: 2
+                });
+                const zoneEdges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+                zoneEdges.position.set(zone.position.x, 0.05, zone.position.z);
+                zoneGroup.add(zoneEdges);
+
+                // Label de la zone (texte 3D au sol)
+                createZoneLabel(zone, zoneGroup);
+            }
+
+            // Créer les racks
+            if (zone.racks && zone.racks.length > 0) {
+                zone.racks.forEach(rack => {
+                    createRack(rack, zone, zoneGroup);
+                });
+            }
+
+            scene.add(zoneGroup);
+        }
+
+        // Créer un label pour identifier la zone
+        function createZoneLabel(zone, parent) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+
+            // Fond transparent
+            context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Texte de la zone
+            context.fillStyle = '#ffffff';
+            context.font = 'bold 48px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(zone.label, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(4, 1, 1);
+            sprite.position.set(zone.position.x, 0.1, zone.position.z);
+
+            parent.add(sprite);
+        }
+
+        function createZoneOld(zone) {
+            const zoneGroup = new THREE.Group();
+
+            const wallHeight = 6;
+            const wallThickness = 0.1;
+
+            // Parse color if it's a string
+            const zoneColor = typeof zone.color === 'string' ? parseInt(zone.color) : zone.color;
+
+            // Gérer les zones spéciales (entrance et facilities)
+            if (zone.type === 'entrance') {
+                // Zone d'entrée avec double porte
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: zoneColor,
+                    transparent: true,
+                    opacity: 0.3,
+                    roughness: 0.5
+                });
+
+                // Mur de fond
+                const backWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(zone.size.width, wallHeight, wallThickness),
+                    wallMaterial
+                );
+                backWall.position.set(zone.position.x, wallHeight/2, zone.position.z - zone.size.depth/2);
+                zoneGroup.add(backWall);
+
+                // Mur de devant avec ouverture pour les portes (double porte de 4m excentrée)
+                const frontWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(zone.size.width, wallHeight, wallThickness),
+                    wallMaterial
+                );
+                frontWall.position.set(zone.position.x, wallHeight/2, zone.position.z + zone.size.depth/2);
+                zoneGroup.add(frontWall);
+
+                // Créer les portes de camion (double porte industrielle)
+                const doorMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xff6b00,
+                    metalness: 0.6,
+                    roughness: 0.4
+                });
+
+                const doorWidth = 4;
+                const doorHeight = 4.5;
+
+                // Porte gauche
+                const leftDoor = new THREE.Mesh(
+                    new THREE.BoxGeometry(doorWidth / 2 - 0.1, doorHeight, 0.15),
+                    doorMaterial
+                );
+                leftDoor.position.set(zone.position.x - doorWidth/4, doorHeight/2, zone.position.z);
+                zoneGroup.add(leftDoor);
+
+                // Porte droite
+                const rightDoor = new THREE.Mesh(
+                    new THREE.BoxGeometry(doorWidth / 2 - 0.1, doorHeight, 0.15),
+                    doorMaterial
+                );
+                rightDoor.position.set(zone.position.x + doorWidth/4, doorHeight/2, zone.position.z);
+                zoneGroup.add(rightDoor);
+
+                // Marquage au sol pour la zone de chargement
+                const loadingZoneMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffff00,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const loadingZone = new THREE.Mesh(
+                    new THREE.PlaneGeometry(zone.size.width - 1, 5),
+                    loadingZoneMaterial
+                );
+                loadingZone.rotation.x = -Math.PI / 2;
+                loadingZone.position.set(zone.position.x, 0.01, zone.position.z);
+                zoneGroup.add(loadingZone);
+
+            } else if (zone.type === 'facilities') {
+                // Zone vestiaires/toilettes
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: zoneColor,
+                    transparent: true,
+                    opacity: 0.4,
+                    roughness: 0.6
+                });
+
+                // Créer les 4 murs solides
+                const backWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(zone.size.width, wallHeight, wallThickness),
+                    wallMaterial
+                );
+                backWall.position.set(zone.position.x, wallHeight/2, zone.position.z - zone.size.depth/2);
+                zoneGroup.add(backWall);
+
+                const frontWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(zone.size.width, wallHeight, wallThickness),
+                    wallMaterial
+                );
+                frontWall.position.set(zone.position.x, wallHeight/2, zone.position.z + zone.size.depth/2);
+                zoneGroup.add(frontWall);
+
+                const leftWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(wallThickness, wallHeight, zone.size.depth),
+                    wallMaterial
+                );
+                leftWall.position.set(zone.position.x - zone.size.width/2, wallHeight/2, zone.position.z);
+                zoneGroup.add(leftWall);
+
+                const rightWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(wallThickness, wallHeight, zone.size.depth),
+                    wallMaterial
+                );
+                rightWall.position.set(zone.position.x + zone.size.width/2, wallHeight/2, zone.position.z);
+                zoneGroup.add(rightWall);
+
+                // Ajouter des casiers (représentation simplifiée)
+                const lockerMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x3a5a7a,
+                    metalness: 0.5,
+                    roughness: 0.5
+                });
+
+                // Rangée de casiers le long du mur de gauche
+                for (let i = 0; i < 8; i++) {
+                    const locker = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.4, 2, 0.5),
+                        lockerMaterial
+                    );
+                    locker.position.set(
+                        zone.position.x - zone.size.width/2 + 0.5,
+                        1,
+                        zone.position.z - zone.size.depth/2 + 2 + i * 4.5
+                    );
+                    zoneGroup.add(locker);
+                }
+
+                // Toilettes (cabines) le long du mur de droite
+                const toiletMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xe0e0e0,
+                    roughness: 0.7
+                });
+
+                for (let i = 0; i < 3; i++) {
+                    const toilet = new THREE.Mesh(
+                        new THREE.BoxGeometry(1.2, 2.2, 1.5),
+                        toiletMaterial
+                    );
+                    toilet.position.set(
+                        zone.position.x + zone.size.width/2 - 0.8,
+                        1.1,
+                        zone.position.z - zone.size.depth/2 + 3 + i * 6
+                    );
+                    zoneGroup.add(toilet);
+                }
+
+            } else {
+                // Zone de stockage normale
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: zoneColor,
+                    transparent: true,
+                    opacity: 0.2,
+                    roughness: 0.7
+                });
+
+                const backWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(zone.size.width, wallHeight, wallThickness),
+                    wallMaterial
+                );
+                backWall.position.set(zone.position.x, wallHeight/2, zone.position.z - zone.size.depth/2);
+                zoneGroup.add(backWall);
+
+                const frontWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(zone.size.width, wallHeight, wallThickness),
+                    wallMaterial
+                );
+                frontWall.position.set(zone.position.x, wallHeight/2, zone.position.z + zone.size.depth/2);
+                zoneGroup.add(frontWall);
+
+                const leftWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(wallThickness, wallHeight, zone.size.depth),
+                    wallMaterial
+                );
+                leftWall.position.set(zone.position.x - zone.size.width/2, wallHeight/2, zone.position.z);
+                zoneGroup.add(leftWall);
+
+                const rightWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(wallThickness, wallHeight, zone.size.depth),
+                    wallMaterial
+                );
+                rightWall.position.set(zone.position.x + zone.size.width/2, wallHeight/2, zone.position.z);
+                zoneGroup.add(rightWall);
+
+                // Créer les racks seulement si la zone en a
+                if (zone.racks && zone.racks.length > 0) {
+                    zone.racks.forEach(rack => {
+                        createRack(rack, zone, zoneGroup);
+                    });
+                }
+            }
+
+            scene.add(zoneGroup);
+        }
+
+        function createRack(rack, zone, parent) {
+            const rackStructure = new THREE.Group();
+
+            // Utiliser la configuration pour les dimensions
+            const rackHeight = warehouseSettings?.warehouse?.rack?.height || 5.5;
+            const rackWidth = warehouseSettings?.warehouse?.rack?.width || 4;
+            const shelfWidth = warehouseSettings?.warehouse?.rack?.shelfWidth || 1.5;
+            const shelfDepth = warehouseSettings?.warehouse?.rack?.shelfDepth || 1;
+            const shelfThickness = warehouseSettings?.warehouse?.rack?.shelfThickness || 0.1;
+
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: 0x555555,
+                roughness: 0.6,
+                metalness: 0.4
+            });
+
+            const frame = new THREE.Mesh(
+                new THREE.BoxGeometry(rackWidth, rackHeight, 0.1),
+                frameMaterial
+            );
+            frame.position.set(rack.position.x, rackHeight / 2, rack.position.z);
+            frame.receiveShadow = true;
+            frame.castShadow = true;
+            rackStructure.add(frame);
+
+            // Calculer le nombre total de colis dans ce rack
+            let totalItems = 0;
+            rack.levels.forEach(level => {
+                if (level.positions) {
+                    totalItems += level.positions.length;
+                }
+            });
+
+            // Créer un panneau LED au-dessus du rack avec le nombre de colis
+            const ledPanel = createLEDPanel(totalItems, rack.label);
+            ledPanel.position.set(rack.position.x, rackHeight + 0.5, rack.position.z);
+            rackStructure.add(ledPanel);
+
+            rack.levels.forEach(level => {
+                const shelfMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    roughness: 0.7
+                });
+                const shelf = new THREE.Mesh(
+                    new THREE.BoxGeometry(shelfWidth, shelfThickness, shelfDepth),
+                    shelfMaterial
+                );
+                shelf.position.set(rack.position.x, level.height, rack.position.z);
+                shelf.receiveShadow = true;
+                shelf.castShadow = true;
+                rackStructure.add(shelf);
+
+                // Afficher le taux d'occupation si disponible
+                if (level.occupancyRate !== undefined) {
+                    const occupancyLabel = createOccupancyLabel(level.occupancyRate, level.id);
+                    occupancyLabel.position.set(rack.position.x + shelfWidth / 2 + 0.3, level.height + 0.3, rack.position.z);
+                    rackStructure.add(occupancyLabel);
+                }
+
+                level.positions.forEach(position => {
+                    if (position.stored_item) {
+                        createItem(position, rack, zone, level, rackStructure);
+                    }
+                });
+            });
+
+            parent.add(rackStructure);
+        }
+
+        // Fonction pour créer un panneau LED affichant le nombre de colis
+        function createLEDPanel(itemCount, rackLabel) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+
+            // Fond noir type LED
+            context.fillStyle = '#000000';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Bordure grise
+            context.strokeStyle = '#333333';
+            context.lineWidth = 8;
+            context.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+
+            // Texte vert LED
+            context.fillStyle = '#00ff00';
+            context.font = 'bold 48px monospace';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+
+            // Afficher le nom du rack et le nombre de colis
+            context.fillText(`${rackLabel}: ${itemCount} colis`, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(2, 0.5, 1);
+
+            return sprite;
+        }
+
+        // Fonction pour créer un label d'occupation
+        function createOccupancyLabel(occupancyRate, levelId) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+
+            // Couleur selon le taux d'occupation
+            let bgColor, textColor;
+            if (occupancyRate >= 90) {
+                bgColor = '#ef4444'; // Rouge si presque plein
+                textColor = '#ffffff';
+            } else if (occupancyRate >= 70) {
+                bgColor = '#f59e0b'; // Orange si moyennement rempli
+                textColor = '#ffffff';
+            } else if (occupancyRate >= 40) {
+                bgColor = '#10b981'; // Vert si bien rempli
+                textColor = '#ffffff';
+            } else {
+                bgColor = '#3b82f6'; // Bleu si peu rempli
+                textColor = '#ffffff';
+            }
+
+            // Dessiner le fond
+            context.fillStyle = bgColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Dessiner la bordure
+            context.strokeStyle = textColor;
+            context.lineWidth = 4;
+            context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+            // Dessiner le texte
+            context.fillStyle = textColor;
+            context.font = 'bold 32px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(`${occupancyRate}%`, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(0.8, 0.2, 1);
+
+            return sprite;
+        }
+
+        // Fonction pour calculer les jours en stock
+        function calculateDaysInWarehouse(warehouseDate) {
+            if (!warehouseDate) return 0;
+            try {
+                const date = new Date(warehouseDate);
+                const now = new Date();
+                const diffTime = Math.abs(now - date);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays;
+            } catch (error) {
+                return 0;
+            }
+        }
+
+        function createItem(position, rack, zone, level, parent) {
+            // Obtenir les dimensions réalistes selon le type d'objet
+            const dimensions = getObjectDimensions(
+                position.componentName || position.stored_item,
+                position.categoryName || zone.name
+            );
+
+            // Calculer le nombre de jours en stock
+            const daysInWarehouse = calculateDaysInWarehouse(position.metadata?.warehouseDate);
+            const isOld = daysInWarehouse > 100;
+
+            // Créer la géométrie avec les dimensions réalistes
+            const boxGeometry = new THREE.BoxGeometry(
+                dimensions.width,
+                dimensions.height,
+                dimensions.depth
+            );
+
+            const boxMaterial = new THREE.MeshStandardMaterial({
+                color: position.color,
+                roughness: 0.5,
+                metalness: 0.3,
+                emissive: position.color,
+                emissiveIntensity: 0.2
+            });
+
+            const box = new THREE.Mesh(boxGeometry, boxMaterial);
+
+            // Positionner l'objet (le centre Y est à la moitié de la hauteur)
+            box.position.set(
+                rack.position.x + position.x,
+                level.height + dimensions.height / 2,
+                rack.position.z + 0.3
+            );
+            box.castShadow = true;
+            box.receiveShadow = true;
+
+            box.userData = {
+                id: position.id,
+                name: position.stored_item,
+                zone: zone.label,
+                rack: rack.label,
+                level: level.id,
+                category: position.category,
+                metadata: position.metadata || {},
+                dimensions: dimensions,
+                daysInWarehouse: daysInWarehouse,
+                isOld: isOld
+            };
+
+            allObjects.push(box);
+            parent.add(box);
+        }
+
+        function setupEventListeners() {
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onWindowResize);
+
+            const canvas = document.getElementById('canvas3D');
+
+            // Clic pour activer pointer lock
+            canvas.addEventListener('click', () => {
+                if (document.pointerLockElement !== canvas) {
+                    canvas.requestPointerLock();
+                } else {
+                    // Si pointer lock est déjà actif, toggle auto-avancement
+                    autoMove = !autoMove;
+                    console.log('Auto-avancement:', autoMove ? 'ACTIVE' : 'DESACTIVE');
+                }
+            });
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyZ': case 'ArrowUp':
+                    moveForward = true;
+                    autoMove = false; // Désactiver auto-avance si on utilise les touches
+                    break;
+                case 'KeyS': case 'ArrowDown':
+                    moveBackward = true;
+                    autoMove = false;
+                    break;
+                case 'KeyQ':
+                    moveLeft = true;
+                    break;
+                case 'KeyD':
+                    moveRight = true;
+                    break;
+                case 'ArrowLeft': rotation = -ROTATION_SPEED; break;
+                case 'ArrowRight': rotation = ROTATION_SPEED; break;
+                case 'ShiftLeft': isRunning = true; break;
+                case 'KeyE': checkNearestObject(); break;
+                case 'Escape': closeItemInfo(); break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyZ': case 'ArrowUp': moveForward = false; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = false; break;
+                case 'KeyQ': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'ArrowLeft': case 'ArrowRight': rotation = 0; break;
+                case 'ShiftLeft': isRunning = false; break;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (document.pointerLockElement === document.getElementById('canvas3D')) {
+                mouseX = event.movementX || 0;
+                mouseY = event.movementY || 0;
+                
+                camera.rotation.y -= mouseX * 0.002;
+                camera.rotation.x -= mouseY * 0.002;
+                camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function checkNearestObject() {
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            
+            const intersects = raycaster.intersectObjects(allObjects);
+            
+            if (intersects.length > 0 && intersects[0].distance < 5) {
+                const obj = intersects[0].object;
+                showItemInfo(obj.userData);
+            }
+        }
+
+        function showItemInfo(data) {
+            document.getElementById('itemTitle').textContent = data.name;
+
+            // Si on a des métadonnées réelles, les afficher
+            if (data.metadata && data.metadata.caseFile) {
+                document.getElementById('itemId').textContent = data.metadata.caseFile;
+                document.getElementById('itemZone').textContent = data.zone;
+                document.getElementById('itemRack').textContent = data.metadata.lot || data.rack;
+
+                // Afficher l'info de quantité
+                let levelInfo = `Grade ${data.metadata.grade || 'N/A'}`;
+                levelInfo += ` - Qté: ${data.metadata.quantite || 1} unité(s)`;
+
+                // Ajouter les dimensions si disponibles
+                if (data.dimensions) {
+                    const dim = data.dimensions;
+                    levelInfo += ` | ${(dim.width*100).toFixed(0)}x${(dim.height*100).toFixed(0)}x${(dim.depth*100).toFixed(0)}cm`;
+                }
+
+                document.getElementById('itemLevel').textContent = levelInfo;
+                document.getElementById('itemCategory').textContent = data.category;
+            } else {
+                // Fallback sur les anciennes données statiques
+                document.getElementById('itemId').textContent = data.id;
+                document.getElementById('itemZone').textContent = data.zone;
+                document.getElementById('itemRack').textContent = data.rack;
+                document.getElementById('itemLevel').textContent = data.level;
+                document.getElementById('itemCategory').textContent = data.category;
+            }
+
+            document.getElementById('itemInfo').classList.add('show');
+        }
+
+        function closeItemInfo() {
+            document.getElementById('itemInfo').classList.remove('show');
+        }
+
+        // Détecter l'objet visé par le crosshair (centre de l'écran)
+        function checkCrosshairTarget() {
+            // Raycaster depuis le centre de l'écran (où se trouve le crosshair)
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            // Vérifier les intersections avec les objets
+            const intersects = raycaster.intersectObjects(allObjects);
+
+            let targetObject = null;
+
+            // Prendre le premier objet intersecté (le plus proche)
+            if (intersects.length > 0) {
+                targetObject = intersects[0].object;
+            }
+
+            // Si l'objet visé a changé
+            if (targetObject !== selectedObject) {
+                // Désélectionner l'objet précédent
+                if (selectedObject) {
+                    deselectObject(selectedObject);
+                }
+
+                // Sélectionner le nouvel objet visé
+                if (targetObject) {
+                    selectObject(targetObject);
+                    showTooltip(targetObject);
+                } else {
+                    hideTooltip();
+                }
+
+                selectedObject = targetObject;
+            }
+
+            // Mettre à jour la position du tooltip si un objet est sélectionné
+            if (selectedObject) {
+                updateTooltipPosition(selectedObject);
+            }
+        }
+
+        // Sélectionner un objet avec effet visuel
+        function selectObject(obj) {
+            // Sauvegarder le matériau original
+            obj.userData.originalMaterial = obj.material.clone();
+
+            // Créer un effet de highlight (outline glow)
+            const highlightMaterial = obj.material.clone();
+            highlightMaterial.emissiveIntensity = 0.6;
+            highlightMaterial.emissive = new THREE.Color(0x60a5fa);
+            obj.material = highlightMaterial;
+
+            // Animation de pulsation
+            if (!obj.userData.pulseAnimation) {
+                obj.userData.pulseAnimation = true;
+                obj.userData.pulseDirection = 1;
+            }
+        }
+
+        // Désélectionner un objet
+        function deselectObject(obj) {
+            if (obj.userData.originalMaterial) {
+                obj.material = obj.userData.originalMaterial;
+                obj.userData.originalMaterial = null;
+            }
+            obj.userData.pulseAnimation = false;
+        }
+
+        // Afficher le tooltip avec les infos de l'objet
+        function showTooltip(obj) {
+            const data = obj.userData;
+            const tooltip = document.getElementById('objectTooltip');
+
+            if (data.metadata && data.metadata.caseFile) {
+                const daysText = calculateDaysInStock(data.metadata.warehouseDate);
+
+                // Changer la couleur de bordure si l'objet est ancien
+                if (data.isOld || data.daysInWarehouse > 100) {
+                    tooltip.style.borderColor = '#ff6b6b';
+                    tooltip.style.boxShadow = '0 4px 20px rgba(255, 107, 107, 0.5)';
+                } else {
+                    tooltip.style.borderColor = '#60a5fa';
+                    tooltip.style.boxShadow = '0 4px 20px rgba(96, 165, 250, 0.5)';
+                }
+
+                document.getElementById('tooltipTitle').textContent = data.name;
+                document.getElementById('tooltipCaseFile').textContent = data.metadata.caseFile;
+                document.getElementById('tooltipClient').textContent = data.metadata.clientName || 'Client inconnu';
+                document.getElementById('tooltipLot').textContent = data.metadata.lot || 'N/A';
+                document.getElementById('tooltipGrade').textContent = data.metadata.grade || 'N/A';
+                document.getElementById('tooltipZone').textContent = data.zone;
+
+                document.getElementById('tooltipDaysInStock').textContent = daysText;
+            } else {
+                document.getElementById('tooltipTitle').textContent = data.name || 'Objet';
+                document.getElementById('tooltipCaseFile').textContent = data.id || 'N/A';
+                document.getElementById('tooltipClient').textContent = 'Client inconnu';
+                document.getElementById('tooltipLot').textContent = data.rack || 'N/A';
+                document.getElementById('tooltipGrade').textContent = 'N/A';
+                document.getElementById('tooltipZone').textContent = data.zone || 'N/A';
+                document.getElementById('tooltipDaysInStock').textContent = 'N/A';
+                tooltip.style.borderColor = '#60a5fa';
+                tooltip.style.boxShadow = '0 4px 20px rgba(96, 165, 250, 0.5)';
+            }
+
+            tooltip.classList.add('show');
+        }
+
+        // Cacher le tooltip
+        function hideTooltip() {
+            document.getElementById('objectTooltip').classList.remove('show');
+        }
+
+        // Mettre à jour la position du tooltip (fixe au centre-haut de l'écran)
+        function updateTooltipPosition(obj) {
+            const tooltip = document.getElementById('objectTooltip');
+
+            // Positionner le tooltip au centre-haut de l'écran, au-dessus du crosshair
+            tooltip.style.left = '50%';
+            tooltip.style.top = '100px';
+            tooltip.style.transform = 'translateX(-50%)';
+        }
+
+        function updateHUD() {
+            const x = camera.position.x.toFixed(1);
+            const z = camera.position.z.toFixed(1);
+            document.getElementById('coordinates').textContent = `X: ${x}, Z: ${z}`;
+
+            const rotDeg = ((camera.rotation.y * 180 / Math.PI) % 360 + 360) % 360;
+            document.getElementById('rotation').textContent = rotDeg.toFixed(0) + '°';
+
+            let currentZoneName = 'Extérieur';
+            if (warehouseConfig && warehouseConfig.warehouse && warehouseConfig.warehouse.zones) {
+                warehouseConfig.warehouse.zones.forEach(zone => {
+                    const zoneMinX = zone.position.x - zone.size.width/2;
+                    const zoneMaxX = zone.position.x + zone.size.width/2;
+                    const zoneMinZ = zone.position.z - zone.size.depth/2;
+                    const zoneMaxZ = zone.position.z + zone.size.depth/2;
+
+                    if (camera.position.x >= zoneMinX && camera.position.x <= zoneMaxX &&
+                        camera.position.z >= zoneMinZ && camera.position.z <= zoneMaxZ) {
+                        currentZoneName = `${zone.label} - ${zone.name}`;
+                    }
+                });
+            }
+            document.getElementById('currentZone').textContent = currentZoneName;
+
+            document.getElementById('objectCount').textContent = allObjects.length;
+
+            // Mettre à jour l'indicateur d'auto-avancement
+            const autoMoveStatus = document.getElementById('autoMoveStatus');
+            if (autoMove) {
+                autoMoveStatus.textContent = 'ON';
+                autoMoveStatus.style.color = '#10b981'; // Vert
+            } else {
+                autoMoveStatus.textContent = 'OFF';
+                autoMoveStatus.style.color = '#ef4444'; // Rouge
+            }
+
+            drawMinimap();
+        }
+
+        function drawMinimap() {
+            const canvas = document.getElementById('minimapCanvas');
+            const ctx = canvas.getContext('2d');
+            const scale = 5;
+            const centerX = 130;
+            const centerY = 170;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dessiner les zones
+            if (warehouseConfig && warehouseConfig.warehouse && warehouseConfig.warehouse.zones) {
+                warehouseConfig.warehouse.zones.forEach(zone => {
+                ctx.fillStyle = '#' + zone.color.toString(16).padStart(6, '0');
+                ctx.globalAlpha = 0.15;
+                ctx.fillRect(
+                    centerX + zone.position.x * scale - (zone.size.width * scale) / 2,
+                    centerY + zone.position.z * scale - (zone.size.depth * scale) / 2,
+                    zone.size.width * scale,
+                    zone.size.depth * scale
+                );
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = '#' + zone.color.toString(16).padStart(6, '0');
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(
+                    centerX + zone.position.x * scale - (zone.size.width * scale) / 2,
+                    centerY + zone.position.z * scale - (zone.size.depth * scale) / 2,
+                    zone.size.width * scale,
+                    zone.size.depth * scale
+                );
+                
+                // Label de zone
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 11px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(
+                    zone.label,
+                    centerX + zone.position.x * scale,
+                    centerY + zone.position.z * scale - (zone.size.depth * scale) / 2 + 15
+                );
+            });
+            }
+
+            // Dessiner tous les objets/colis
+            allObjects.forEach(obj => {
+                const objX = centerX + obj.position.x * scale;
+                const objZ = centerY + obj.position.z * scale;
+                
+                // Calculer la distance à la caméra
+                const distance = Math.sqrt(
+                    Math.pow(obj.position.x - camera.position.x, 2) + 
+                    Math.pow(obj.position.z - camera.position.z, 2)
+                );
+                
+                // Taille du point selon la distance (effet radar)
+                const size = distance < 5 ? 5 : (distance < 10 ? 4 : 3);
+                
+                // Couleur de l'objet
+                const color = '#' + obj.material.color.getHexString();
+                
+                // Effet de pulsation pour les objets proches
+                if (distance < 5) {
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = color;
+                }
+                
+                // Dessiner le point
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(objX, objZ, size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Contour blanc pour meilleure visibilité
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                ctx.shadowBlur = 0;
+                
+                // Afficher le nom pour les objets très proches
+                if (distance < 3) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '9px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(obj.userData.name.substring(0, 12), objX, objZ - 8);
+                }
+            });
+
+            // Dessiner les racks (structure)
+            if (warehouseConfig && warehouseConfig.warehouse && warehouseConfig.warehouse.zones) {
+                warehouseConfig.warehouse.zones.forEach(zone => {
+                    zone.racks.forEach(rack => {
+                        const rackX = centerX + rack.position.x * scale;
+                        const rackZ = centerY + rack.position.z * scale;
+
+                        ctx.strokeStyle = '#666666';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(rackX - 10, rackZ - 2.5, 20, 5);
+                    });
+                });
+            }
+            
+            // Dessiner le joueur (triangle avec direction)
+            ctx.save();
+            ctx.translate(centerX + camera.position.x * scale, centerY + camera.position.z * scale);
+            ctx.rotate(camera.rotation.y);
+            
+            // Ombre du triangle
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(96, 165, 250, 0.8)';
+            
+            // Triangle du joueur
+            ctx.fillStyle = '#60a5fa';
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(-6, 6);
+            ctx.lineTo(6, 6);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Contour blanc
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Point central
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+            ctx.shadowBlur = 0;
+            
+            // Légende des couleurs
+            const legendY = 10;
+            const categories = [
+                { color: '#6366f1', label: 'IT' },
+                { color: '#ec4899', label: 'Mobilier' },
+                { color: '#10b981', label: 'Batteries' },
+                { color: '#06b6d4', label: 'D3E' }
+            ];
+            
+            ctx.font = '9px Inter';
+            ctx.textAlign = 'left';
+            categories.forEach((cat, index) => {
+                const x = 10 + (index % 2) * 110;
+                const y = legendY + Math.floor(index / 2) * 15;
+                
+                ctx.fillStyle = cat.color;
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(cat.label, x + 10, y + 3);
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            if (rotation !== 0) {
+                camera.rotation.y += rotation * delta;
+            }
+            
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            // Si auto-avancement est activé, forcer le mouvement en avant
+            const effectiveMoveForward = moveForward || autoMove;
+
+            direction.z = Number(moveBackward) - Number(effectiveMoveForward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            const speed = MOVE_SPEED * (isRunning ? RUN_MULTIPLIER : 1);
+
+            // Vecteur avant basé sur la rotation de la caméra
+            const forward = new THREE.Vector3(0, 0, 1);
+            forward.applyQuaternion(camera.quaternion);
+            forward.y = 0;
+            forward.normalize();
+
+            // Vecteur droite basé sur la rotation de la caméra
+            const right = new THREE.Vector3(-1, 0, 0);
+            right.applyQuaternion(camera.quaternion);
+            right.y = 0;
+            right.normalize();
+
+            // Appliquer le mouvement dans la direction de la caméra
+            if (effectiveMoveForward || moveBackward) {
+                camera.position.addScaledVector(forward, direction.z * speed * delta);
+            }
+            if (moveLeft || moveRight) {
+                camera.position.addScaledVector(right, direction.x * speed * delta);
+            }
+            
+            camera.position.x = Math.max(-14, Math.min(14, camera.position.x));
+            camera.position.z = Math.max(-22, Math.min(32, camera.position.z));
+
+            // Détecter l'objet visé par le crosshair
+            checkCrosshairTarget();
+
+            // Animation de pulsation pour l'objet sélectionné
+            if (selectedObject && selectedObject.userData.pulseAnimation) {
+                const intensity = selectedObject.material.emissiveIntensity;
+                if (selectedObject.userData.pulseDirection === 1) {
+                    selectedObject.material.emissiveIntensity += delta * 2;
+                    if (intensity >= 0.8) selectedObject.userData.pulseDirection = -1;
+                } else {
+                    selectedObject.material.emissiveIntensity -= delta * 2;
+                    if (intensity <= 0.4) selectedObject.userData.pulseDirection = 1;
+                }
+            }
+
+            updateHUD();
+            renderer.render(scene, camera);
+        }
+
+        function switchView(mode) {
+            const buttons = document.querySelectorAll('.view-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            currentViewMode = mode;
+            
+            if (mode === 'plan') {
+                camera.position.set(0, 30, 0);
+                camera.rotation.set(-Math.PI/2, 0, 0);
+            } else {
+                camera.position.set(0, 1.6, -18);
+                camera.rotation.set(0, 0, 0);
+            }
+        }
+
+        // Démarrer le chargement des données au chargement de la page
+        async function initialize() {
+            await loadWarehouseSettings();
+            await loadWarehouseData();
+        }
+        initialize();
+    </script>
+</body>
+</html>
