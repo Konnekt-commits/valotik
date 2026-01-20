@@ -1,40 +1,34 @@
 # Backend Dockerfile - Cloud Run optimisé
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
+RUN apt-get update && apt-get install -y openssl libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Installer toutes les dépendances (y compris dev pour build)
 RUN npm ci
-
-# Générer le client Prisma
 RUN npx prisma generate
 
-# Copier le code source
 COPY . .
-
-# Build TypeScript
 RUN npm run build
 
-# Stage de production
-FROM node:20-alpine
+# Production
+FROM node:20-slim
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Installer seulement les dépendances de production
 RUN npm ci --only=production
 RUN npx prisma generate
 
-# Copier le build
 COPY --from=builder /app/dist ./dist
 
-# Cloud Run utilise PORT 8080
 ENV PORT=8080
 EXPOSE 8080
 
