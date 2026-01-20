@@ -1,11 +1,11 @@
 steps:
   # Build l'image Docker
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/valotik-api:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api:latest', '.']
 
   # Push l'image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/valotik-api:$COMMIT_SHA']
+    args: ['push', 'europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api:latest']
 
   # Déploie sur Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -13,9 +13,9 @@ steps:
       - 'run'
       - 'deploy'
       - 'valotik-api'
-      - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/valotik-api:$COMMIT_SHA'
+      - '--image=europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api:latest'
       - '--region=europe-west1'
       - '--allow-unauthenticated'
 
 images:
-  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/valotik-api:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api:latest'
