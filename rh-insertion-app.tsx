@@ -1128,11 +1128,12 @@ export default function RHInsertionApp() {
           (s.objetEntretien || '-').substring(0, 45),
           s.conseillerNom || '-'
         ]),
-        styles: { fontSize: 5.5, cellPadding: 1.2 },
-        headStyles: { fillColor: [75, 85, 99], fontSize: 5.5, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
+        styles: { fontSize: 5.5, cellPadding: 1.5 },
+        headStyles: { fillColor: [248, 250, 252], textColor: [55, 65, 81], fontSize: 5.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [255, 255, 255] },
         margin: { left: 10, right: 10 },
-        columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 22 }, 2: { cellWidth: 15 }, 3: { cellWidth: 75 }, 4: { cellWidth: 30 } }
+        tableWidth: pageWidth - 20,
+        columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 24 }, 2: { cellWidth: 16 }, 3: { cellWidth: 'auto' }, 4: { cellWidth: 32 } }
       });
     }
 
