@@ -546,7 +546,7 @@ export default function RHInsertionApp() {
           pointages: [{ date, heures }]
         })
       });
-      loadPointages();
+      // Ne pas recharger les données pour éviter de perdre le focus
     } catch (error) {
       console.error('Erreur save pointage:', error);
     }
@@ -3388,7 +3388,6 @@ Cette attestation est délivrée pour servir et valoir ce que de droit.`;
                                   <input
                                     type="text"
                                     inputMode="decimal"
-                                    pattern="[0-9]*\.?[0-9]*"
                                     tabIndex={tabIdx}
                                     value={heures || ''}
                                     onChange={(e) => {
@@ -3398,7 +3397,8 @@ Cette attestation est délivrée pour servir et valoir ce que de droit.`;
                                       }
                                     }}
                                     onBlur={() => handlePointageBlur(emp.id, pointage.id, j.date)}
-                                    className={`w-10 px-1 py-0.5 text-center text-xs rounded ${bg('bg-slate-600 text-white', 'bg-gray-100 text-gray-900')} border-0 focus:ring-1 focus:ring-blue-500`}
+                                    className={`w-12 px-1 py-1 text-center text-xs rounded ${bg('bg-slate-600 text-white', 'bg-gray-100 text-gray-900')} border-0 focus:ring-1 focus:ring-blue-500`}
+                                    style={{ MozAppearance: 'textfield', WebkitAppearance: 'none' }}
                                   />
                                 ) : (
                                   <span className={`text-xs ${heures > 0 ? text('text-white', 'text-gray-900') : 'text-slate-500'}`}>
