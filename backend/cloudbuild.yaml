@@ -2,9 +2,9 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # Build l'image Docker
+  # Build l'image Docker depuis le dossier backend
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api:latest', '.']
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api:latest', './backend']
 
   # Push l'image
   - name: 'gcr.io/cloud-builders/docker'
