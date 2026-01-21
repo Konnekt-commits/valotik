@@ -3677,6 +3677,15 @@ export default function RHInsertionApp() {
                   <div>
                     <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>Heures contrat</p>
                     <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{Math.round(pointagesData.totaux.heuresContrat)}h</p>
+                    {(() => {
+                      const diff = pointagesData.totaux.heuresPointees - pointagesData.totaux.heuresContrat;
+                      const diffArrondi = Math.round(diff * 10) / 10;
+                      return (
+                        <p className={`text-xs font-medium ${diff >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {diff >= 0 ? '+' : ''}{diffArrondi}h
+                        </p>
+                      );
+                    })()}
                   </div>
                   <Target className="w-8 h-8 text-blue-500/30" />
                 </div>
