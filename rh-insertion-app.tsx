@@ -815,324 +815,564 @@ export default function RHInsertionApp() {
     return new Date(date).toLocaleDateString('fr-FR');
   };
 
-  // =================== GENERATION PDF ===================
+  // =================== GENERATION PDF PROFESSIONNELLE ===================
 
-  // PDF Fiche Salarié Complète
+  // Générer une référence de document unique
+  const generateDocReference = (type: string, employeeId?: string) => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const seq = String(Math.floor(Math.random() * 9999)).padStart(4, '0');
+    const empRef = employeeId ? `-${employeeId.substring(0, 6).toUpperCase()}` : '';
+    return `${type}-${year}${month}${day}${empRef}-${seq}`;
+  };
+
+  // Helper pour en-tête professionnel ISO
+  const addPDFHeaderPro = (doc: jsPDF, config: {
+    title: string;
+    docType: string; // FI=Fiche Individuelle, RS=Rapport Suivi, AE=Attestation Emploi, SE=Synthèse Effectifs
+    docRef: string;
+    version?: string;
+    classification?: 'CONFIDENTIEL' | 'INTERNE' | 'PUBLIC';
+    subtitle?: string;
+  }) => {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const org = organismeData;
+    const { title, docType, docRef, version = '1.0', classification = 'CONFIDENTIEL', subtitle } = config;
+
+    // ===== BANDEAU SUPÉRIEUR =====
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, 0, pageWidth, 22, 'F');
+
+    // Logo/Nom structure (gauche)
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(org?.raisonSociale?.toUpperCase() || 'STRUCTURE IAE', 10, 8);
+
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 180, 180);
+    doc.text(org?.formeJuridique || 'Association', 10, 13);
+    doc.text(`SIRET: ${org?.siret || 'N/A'}`, 10, 17);
+
+    // Infos document (droite) - Style ISO
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RÉFÉRENCE', pageWidth - 55, 6);
+    doc.text('VERSION', pageWidth - 35, 6);
+    doc.text('DATE', pageWidth - 18, 6);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(docRef, pageWidth - 55, 11);
+    doc.text(version, pageWidth - 35, 11);
+    doc.text(new Date().toLocaleDateString('fr-FR'), pageWidth - 18, 11);
+
+    // Classification
+    const classColors: Record<string, number[]> = {
+      'CONFIDENTIEL': [220, 38, 38],
+      'INTERNE': [245, 158, 11],
+      'PUBLIC': [34, 197, 94]
+    };
+    doc.setFillColor(...(classColors[classification] || [100, 100, 100]) as [number, number, number]);
+    doc.roundedRect(pageWidth - 55, 14, 45, 5, 1, 1, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(classification, pageWidth - 32.5, 17.5, { align: 'center' });
+
+    // ===== TITRE DU DOCUMENT =====
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 22, pageWidth, 18, 'F');
+
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title.toUpperCase(), pageWidth / 2, 30, { align: 'center' });
+
+    if (subtitle) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(subtitle, pageWidth / 2, 36, { align: 'center' });
+    }
+
+    // ===== CARTOUCHE INFORMATIONS STRUCTURE =====
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(10, 42, pageWidth - 10, 42);
+
+    doc.setFontSize(5.5);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+
+    const orgInfo = org ? [
+      `${org.adresseSiege || ''} - ${org.codePostalSiege || ''} ${org.villeSiege || ''}`,
+      `Tél: ${org.telephoneSiege || 'N/A'} | Email: ${org.emailSiege || 'N/A'}`,
+      org.conventions?.[0] ? `Convention ${org.conventions[0].typeStructure} n°${org.conventions[0].numeroConvention} | ${org.conventions[0].effectifETPAutorise} ETP autorisés` : ''
+    ].filter(Boolean).join('  •  ') : '';
+
+    doc.text(orgInfo, pageWidth / 2, 46, { align: 'center' });
+
+    doc.setDrawColor(220, 220, 220);
+    doc.line(10, 49, pageWidth - 10, 49);
+
+    return 54;
+  };
+
+  // Helper pour pied de page professionnel ISO
+  const addPDFFooterPro = (doc: jsPDF, docRef: string) => {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const org = organismeData;
+    const pageCount = doc.internal.pages.length - 1;
+
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+
+      // Bandeau de pied de page
+      doc.setFillColor(248, 250, 252);
+      doc.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.2);
+      doc.line(10, pageHeight - 20, pageWidth - 10, pageHeight - 20);
+
+      // Colonne gauche - Infos structure
+      doc.setFontSize(5);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${org?.raisonSociale || 'Structure IAE'}`, 10, pageHeight - 15);
+      doc.text(`${org?.formeJuridique || ''} - SIRET: ${org?.siret || 'N/A'} - APE: ${org?.codeAPE || 'N/A'}`, 10, pageHeight - 11);
+      if (org?.iban) {
+        doc.text(`IBAN: ${org.iban} - BIC: ${org.bic || 'N/A'}`, 10, pageHeight - 7);
+      }
+
+      // Colonne centre - Réf document et conformité
+      doc.setFontSize(5);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Réf:', pageWidth / 2 - 20, pageHeight - 15);
+      doc.setFont('helvetica', 'normal');
+      doc.text(docRef, pageWidth / 2 - 14, pageHeight - 15);
+
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(4.5);
+      doc.text('Document conforme aux exigences de suivi IAE - Art. L5132-1 Code du travail', pageWidth / 2, pageHeight - 10, { align: 'center' });
+      doc.text(`Édité le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
+
+      // Colonne droite - Pagination
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`${i} / ${pageCount}`, pageWidth - 15, pageHeight - 10, { align: 'right' });
+    }
+  };
+
+  // Helper pour section avec titre
+  const addSection = (doc: jsPDF, y: number, title: string, pageWidth: number): number => {
+    doc.setFillColor(55, 65, 81);
+    doc.rect(10, y, pageWidth - 20, 5, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title.toUpperCase(), 12, y + 3.5);
+    return y + 7;
+  };
+
+  // PDF Fiche Salarié Complète - VERSION PRO
   const generateFicheSalariePDF = (employee: InsertionEmployee) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    let y = 20;
+    const docRef = generateDocReference('FI', employee.id);
 
-    // En-tête
-    doc.setFillColor(30, 58, 138);
-    doc.rect(0, 0, pageWidth, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FICHE SALARIÉ EN INSERTION', pageWidth / 2, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom}`, pageWidth / 2, 32, { align: 'center' });
-
-    y = 50;
-    doc.setTextColor(0, 0, 0);
-
-    // Section État Civil
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, pageWidth - 30, 8, 'F');
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ÉTAT CIVIL', 20, y + 6);
-    y += 15;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const etatCivil = [
-      ['Nom de naissance', employee.nom, 'Prénom', employee.prenom],
-      ['Date de naissance', formatDate(employee.dateNaissance), 'Lieu de naissance', employee.lieuNaissance || '-'],
-      ['Nationalité', employee.nationalite || '-', 'N° Sécurité sociale', employee.numeroSecu || '-']
-    ];
-    etatCivil.forEach(row => {
-      doc.setFont('helvetica', 'bold');
-      doc.text(row[0] + ':', 20, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(row[1]), 70, y);
-      doc.setFont('helvetica', 'bold');
-      doc.text(row[2] + ':', 115, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(row[3]), 170, y);
-      y += 7;
+    let y = addPDFHeaderPro(doc, {
+      title: 'Fiche Individuelle Salarié en Insertion',
+      docType: 'FI',
+      docRef,
+      version: '1.0',
+      classification: 'CONFIDENTIEL',
+      subtitle: `${employee.civilite} ${employee.prenom} ${employee.nom.toUpperCase()} - Matricule: ${employee.id.substring(0, 8).toUpperCase()}`
     });
 
-    y += 5;
+    // ===== ENCART SYNTHÈSE =====
+    doc.setFillColor(240, 245, 250);
+    doc.roundedRect(10, y, pageWidth - 20, 22, 2, 2, 'F');
 
-    // Section Coordonnées
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, pageWidth - 30, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('COORDONNÉES', 20, y + 6);
-    y += 15;
+    // Photo placeholder
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(12, y + 2, 18, 18, 1, 1, 'FD');
+    doc.setFontSize(4);
+    doc.setTextColor(150);
+    doc.text('PHOTO', 21, y + 12, { align: 'center' });
 
-    doc.setFontSize(10);
+    // Infos synthèse
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('Adresse:', 20, y);
+    doc.text(`${employee.prenom} ${employee.nom.toUpperCase()}`, 34, y + 6);
+
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${employee.adresse}, ${employee.codePostal} ${employee.ville}`, 50, y);
-    y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Téléphone:', 20, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(employee.telephone || '-', 50, y);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Email:', 115, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(employee.email || '-', 135, y);
-    y += 12;
+    doc.setTextColor(80, 80, 80);
+    doc.text(`${employee.typeContrat} | ${employee.dureeHebdo}h/semaine | ${employee.poste || 'Poste non défini'}`, 34, y + 11);
+    doc.text(`Entrée: ${formatDate(employee.dateEntree)}${employee.dateSortie ? ` - Sortie: ${formatDate(employee.dateSortie)}` : ' - En cours'}`, 34, y + 15);
 
-    // Section Situation Administrative
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, pageWidth - 30, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('SITUATION ADMINISTRATIVE & IAE', 20, y + 6);
-    y += 15;
+    // Badges statut
+    let badgeX = 34;
+    const badges: { label: string; color: number[] }[] = [];
+    if (employee.statut === 'actif') badges.push({ label: 'ACTIF', color: [34, 197, 94] });
+    if (employee.statut === 'sorti') badges.push({ label: 'SORTI', color: [107, 114, 128] });
+    if (employee.beneficiaireRSA) badges.push({ label: 'RSA', color: [59, 130, 246] });
+    if (employee.beneficiaireASS) badges.push({ label: 'ASS', color: [139, 92, 246] });
+    if (employee.reconnaissanceTH) badges.push({ label: 'RQTH', color: [236, 72, 153] });
+    if (employee.passInclusionNumero) badges.push({ label: 'PASS IAE', color: [16, 185, 129] });
 
-    doc.setFontSize(10);
-    const situations = [];
-    if (employee.inscritFranceTravail) situations.push(`France Travail: ${employee.numeroFranceTravail || 'Oui'}`);
-    if (employee.beneficiaireRSA) situations.push('Bénéficiaire RSA');
-    if (employee.beneficiaireASS) situations.push('Bénéficiaire ASS');
-    if (employee.beneficiaireAAH) situations.push('Bénéficiaire AAH');
-    if (employee.reconnaissanceTH) situations.push('RQTH');
-
-    doc.setFont('helvetica', 'normal');
-    doc.text(situations.length > 0 ? situations.join(' | ') : 'Aucune situation particulière', 20, y);
-    y += 10;
-
-    if (employee.passInclusionNumero) {
+    badges.slice(0, 6).forEach(b => {
+      doc.setFillColor(...b.color as [number, number, number]);
+      const w = doc.getTextWidth(b.label) * 0.8 + 3;
+      doc.roundedRect(badgeX, y + 17, w, 4, 0.8, 0.8, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(4.5);
       doc.setFont('helvetica', 'bold');
-      doc.text('Pass IAE:', 20, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`N° ${employee.passInclusionNumero} - Valide du ${formatDate(employee.passInclusionDate)} au ${formatDate(employee.passInclusionExpiration)}`, 50, y);
-      y += 7;
-    }
-    if (employee.eligibiliteIAE) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('Éligibilité IAE:', 20, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(employee.eligibiliteIAE, 60, y);
-      y += 7;
-    }
-    y += 5;
-
-    // Section Contrat
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, y, pageWidth - 30, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('CONTRAT DE TRAVAIL', 20, y + 6);
-    y += 15;
-
-    doc.setFontSize(10);
-    const contratInfo = [
-      ['Type', employee.typeContrat, 'Durée hebdo', `${employee.dureeHebdo}h`],
-      ['Date d\'entrée', formatDate(employee.dateEntree), 'Poste', employee.poste || '-'],
-      ['Salaire brut', employee.salaireBrut ? `${employee.salaireBrut}€` : '-', 'Statut', employee.statut]
-    ];
-    contratInfo.forEach(row => {
-      doc.setFont('helvetica', 'bold');
-      doc.text(row[0] + ':', 20, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(row[1]), 55, y);
-      doc.setFont('helvetica', 'bold');
-      doc.text(row[2] + ':', 100, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(row[3]), 140, y);
-      y += 7;
+      doc.text(b.label, badgeX + 1.5, y + 19.8);
+      badgeX += w + 2;
     });
 
-    // Si le salarié a des suivis, les ajouter
+    // Indicateurs à droite
+    const rightCol = pageWidth - 55;
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('N° Sécurité Sociale', rightCol, y + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(employee.numeroSecu || 'Non renseigné', rightCol, y + 9);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Pass IAE', rightCol, y + 14);
+    doc.setFont('helvetica', 'normal');
+    doc.text(employee.passInclusionNumero || 'Non renseigné', rightCol, y + 18);
+
+    y += 26;
+
+    // ===== ÉTAT CIVIL =====
+    y = addSection(doc, y, 'État Civil', pageWidth);
+
+    doc.setFontSize(6);
+    doc.setTextColor(35, 41, 54);
+    const col1 = 12, col2 = 42, col3 = 75, col4 = 105, col5 = 140, col6 = 170;
+
+    const addDataRow = (items: [string, string][]) => {
+      items.forEach((item, idx) => {
+        const colLabel = idx === 0 ? col1 : idx === 1 ? col3 : col5;
+        const colValue = idx === 0 ? col2 : idx === 1 ? col4 : col6;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(100);
+        doc.text(item[0], colLabel, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(35, 41, 54);
+        doc.text(item[1].substring(0, 25), colValue, y);
+      });
+      y += 4.5;
+    };
+
+    addDataRow([['Civilité:', employee.civilite], ['Nom:', employee.nom.toUpperCase()], ['Prénom:', employee.prenom]]);
+    addDataRow([['Nom usage:', employee.nomUsage || '-'], ['Né(e) le:', formatDate(employee.dateNaissance)], ['Lieu:', employee.lieuNaissance || '-']]);
+    addDataRow([['Nationalité:', employee.nationalite || 'Française'], ['N° Sécu:', employee.numeroSecu || '-'], ['', '']]);
+    y += 2;
+
+    // ===== COORDONNÉES =====
+    y = addSection(doc, y, 'Coordonnées', pageWidth);
+    addDataRow([['Adresse:', employee.adresse?.substring(0, 40) || '-'], ['', ''], ['', '']]);
+    addDataRow([['CP / Ville:', `${employee.codePostal} ${employee.ville}`], ['', ''], ['', '']]);
+    addDataRow([['Téléphone:', employee.telephone || '-'], ['Tél. 2:', employee.telephoneSecondaire || '-'], ['Email:', employee.email?.substring(0, 25) || '-']]);
+    y += 2;
+
+    // ===== SITUATION PERSONNELLE =====
+    y = addSection(doc, y, 'Situation Personnelle', pageWidth);
+    addDataRow([['Sit. familiale:', employee.situationFamiliale || '-'], ['Enfants:', String(employee.nombreEnfants || 0)], ['', '']]);
+    addDataRow([['Permis:', employee.permisConduire ? `Oui (${employee.typePermis || 'B'})` : 'Non'], ['Véhicule:', employee.vehicule ? 'Oui' : 'Non'], ['', '']]);
+    addDataRow([['Pièce ID:', employee.typePieceIdentite || '-'], ['N° pièce:', employee.numeroPieceIdentite || '-'], ['Exp.:', employee.dateExpirationPiece ? formatDate(employee.dateExpirationPiece) : '-']]);
+    y += 2;
+
+    // ===== SITUATION ADMINISTRATIVE IAE =====
+    y = addSection(doc, y, 'Situation Administrative & Éligibilité IAE', pageWidth);
+    addDataRow([['France Travail:', employee.inscritFranceTravail ? 'Oui' : 'Non'], ['N° FT:', employee.numeroFranceTravail || '-'], ['Éligibilité:', employee.eligibiliteIAE || '-']]);
+    addDataRow([['RSA:', employee.beneficiaireRSA ? 'Oui' : 'Non'], ['ASS:', employee.beneficiaireASS ? 'Oui' : 'Non'], ['AAH:', employee.beneficiaireAAH ? 'Oui' : 'Non']]);
+    addDataRow([['RQTH:', employee.reconnaissanceTH ? 'Oui' : 'Non'], ['Pass IAE:', employee.passInclusionNumero || '-'], ['Exp. Pass:', employee.passInclusionExpiration ? formatDate(employee.passInclusionExpiration) : '-']]);
+    y += 2;
+
+    // ===== CONTRAT DE TRAVAIL =====
+    y = addSection(doc, y, 'Contrat de Travail', pageWidth);
+    addDataRow([['Type:', employee.typeContrat], ['Durée:', `${employee.dureeHebdo}h/sem`], ['Poste:', employee.poste || '-']]);
+    addDataRow([['Entrée:', formatDate(employee.dateEntree)], ['Sortie:', employee.dateSortie ? formatDate(employee.dateSortie) : 'En cours'], ['Salaire:', employee.salaireBrut ? `${employee.salaireBrut}€ brut` : '-']]);
+    if (employee.dateSortie) {
+      addDataRow([['Motif sortie:', employee.motifSortie || '-'], ['Type sortie:', employee.typeSortie || '-'], ['', '']]);
+    }
+    y += 2;
+
+    // ===== TABLEAU SUIVIS =====
     if (employee.suivis && employee.suivis.length > 0) {
-      y += 10;
-      doc.setFillColor(241, 245, 249);
-      doc.rect(15, y, pageWidth - 30, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('SUIVI ACCOMPAGNEMENT', 20, y + 6);
-      y += 12;
+      y = addSection(doc, y, `Historique Accompagnement (${employee.suivis.length} entretien${employee.suivis.length > 1 ? 's' : ''})`, pageWidth);
 
       autoTable(doc, {
         startY: y,
-        head: [['Date', 'Type', 'Objet', 'Conseiller']],
-        body: employee.suivis.slice(0, 10).map((s: any) => [
+        head: [['Date', 'Type', 'Durée', 'Objet de l\'entretien', 'Conseiller']],
+        body: employee.suivis.slice(0, 6).map((s: any) => [
           formatDate(s.dateEntretien),
           s.typeEntretien || '-',
-          (s.objetEntretien || '-').substring(0, 40),
+          s.duree ? `${s.duree}min` : '-',
+          (s.objetEntretien || '-').substring(0, 45),
           s.conseillerNom || '-'
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [30, 58, 138] },
-        margin: { left: 20, right: 20 }
+        styles: { fontSize: 5.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [75, 85, 99], fontSize: 5.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 },
+        columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 22 }, 2: { cellWidth: 15 }, 3: { cellWidth: 75 }, 4: { cellWidth: 30 } }
       });
     }
 
-    // Pied de page
-    const pageCount = doc.internal.pages.length - 1;
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(128);
-      doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} - Page ${i}/${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    // ===== NOTES =====
+    const finalY = (doc as any).lastAutoTable?.finalY || y;
+    if (employee.notes) {
+      doc.setFontSize(5);
+      doc.setTextColor(100);
+      doc.setFont('helvetica', 'italic');
+      doc.text(`Observations: ${employee.notes.substring(0, 300)}`, 10, finalY + 6);
     }
 
-    doc.save(`Fiche_${employee.nom}_${employee.prenom}.pdf`);
+    addPDFFooterPro(doc, docRef);
+    doc.save(`FI_${employee.nom.toUpperCase()}_${employee.prenom}_${docRef}.pdf`);
   };
 
-  // PDF Rapport de Suivi d'un salarié
+  // PDF Rapport de Suivi d'un salarié - VERSION PRO
   const generateRapportSuiviPDF = (employee: InsertionEmployee) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    let y = 20;
+    const docRef = generateDocReference('RS', employee.id);
 
-    // En-tête
-    doc.setFillColor(22, 163, 74);
-    doc.rect(0, 0, pageWidth, 35, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
+    // Calcul durée parcours
+    const dateEntree = new Date(employee.dateEntree);
+    const dateFin = employee.dateSortie ? new Date(employee.dateSortie) : new Date();
+    const dureeMois = Math.floor((dateFin.getTime() - dateEntree.getTime()) / (1000 * 60 * 60 * 24 * 30));
+
+    let y = addPDFHeaderPro(doc, {
+      title: 'Rapport de Suivi Socioprofessionnel',
+      docType: 'RS',
+      docRef,
+      version: '1.0',
+      classification: 'CONFIDENTIEL',
+      subtitle: `${employee.civilite} ${employee.prenom} ${employee.nom.toUpperCase()} - Parcours de ${dureeMois} mois`
+    });
+
+    // ===== SYNTHÈSE DU PARCOURS =====
+    doc.setFillColor(240, 245, 250);
+    doc.roundedRect(10, y, pageWidth - 20, 28, 2, 2, 'F');
+
+    // Colonne gauche - Identité
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text('RAPPORT D\'ACCOMPAGNEMENT', pageWidth / 2, 18, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom}`, pageWidth / 2, 30, { align: 'center' });
-
-    y = 45;
-    doc.setTextColor(0, 0, 0);
-
-    // Infos salarié
-    doc.setFontSize(10);
+    doc.text('BÉNÉFICIAIRE', 14, y + 5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Poste: ${employee.poste || '-'} | Entrée: ${formatDate(employee.dateEntree)} | Contrat: ${employee.typeContrat}`, 20, y);
-    y += 15;
+    doc.setFontSize(6);
+    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom.toUpperCase()}`, 14, y + 10);
+    doc.text(`Né(e) le ${formatDate(employee.dateNaissance)}`, 14, y + 14);
+    doc.text(`N° Sécu: ${employee.numeroSecu || 'Non renseigné'}`, 14, y + 18);
+    doc.text(`Pass IAE: ${employee.passInclusionNumero || 'Non renseigné'}`, 14, y + 22);
 
-    // Fiche PRO si existante
+    // Colonne centre - Contrat
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('CONTRAT', 70, y + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.text(`Type: ${employee.typeContrat} - ${employee.dureeHebdo}h/sem`, 70, y + 10);
+    doc.text(`Poste: ${employee.poste || 'Non défini'}`, 70, y + 14);
+    doc.text(`Entrée: ${formatDate(employee.dateEntree)}`, 70, y + 18);
+    doc.text(`${employee.dateSortie ? `Sortie: ${formatDate(employee.dateSortie)}` : 'Statut: En cours'}`, 70, y + 22);
+
+    // Colonne droite - Indicateurs
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('INDICATEURS', 130, y + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.text(`Durée parcours: ${dureeMois} mois`, 130, y + 10);
+    doc.text(`Entretiens: ${employee.suivis?.length || 0}`, 130, y + 14);
+    doc.text(`PMSMP: ${employee.conventionsPMSMP?.length || 0}`, 130, y + 18);
+    doc.text(`Formations: ${employee.formations?.length || 0}`, 130, y + 22);
+
+    y += 32;
+
+    // ===== PROJET PROFESSIONNEL =====
     if (employee.fichePro) {
-      doc.setFillColor(241, 245, 249);
-      doc.rect(15, y, pageWidth - 30, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text('PROJET PROFESSIONNEL', 20, y + 6);
-      y += 15;
+      y = addSection(doc, y, 'Projet Professionnel & Objectifs', pageWidth);
 
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(35, 41, 54);
+
       if (employee.fichePro.projetPro) {
-        doc.text(`Projet: ${employee.fichePro.projetPro}`, 20, y); y += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Projet:', 12, y);
+        doc.setFont('helvetica', 'normal');
+        const projetLines = doc.splitTextToSize(employee.fichePro.projetPro, pageWidth - 35);
+        doc.text(projetLines.slice(0, 2), 30, y);
+        y += projetLines.slice(0, 2).length * 4 + 2;
       }
+
       if (employee.fichePro.metiersVises) {
-        doc.text(`Métiers visés: ${employee.fichePro.metiersVises}`, 20, y); y += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Métiers visés:', 12, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(employee.fichePro.metiersVises.substring(0, 80), 38, y);
+        y += 5;
       }
-      if (employee.fichePro.objectifsCourt) {
-        doc.text(`Objectifs court terme: ${employee.fichePro.objectifsCourt}`, 20, y); y += 6;
+
+      // Objectifs sur 2 colonnes
+      const hasObj = employee.fichePro.objectifsCourt || employee.fichePro.objectifsMoyen || employee.fichePro.objectifsLong;
+      if (hasObj) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Court terme:', 12, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text((employee.fichePro.objectifsCourt || '-').substring(0, 50), 35, y);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Moyen terme:', 100, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text((employee.fichePro.objectifsMoyen || '-').substring(0, 50), 125, y);
+        y += 5;
       }
-      if (employee.fichePro.objectifsMoyen) {
-        doc.text(`Objectifs moyen terme: ${employee.fichePro.objectifsMoyen}`, 20, y); y += 6;
+
+      // Freins identifiés
+      const freins: string[] = [];
+      if (employee.fichePro.freinsMobilite) freins.push('Mobilité');
+      if (employee.fichePro.freinsLogement) freins.push('Logement');
+      if (employee.fichePro.freinsSante) freins.push('Santé');
+      if (employee.fichePro.freinsGardeEnfants) freins.push('Garde enfants');
+      if (employee.fichePro.freinsLangue) freins.push('Langue');
+      if (employee.fichePro.freinsNumerique) freins.push('Numérique');
+
+      if (freins.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Freins identifiés:', 12, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(freins.join(' | '), 42, y);
+        y += 5;
       }
-      y += 10;
+      y += 3;
     }
 
-    // Tableau des entretiens
+    // ===== HISTORIQUE ENTRETIENS =====
     if (employee.suivis && employee.suivis.length > 0) {
-      doc.setFillColor(241, 245, 249);
-      doc.rect(15, y, pageWidth - 30, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text(`HISTORIQUE DES ENTRETIENS (${employee.suivis.length})`, 20, y + 6);
-      y += 12;
+      y = addSection(doc, y, `Historique des Entretiens de Suivi (${employee.suivis.length})`, pageWidth);
 
       autoTable(doc, {
         startY: y,
-        head: [['Date', 'Type', 'Durée', 'Objet', 'Actions décidées']],
+        head: [['Date', 'Type', 'Durée', 'Conseiller', 'Objet de l\'entretien', 'Actions décidées']],
         body: employee.suivis.map((s: any) => [
           formatDate(s.dateEntretien),
           s.typeEntretien || '-',
-          s.duree ? `${s.duree} min` : '-',
-          (s.objetEntretien || '-').substring(0, 30),
-          (s.actionsDecidees || '-').substring(0, 30)
+          s.duree ? `${s.duree}min` : '-',
+          s.conseillerNom || '-',
+          (s.objetEntretien || '-').substring(0, 40),
+          (s.actionsDecidees || '-').substring(0, 35)
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [22, 163, 74] },
-        margin: { left: 15, right: 15 },
-        columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 20 },
-          3: { cellWidth: 50 },
-          4: { cellWidth: 50 }
-        }
+        styles: { fontSize: 5.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [55, 65, 81], fontSize: 5.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 },
+        columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 18 }, 2: { cellWidth: 12 }, 3: { cellWidth: 25 }, 4: { cellWidth: 50 }, 5: { cellWidth: 45 } }
       });
-      y = (doc as any).lastAutoTable.finalY + 10;
+      y = (doc as any).lastAutoTable.finalY + 5;
     }
 
-    // PMSMP
+    // ===== PMSMP =====
     if (employee.conventionsPMSMP && employee.conventionsPMSMP.length > 0) {
-      doc.setFillColor(241, 245, 249);
-      doc.rect(15, y, pageWidth - 30, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text(`PMSMP RÉALISÉES (${employee.conventionsPMSMP.length})`, 20, y + 6);
-      y += 12;
+      y = addSection(doc, y, `Immersions Professionnelles - PMSMP (${employee.conventionsPMSMP.length})`, pageWidth);
 
       autoTable(doc, {
         startY: y,
-        head: [['Entreprise', 'Période', 'Statut', 'Évaluation']],
+        head: [['Entreprise d\'accueil', 'Période', 'Durée', 'Statut', 'Évaluation', 'Suite envisagée']],
         body: employee.conventionsPMSMP.map((p: any) => [
           p.entrepriseNom,
           `${formatDate(p.dateDebut)} - ${formatDate(p.dateFin)}`,
+          p.dureeJours ? `${p.dureeJours}j` : '-',
           p.statut,
-          p.evaluationEntreprise || '-'
+          p.evaluationEntreprise || '-',
+          p.suiteEnvisagee || '-'
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [22, 163, 74] },
-        margin: { left: 15, right: 15 }
+        styles: { fontSize: 5.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [55, 65, 81], fontSize: 5.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 }
       });
-      y = (doc as any).lastAutoTable.finalY + 10;
+      y = (doc as any).lastAutoTable.finalY + 5;
     }
 
-    // Formations
+    // ===== FORMATIONS =====
     if (employee.formations && employee.formations.length > 0) {
-      doc.setFillColor(241, 245, 249);
-      doc.rect(15, y, pageWidth - 30, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text(`FORMATIONS SUIVIES (${employee.formations.length})`, 20, y + 6);
-      y += 12;
+      y = addSection(doc, y, `Formations Suivies (${employee.formations.length})`, pageWidth);
 
       autoTable(doc, {
         startY: y,
-        head: [['Formation', 'Organisme', 'Dates', 'Durée', 'Résultat']],
+        head: [['Intitulé', 'Organisme', 'Type', 'Période', 'Durée', 'Résultat']],
         body: employee.formations.map((f: any) => [
-          f.intitule,
-          f.organisme || '-',
-          `${formatDate(f.dateDebut)} - ${formatDate(f.dateFin)}`,
+          f.intitule?.substring(0, 35) || '-',
+          f.organisme?.substring(0, 20) || '-',
+          f.type || '-',
+          `${formatDate(f.dateDebut)}${f.dateFin ? ` - ${formatDate(f.dateFin)}` : ''}`,
           f.dureeHeures ? `${f.dureeHeures}h` : '-',
-          f.resultat || f.statut
+          f.resultat || f.statut || '-'
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [22, 163, 74] },
-        margin: { left: 15, right: 15 }
+        styles: { fontSize: 5.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [55, 65, 81], fontSize: 5.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 }
+      });
+      y = (doc as any).lastAutoTable.finalY + 5;
+    }
+
+    // ===== OBJECTIFS INDIVIDUELS =====
+    if (employee.objectifsIndividuels && employee.objectifsIndividuels.length > 0) {
+      y = addSection(doc, y, `Objectifs Individuels (${employee.objectifsIndividuels.length})`, pageWidth);
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Objectif', 'Catégorie', 'Échéance', 'Progression', 'Statut']],
+        body: employee.objectifsIndividuels.map((o: any) => [
+          o.titre?.substring(0, 50) || '-',
+          o.categorie || '-',
+          o.dateEcheance ? formatDate(o.dateEcheance) : '-',
+          `${o.progression || 0}%`,
+          o.statut || '-'
+        ]),
+        styles: { fontSize: 5.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [55, 65, 81], fontSize: 5.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 }
       });
     }
 
-    // Pied de page
-    const pageCount = doc.internal.pages.length - 1;
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(128);
-      doc.text(`Rapport généré le ${new Date().toLocaleDateString('fr-FR')} - Page ${i}/${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    // ===== BILAN SORTIE si sorti =====
+    if (employee.dateSortie && employee.fichePro?.bilanSortie) {
+      const finalY = (doc as any).lastAutoTable?.finalY || y;
+      doc.setFillColor(245, 247, 250);
+      doc.roundedRect(10, finalY + 5, pageWidth - 20, 18, 2, 2, 'F');
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(35, 41, 54);
+      doc.text('BILAN DE SORTIE', 14, finalY + 10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Type de sortie: ${employee.typeSortie || '-'} | Motif: ${employee.motifSortie || '-'}`, 14, finalY + 15);
+      doc.text(`Situation à la sortie: ${employee.fichePro.situationSortie || '-'}`, 14, finalY + 20);
     }
 
-    doc.save(`Rapport_Suivi_${employee.nom}_${employee.prenom}.pdf`);
+    addPDFFooterPro(doc, docRef);
+    doc.save(`RS_${employee.nom.toUpperCase()}_${employee.prenom}_${docRef}.pdf`);
   };
 
   // PDF Synthèse des Effectifs
@@ -1282,55 +1522,211 @@ export default function RHInsertionApp() {
     doc.save(`Synthese_Effectifs_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  // PDF Attestation d'emploi
+  // PDF Attestation d'emploi - VERSION PRO
   const generateAttestationEmploiPDF = (employee: InsertionEmployee) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    let y = 40;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const docRef = generateDocReference('AE', employee.id);
+    const org = organismeData;
 
-    // Logo/En-tête entreprise
-    doc.setFontSize(16);
+    // ===== EN-TÊTE STRUCTURE =====
+    // Bandeau sobre
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, 0, pageWidth, 32, 'F');
+
+    // Logo zone (gauche)
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(12, 6, 20, 20, 2, 2, 'F');
+    doc.setFontSize(5);
+    doc.setTextColor(150);
+    doc.text('LOGO', 22, 17, { align: 'center' });
+
+    // Nom et infos structure
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('VALOTIK', 20, 25);
+    doc.text(org?.raisonSociale?.toUpperCase() || 'STRUCTURE D\'INSERTION', 38, 12);
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(200, 200, 200);
+    doc.text(org?.formeJuridique || 'Structure d\'Insertion par l\'Activité Économique', 38, 18);
+    doc.text(`${org?.adresseSiege || ''} - ${org?.codePostalSiege || ''} ${org?.villeSiege || ''}`, 38, 23);
+    doc.text(`SIRET: ${org?.siret || 'N/A'} | Tél: ${org?.telephoneSiege || 'N/A'}`, 38, 28);
+
+    // Référence document (droite)
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Réf. Document', pageWidth - 40, 10);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(docRef, pageWidth - 40, 15);
+    doc.text(`Édité le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - 40, 20);
+
+    // ===== TITRE =====
+    let y = 50;
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 38, pageWidth, 20, 'F');
+
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ATTESTATION D\'EMPLOI', pageWidth / 2, 50, { align: 'center' });
+
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(10, 58, pageWidth - 10, 58);
+
+    // ===== CORPS DU DOCUMENT =====
+    y = 68;
+
+    // Section émetteur
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(35, 41, 54);
+
+    const representant = org?.representantNom && org?.representantPrenom
+      ? `${org.representantPrenom} ${org.representantNom.toUpperCase()}`
+      : '[Représentant légal]';
+    const fonction = org?.representantFonction || '[Fonction]';
+
+    doc.text(`Je soussigné(e), ${representant},`, 20, y);
+    y += 5;
+    doc.text(`agissant en qualité de ${fonction} de la structure ${org?.raisonSociale || '[Nom structure]'},`, 20, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('ATTESTE QUE :', 20, y);
+    y += 10;
+
+    // Encadré bénéficiaire
+    doc.setFillColor(245, 247, 250);
+    doc.roundedRect(20, y, pageWidth - 40, 28, 2, 2, 'F');
+
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Structure d\'Insertion par l\'Activité Économique', 20, 32);
+    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom.toUpperCase()}`, 25, y + 8);
 
-    // Titre
-    y = 60;
-    doc.setFontSize(18);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(`Né(e) le ${formatDate(employee.dateNaissance)}${employee.lieuNaissance ? ` à ${employee.lieuNaissance}` : ''}`, 25, y + 14);
+    doc.text(`Demeurant: ${employee.adresse}`, 25, y + 19);
+    doc.text(`${employee.codePostal} ${employee.ville}`, 25, y + 24);
+
+    y += 35;
+
+    // Texte attestation
+    doc.setFontSize(8);
+    const dateEntree = formatDate(employee.dateEntree);
+    const texteEmploi = employee.dateSortie
+      ? `a été employé(e) au sein de notre structure du ${dateEntree} au ${formatDate(employee.dateSortie)}`
+      : `est employé(e) au sein de notre structure depuis le ${dateEntree}`;
+
+    doc.text(texteEmploi, 20, y);
+    y += 6;
+    doc.text(`en qualité de ${employee.poste || 'Salarié(e) en insertion'}.`, 20, y);
+    y += 12;
+
+    // Tableau récapitulatif contrat
+    doc.setFillColor(55, 65, 81);
+    doc.rect(20, y, pageWidth - 40, 6, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text('ATTESTATION D\'EMPLOI', pageWidth / 2, y, { align: 'center' });
+    doc.text('CARACTÉRISTIQUES DU CONTRAT', 25, y + 4);
+    y += 8;
 
-    y = 85;
-    doc.setFontSize(11);
+    doc.setTextColor(35, 41, 54);
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
 
-    const text = `Je soussigné(e), [Nom du représentant légal], agissant en qualité de [Fonction], certifie que :
+    const contratData = [
+      ['Type de contrat', employee.typeContrat],
+      ['Durée hebdomadaire', `${employee.dureeHebdo} heures`],
+      ['Date d\'entrée', dateEntree],
+      ['Poste occupé', employee.poste || 'Salarié(e) en insertion']
+    ];
 
-${employee.civilite} ${employee.prenom} ${employee.nom}
-Né(e) le ${formatDate(employee.dateNaissance)}
-Demeurant ${employee.adresse}, ${employee.codePostal} ${employee.ville}
+    if (employee.dateSortie) {
+      contratData.push(['Date de sortie', formatDate(employee.dateSortie)]);
+    }
+    if (employee.salaireBrut) {
+      contratData.push(['Rémunération brute mensuelle', `${employee.salaireBrut} €`]);
+    }
 
-Est employé(e) au sein de notre structure depuis le ${formatDate(employee.dateEntree)} en qualité de ${employee.poste || 'Salarié en insertion'}.
+    contratData.forEach((row, idx) => {
+      const bgColor = idx % 2 === 0 ? [248, 250, 252] : [255, 255, 255];
+      doc.setFillColor(...bgColor as [number, number, number]);
+      doc.rect(20, y, pageWidth - 40, 5, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.text(row[0], 25, y + 3.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(row[1], 90, y + 3.5);
+      y += 5;
+    });
 
-Type de contrat : ${employee.typeContrat}
-Durée hebdomadaire : ${employee.dureeHebdo} heures
-${employee.salaireBrut ? `Rémunération brute mensuelle : ${employee.salaireBrut} €` : ''}
+    // Cadre convention si disponible
+    if (org?.conventions?.[0]) {
+      y += 8;
+      doc.setFillColor(240, 245, 250);
+      doc.roundedRect(20, y, pageWidth - 40, 12, 2, 2, 'F');
+      doc.setFontSize(6);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Cette embauche s'inscrit dans le cadre de la convention ${org.conventions[0].typeStructure} n°${org.conventions[0].numeroConvention}`, 25, y + 5);
+      doc.text(`conclue avec l'État (DREETS/DDETS) pour la période du ${formatDate(org.conventions[0].dateDebut)} au ${formatDate(org.conventions[0].dateFin)}.`, 25, y + 9);
+      y += 15;
+    }
 
-Cette attestation est délivrée pour servir et valoir ce que de droit.`;
+    // Mention légale
+    y += 10;
+    doc.setFontSize(8);
+    doc.setTextColor(35, 41, 54);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cette attestation est délivrée pour servir et valoir ce que de droit.', 20, y);
 
-    const lines = doc.splitTextToSize(text, pageWidth - 40);
-    doc.text(lines, 20, y);
-
-    // Date et signature
-    y = 200;
-    doc.text(`Fait à __________________, le ${new Date().toLocaleDateString('fr-FR')}`, 20, y);
+    // ===== SIGNATURE =====
     y += 20;
-    doc.text('Signature et cachet de l\'entreprise :', 20, y);
-    doc.rect(20, y + 5, 80, 40);
+    doc.text(`Fait à ${org?.villeSiege || '____________________'}, le ${new Date().toLocaleDateString('fr-FR')}`, 20, y);
 
-    doc.save(`Attestation_Emploi_${employee.nom}_${employee.prenom}.pdf`);
+    y += 15;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('Signature et cachet de la structure', pageWidth - 80, y);
+
+    // Zone signature
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(pageWidth - 80, y + 3, 60, 35, 2, 2, 'FD');
+
+    // Nom du signataire sous la zone
+    y += 42;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.setTextColor(100, 100, 100);
+    doc.text(representant, pageWidth - 50, y, { align: 'center' });
+    doc.text(fonction, pageWidth - 50, y + 4, { align: 'center' });
+
+    // ===== PIED DE PAGE =====
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(10, pageHeight - 22, pageWidth - 10, pageHeight - 22);
+
+    doc.setFontSize(5);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${org?.raisonSociale || 'Structure IAE'} - ${org?.formeJuridique || ''} - SIRET: ${org?.siret || 'N/A'} - APE: ${org?.codeAPE || 'N/A'}`, 10, pageHeight - 16);
+    if (org?.iban) {
+      doc.text(`Coordonnées bancaires: IBAN ${org.iban} - BIC ${org.bic || 'N/A'}`, 10, pageHeight - 12);
+    }
+    doc.text(`Réf: ${docRef} | Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, 10, pageHeight - 8);
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(4.5);
+    doc.text('Ce document est établi conformément aux dispositions du Code du travail relatives à l\'Insertion par l\'Activité Économique (Art. L5132-1 et suivants).', pageWidth / 2, pageHeight - 4, { align: 'center' });
+
+    doc.save(`AE_${employee.nom.toUpperCase()}_${employee.prenom}_${docRef}.pdf`);
   };
 
   // =================== FIN GENERATION PDF ===================
