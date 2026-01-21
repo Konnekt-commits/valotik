@@ -384,7 +384,17 @@ export const utiliserBanqueHeures = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pointage non trouvé' });
     }
 
-    // Vérifier qu'on a assez d'heures en banque
+    // Vérifier que la banque a un solde positif
+    if (pointage.heuresBanqueEntree <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: pointage.heuresBanqueEntree < 0
+          ? `Solde banque négatif (${pointage.heuresBanqueEntree}h). Impossible d'utiliser des heures.`
+          : 'Aucune heure disponible en banque.'
+      });
+    }
+
+    // Vérifier qu'on a assez d'heures en banque (ne peut utiliser que le solde positif)
     if (heuresAUtiliser > pointage.heuresBanqueEntree) {
       return res.status(400).json({
         success: false,
@@ -399,12 +409,16 @@ export const utiliserBanqueHeures = async (req: Request, res: Response) => {
       ? Math.round(heuresEffectives / pointage.heuresContrat * 100)
       : 0;
 
+    // Calculer la banque de sortie (peut être négative si déficit ce mois)
+    const excedent = heuresEffectives - pointage.heuresContrat;
+    const heuresBanqueSortie = pointage.heuresBanqueEntree - heuresAUtiliser + excedent;
+
     const updated = await prisma.pointageMensuel.update({
       where: { id: pointageMensuelId },
       data: {
         heuresRegularisees,
         pourcentage,
-        heuresBanqueSortie: pointage.heuresBanqueEntree - heuresAUtiliser + Math.max(0, heuresEffectives - pointage.heuresContrat)
+        heuresBanqueSortie: Math.round(heuresBanqueSortie * 100) / 100
       }
     });
 
@@ -429,23 +443,24 @@ export const transfererVersBanque = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pointage non trouvé' });
     }
 
-    // Calculer l'excédent (heures au-dessus de 100%)
+    // Calculer l'excédent ou le déficit (positif si > 100%, négatif si < 100%)
     const heuresEffectives = pointage.heuresPointees + pointage.heuresRegularisees;
-    const excedent = Math.max(0, heuresEffectives - pointage.heuresContrat);
+    const excedent = heuresEffectives - pointage.heuresContrat;
 
-    // Mettre à jour la banque de sortie avec l'excédent
+    // Mettre à jour la banque de sortie (peut être négatif = déficit)
     const heuresBanqueSortie = pointage.heuresBanqueEntree - pointage.heuresRegularisees + excedent;
+    const heuresBanqueSortieArrondi = Math.round(heuresBanqueSortie * 100) / 100;
 
     const updated = await prisma.pointageMensuel.update({
       where: { id: pointageMensuelId },
       data: {
-        heuresBanqueSortie: Math.max(0, heuresBanqueSortie),
+        heuresBanqueSortie: heuresBanqueSortieArrondi,
         statut: 'valide',
         dateValidation: new Date()
       }
     });
 
-    // Propager vers le mois suivant
+    // Propager vers le mois suivant (y compris les heures négatives)
     const moisSuivant = pointage.mois === 12 ? 1 : pointage.mois + 1;
     const anneeSuivante = pointage.mois === 12 ? pointage.annee + 1 : pointage.annee;
 
@@ -465,20 +480,26 @@ export const transfererVersBanque = async (req: Request, res: Response) => {
           mois: moisSuivant,
           annee: anneeSuivante,
           heuresContrat: heuresContratSuivant,
-          heuresBanqueEntree: Math.max(0, heuresBanqueSortie)
+          heuresBanqueEntree: heuresBanqueSortieArrondi
         },
         update: {
-          heuresBanqueEntree: Math.max(0, heuresBanqueSortie)
+          heuresBanqueEntree: heuresBanqueSortieArrondi
         }
       });
+    }
+
+    // Message adapté selon excédent ou déficit
+    let message = 'Pointage validé';
+    if (excedent > 0) {
+      message = `+${Math.round(excedent * 10) / 10}h transférées vers la banque`;
+    } else if (excedent < 0) {
+      message = `${Math.round(excedent * 10) / 10}h (déficit) reportées au mois suivant`;
     }
 
     res.json({
       success: true,
       data: updated,
-      message: excedent > 0
-        ? `${Math.round(excedent * 10) / 10}h transférées vers la banque`
-        : 'Pointage validé'
+      message
     });
   } catch (error: any) {
     console.error('Erreur transfererVersBanque:', error);
@@ -545,6 +566,7 @@ export const cloturerMois = async (req: Request, res: Response) => {
         const heuresContratSuivant = calculerHeuresContratMois(employee.dureeHebdo, moisSuivant, anneeSuivante);
 
         // Créer ou mettre à jour le pointage du mois suivant avec la banque
+        // Permet les valeurs négatives (déficit) qui seront à rattraper
         await prisma.pointageMensuel.upsert({
           where: {
             employeeId_mois_annee: {
@@ -558,16 +580,16 @@ export const cloturerMois = async (req: Request, res: Response) => {
             mois: moisSuivant,
             annee: anneeSuivante,
             heuresContrat: heuresContratSuivant,
-            heuresBanqueEntree: p.heuresBanqueSortie
+            heuresBanqueEntree: p.heuresBanqueSortie // Peut être négatif
           },
           update: {
-            heuresBanqueEntree: p.heuresBanqueSortie
+            heuresBanqueEntree: p.heuresBanqueSortie // Peut être négatif
           }
         });
       }
     }
 
-    res.json({ success: true, message: `Mois ${moisNum}/${anneeNum} clôturé` });
+    res.json({ success: true, message: `Mois ${moisNum}/${anneeNum} clôturé. Les soldes (positifs et négatifs) ont été reportés au mois suivant.` });
   } catch (error: any) {
     console.error('Erreur cloturerMois:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -597,8 +619,10 @@ const recalculerPointageMensuel = async (pointageMensuelId: string) => {
     ? Math.round(heuresEffectives / pointage.heuresContrat * 100)
     : 0;
 
-  // Calculer la nouvelle banque (heures en plus si > 100%)
-  const excedent = Math.max(0, heuresEffectives - pointage.heuresContrat);
+  // Calculer la nouvelle banque (positif si > 100%, négatif si < 100%)
+  // excedent peut être négatif (déficit) ou positif (surplus)
+  const excedent = heuresEffectives - pointage.heuresContrat;
+  // heuresBanqueSortie = solde entrant - heures utilisées pour régulariser + excédent/déficit du mois
   const heuresBanqueSortie = pointage.heuresBanqueEntree - pointage.heuresRegularisees + excedent;
 
   await prisma.pointageMensuel.update({
@@ -606,7 +630,8 @@ const recalculerPointageMensuel = async (pointageMensuelId: string) => {
     data: {
       heuresPointees,
       pourcentage,
-      heuresBanqueSortie: Math.max(0, heuresBanqueSortie)
+      // Permettre les valeurs négatives pour suivre le déficit
+      heuresBanqueSortie: Math.round(heuresBanqueSortie * 100) / 100
     }
   });
 };

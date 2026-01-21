@@ -3705,7 +3705,9 @@ export default function RHInsertionApp() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>Banque d'heures</p>
-                    <p className={`text-2xl font-bold text-amber-500`}>{Math.round(pointagesData.totaux.heuresBanque)}h</p>
+                    <p className={`text-2xl font-bold ${pointagesData.totaux.heuresBanque >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                      {pointagesData.totaux.heuresBanque >= 0 ? '' : ''}{Math.round(pointagesData.totaux.heuresBanque)}h
+                    </p>
                   </div>
                   <Banknote className="w-8 h-8 text-amber-500/30" />
                 </div>
@@ -3820,16 +3822,28 @@ export default function RHInsertionApp() {
                             <div className="flex flex-col items-center gap-0.5">
                               {pointage.statut === 'valide' ? (
                                 <>
-                                  <span className={`text-xs font-medium ${pointage.heuresBanqueSortie > 0 ? 'text-green-500' : 'text-slate-500'}`}>
-                                    {Math.round(pointage.heuresBanqueSortie * 10) / 10}h
+                                  <span className={`text-xs font-medium ${
+                                    pointage.heuresBanqueSortie > 0 ? 'text-green-500' :
+                                    pointage.heuresBanqueSortie < 0 ? 'text-red-500' : 'text-slate-500'
+                                  }`}>
+                                    {pointage.heuresBanqueSortie > 0 ? '+' : ''}{Math.round(pointage.heuresBanqueSortie * 10) / 10}h
                                   </span>
-                                  <span className="text-[10px] text-slate-500">en banque</span>
+                                  <span className="text-[10px] text-slate-500">
+                                    {pointage.heuresBanqueSortie >= 0 ? 'en banque' : 'déficit'}
+                                  </span>
                                 </>
                               ) : (
                                 <>
-                                  <span className={`text-xs ${pointage.heuresBanqueEntree > 0 ? 'text-amber-500' : 'text-slate-500'}`}>
-                                    {pointage.heuresBanqueEntree > 0 ? `+${Math.round(pointage.heuresBanqueEntree * 10) / 10}h` : '0h'}
+                                  <span className={`text-xs ${
+                                    pointage.heuresBanqueEntree > 0 ? 'text-amber-500' :
+                                    pointage.heuresBanqueEntree < 0 ? 'text-red-500' : 'text-slate-500'
+                                  }`}>
+                                    {pointage.heuresBanqueEntree > 0 ? `+${Math.round(pointage.heuresBanqueEntree * 10) / 10}h` :
+                                     pointage.heuresBanqueEntree < 0 ? `${Math.round(pointage.heuresBanqueEntree * 10) / 10}h` : '0h'}
                                   </span>
+                                  {pointage.heuresBanqueEntree < 0 && (
+                                    <span className="text-[10px] text-red-400">déficit à rattraper</span>
+                                  )}
                                   {pointage.pourcentage < 100 && pointage.heuresBanqueEntree > 0 && pointage.statut !== 'valide' && (
                                     <button
                                       onClick={() => {
@@ -3847,6 +3861,11 @@ export default function RHInsertionApp() {
                                   {pointage.pourcentage > 100 && (
                                     <span className="text-[10px] text-blue-400">
                                       +{Math.round((pointage.heuresPointees - pointage.heuresContrat) * 10) / 10}h à transférer
+                                    </span>
+                                  )}
+                                  {pointage.pourcentage < 100 && pointage.heuresBanqueEntree <= 0 && (
+                                    <span className="text-[10px] text-orange-400">
+                                      {Math.round((pointage.heuresContrat - pointage.heuresPointees) * 10) / 10}h manquantes
                                     </span>
                                   )}
                                 </>
