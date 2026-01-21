@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, User, Clock, Sun, Moon,
   Check, X, Calendar, AlertCircle, Coffee, GraduationCap,
-  Umbrella, Heart, Briefcase, Save, Loader2, RefreshCw
+  Umbrella, Heart, Briefcase, Save, Loader2, RefreshCw, Trash2, PenTool
 } from 'lucide-react';
 
 const API_URL = 'https://valotik-api-546691893264.europe-west1.run.app/api';
@@ -98,6 +98,9 @@ export default function PointageMobileApp() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [signatures, setSignatures] = useState<Record<string, string>>({});
+  const [isDrawing, setIsDrawing] = useState(false);
 
   // Couleurs dynamiques
   const bg = (dark: string, light: string) => isDark ? dark : light;
@@ -322,6 +325,109 @@ export default function PointageMobileApp() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [activeSheet]);
+
+  // Initialiser le canvas de signature quand le bottom sheet s'ouvre
+  useEffect(() => {
+    if (activeSheet && signatureCanvasRef.current) {
+      const canvas = signatureCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Adapter la taille du canvas
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * 2;
+        canvas.height = rect.height * 2;
+        ctx.scale(2, 2);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = isDark ? '#10b981' : '#059669';
+
+        // Restaurer la signature existante si elle existe
+        const existingSignature = signatures[activeSheet];
+        if (existingSignature) {
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, rect.width, rect.height);
+          };
+          img.src = existingSignature;
+        }
+      }
+    }
+  }, [activeSheet, isDark]);
+
+  // Fonctions de dessin pour la signature
+  const getCoordinates = (e: React.TouchEvent | React.MouseEvent) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+
+    if ('touches' in e) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    } else {
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+  };
+
+  const startDrawing = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    const canvas = signatureCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    const { x, y } = getCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+
+    const canvas = signatureCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+
+    const { x, y } = getCoordinates(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+
+    // Sauvegarder la signature
+    const canvas = signatureCanvasRef.current;
+    if (canvas && activeSheet) {
+      const dataUrl = canvas.toDataURL('image/png');
+      setSignatures(prev => ({ ...prev, [activeSheet]: dataUrl }));
+    }
+  };
+
+  const clearSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    if (activeSheet) {
+      setSignatures(prev => {
+        const newSigs = { ...prev };
+        delete newSigs[activeSheet];
+        return newSigs;
+      });
+    }
+  };
 
   return (
     <div className={`min-h-screen ${bg('bg-slate-900', 'bg-gray-100')} transition-colors duration-300`}>
@@ -727,6 +833,45 @@ export default function PointageMobileApp() {
                       rows={2}
                       className={`w-full px-4 py-3 rounded-xl ${bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
                     />
+                  </div>
+
+                  {/* Signature du salarié */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} flex items-center gap-2`}>
+                        <PenTool size={16} />
+                        Signature du salarié
+                      </label>
+                      <button
+                        onClick={clearSignature}
+                        className={`p-2 rounded-lg ${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-200 hover:bg-gray-300')} transition-colors`}
+                      >
+                        <Trash2 size={16} className={text('text-gray-400', 'text-gray-500')} />
+                      </button>
+                    </div>
+                    <div className={`relative rounded-xl overflow-hidden ${bg('bg-slate-700', 'bg-gray-100')} border-2 border-dashed ${signatures[ep.employee.id] ? 'border-emerald-500' : bg('border-slate-600', 'border-gray-300')}`}>
+                      <canvas
+                        ref={signatureCanvasRef}
+                        className="w-full h-32 touch-none cursor-crosshair"
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        onTouchStart={startDrawing}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDrawing}
+                      />
+                      {!signatures[ep.employee.id] && (
+                        <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${text('text-gray-500', 'text-gray-400')}`}>
+                          <span className="text-sm">Signez ici</span>
+                        </div>
+                      )}
+                    </div>
+                    {signatures[ep.employee.id] && (
+                      <p className="mt-1 text-xs text-emerald-500 flex items-center gap-1">
+                        <Check size={12} /> Signature enregistrée
+                      </p>
+                    )}
                   </div>
 
                   {/* Bouton valider */}
