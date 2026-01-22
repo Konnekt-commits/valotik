@@ -116,6 +116,7 @@ export default function RHInsertionApp() {
   const [pointagesLoading, setPointagesLoading] = useState(false);
   const [editingPointage, setEditingPointage] = useState<string | null>(null);
   const [pointageValues, setPointageValues] = useState<Record<string, Record<string, number>>>({});
+  const [selectedWeek, setSelectedWeek] = useState<number>(1);
 
   // Agenda states
   const [agendaMois, setAgendaMois] = useState<number>(new Date().getMonth() + 1);
@@ -516,6 +517,21 @@ export default function RHInsertionApp() {
         const values: Record<string, Record<string, number>> = {};
         data.data.pointages.forEach((p: any) => {
           values[p.employee.id] = {};
+          // D'abord, initialiser les valeurs par défaut pour les jours ouvrés
+          // Lundi (1) à Jeudi (4) : 6.5h (3h matin + 3.5h après-midi)
+          // Vendredi (5) et weekend : 0h
+          data.data.joursMois?.forEach((jour: any) => {
+            if (!jour.estWeekend) {
+              const date = new Date(jour.date);
+              const dayOfWeek = date.getDay();
+              // Lundi (1) à Jeudi (4) : valeur par défaut 6.5h
+              if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+                values[p.employee.id][jour.date] = 6.5;
+              }
+              // Vendredi : pas de valeur par défaut (0)
+            }
+          });
+          // Ensuite, écraser avec les valeurs réelles enregistrées
           p.pointage.journees?.forEach((j: any) => {
             const dateStr = new Date(j.date).toISOString().split('T')[0];
             values[p.employee.id][dateStr] = j.heuresTravaillees;
@@ -3640,6 +3656,175 @@ export default function RHInsertionApp() {
       }
     };
 
+    // Générer la feuille d'émargement PDF
+    const genererFeuilleEmargement = (semaine: number = 1) => {
+      if (!pointagesData) return;
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'A4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // Couleur header (bleu-gris du modèle)
+      const headerColor: [number, number, number] = [88, 129, 140];
+
+      // Titre
+      doc.setFontSize(22);
+      doc.setTextColor(88, 129, 140);
+      doc.setFont('helvetica', 'bold');
+      doc.text("FEUILLE D'ÉMARGEMENT", pageWidth / 2, 20, { align: 'center' });
+
+      // Sous-titre
+      doc.setFontSize(14);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${moisNoms[pointagesMois]} ${pointagesAnnee} - Semaine ${semaine}`, pageWidth / 2, 28, { align: 'center' });
+
+      // Informations
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      const org = organismeData;
+      doc.text(`Intervenant : ${org?.responsable || 'Encadrant technique'}`, 14, 40);
+      doc.text(`Lieu : ${org?.adresse || ''} ${org?.codePostal || ''} ${org?.ville || ''}`, 14, 46);
+
+      // Calculer les jours de la semaine sélectionnée
+      const premierJourMois = new Date(pointagesAnnee, pointagesMois - 1, 1);
+      const dernierJourMois = new Date(pointagesAnnee, pointagesMois, 0);
+
+      // Trouver le premier lundi du mois ou le premier jour
+      let premierLundi = new Date(premierJourMois);
+      while (premierLundi.getDay() !== 1) {
+        premierLundi.setDate(premierLundi.getDate() + 1);
+        if (premierLundi > dernierJourMois) {
+          premierLundi = premierJourMois;
+          break;
+        }
+      }
+
+      // Aller à la semaine sélectionnée
+      const debutSemaine = new Date(premierLundi);
+      debutSemaine.setDate(debutSemaine.getDate() + (semaine - 1) * 7);
+
+      // Générer les 5 jours ouvrés (Lun-Ven)
+      const joursOuvres: { date: Date; dateStr: string; label: string }[] = [];
+      for (let i = 0; i < 5; i++) {
+        const jour = new Date(debutSemaine);
+        jour.setDate(jour.getDate() + i);
+        const joursSemaine = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+        joursOuvres.push({
+          date: jour,
+          dateStr: jour.toISOString().split('T')[0],
+          label: `${joursSemaine[jour.getDay()]} ${jour.getDate().toString().padStart(2, '0')}/${(jour.getMonth() + 1).toString().padStart(2, '0')}`
+        });
+      }
+
+      // Préparer les données du tableau
+      const employees = pointagesData.pointages || [];
+
+      // En-têtes du tableau
+      const headers = [
+        [
+          { content: 'PARTICIPANTS', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: headerColor, textColor: [255, 255, 255], fontStyle: 'bold' } },
+          ...joursOuvres.map(j => ({
+            content: j.label,
+            colSpan: 2,
+            styles: { halign: 'center', fillColor: headerColor, textColor: [255, 255, 255], fontStyle: 'bold' }
+          }))
+        ],
+        [
+          ...joursOuvres.flatMap(() => [
+            { content: 'Matin\n08:00 - 12:00', styles: { halign: 'center', fillColor: headerColor, textColor: [255, 255, 255], fontSize: 7 } },
+            { content: 'Après-midi\n13:00 - 16:30', styles: { halign: 'center', fillColor: headerColor, textColor: [255, 255, 255], fontSize: 7 } }
+          ])
+        ]
+      ];
+
+      // Données des employés
+      const body = employees.map((p: any) => {
+        const emp = p.employee;
+        const row: any[] = [
+          { content: `${emp.prenom} ${emp.nom.toUpperCase()}`, styles: { fontStyle: 'bold' } }
+        ];
+
+        joursOuvres.forEach(j => {
+          const heures = pointageValues[emp.id]?.[j.dateStr] || 0;
+          const dayOfWeek = j.date.getDay();
+          // Lundi à Jeudi : 3h matin + 3.5h après-midi par défaut
+          // Vendredi : 0h par défaut
+          const isLundiAJeudi = dayOfWeek >= 1 && dayOfWeek <= 4;
+
+          if (heures > 0) {
+            // Si des heures sont pointées, on les répartit matin/après-midi
+            const heureMatin = Math.min(heures, isLundiAJeudi ? 3 : 4);
+            const heureAprem = Math.max(0, heures - heureMatin);
+            // Cases pour signature (vides pour que l'employé signe)
+            row.push({ content: '', styles: { minCellHeight: 18 } });
+            row.push({ content: '', styles: { minCellHeight: 18 } });
+          } else {
+            // Pas de pointage
+            row.push({ content: '', styles: { minCellHeight: 18, fillColor: [245, 245, 245] } });
+            row.push({ content: '', styles: { minCellHeight: 18, fillColor: [245, 245, 245] } });
+          }
+        });
+
+        return row;
+      });
+
+      // Ajouter des lignes vides pour atteindre minimum 10 lignes
+      const minLignes = 10;
+      while (body.length < minLignes) {
+        const emptyRow: any[] = [{ content: '', styles: { minCellHeight: 18 } }];
+        for (let i = 0; i < joursOuvres.length * 2; i++) {
+          emptyRow.push({ content: '', styles: { minCellHeight: 18 } });
+        }
+        body.push(emptyRow);
+      }
+
+      // Générer le tableau
+      autoTable(doc, {
+        startY: 52,
+        head: headers,
+        body: body,
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          lineColor: [200, 200, 200],
+          lineWidth: 0.3
+        },
+        headStyles: {
+          fillColor: headerColor,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold'
+        },
+        columnStyles: {
+          0: { cellWidth: 45 }
+        },
+        margin: { left: 14, right: 14 }
+      });
+
+      // Pied de page
+      const finalY = (doc as any).lastAutoTable?.finalY || 180;
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, finalY + 10);
+
+      // Télécharger le PDF
+      doc.save(`Feuille_Emargement_${moisNoms[pointagesMois]}_${pointagesAnnee}_S${semaine}.pdf`);
+    };
+
+    // Calculer le nombre de semaines dans le mois
+    const getNombreSemaines = () => {
+      const premierJour = new Date(pointagesAnnee, pointagesMois - 1, 1);
+      const dernierJour = new Date(pointagesAnnee, pointagesMois, 0);
+      let premierLundi = new Date(premierJour);
+      while (premierLundi.getDay() !== 1 && premierLundi <= dernierJour) {
+        premierLundi.setDate(premierLundi.getDate() + 1);
+      }
+      if (premierLundi > dernierJour) return 1;
+      const joursRestants = Math.ceil((dernierJour.getTime() - premierLundi.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      return Math.ceil(joursRestants / 7);
+    };
+
     return (
       <div className="p-6 space-y-4">
         {/* Header */}
@@ -3661,6 +3846,27 @@ export default function RHInsertionApp() {
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
+            {/* Bouton Feuille d'émargement */}
+            {pointagesData && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
+                  className={`px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white', 'bg-gray-200 text-gray-900')} border-0 focus:ring-2 focus:ring-teal-500`}
+                >
+                  {Array.from({ length: getNombreSemaines() }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>Semaine {i + 1}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => genererFeuilleEmargement(selectedWeek)}
+                  className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <FileSignature className="w-4 h-4" />
+                  Feuille d'émargement
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

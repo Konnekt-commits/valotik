@@ -143,9 +143,15 @@ export default function PointageMobileApp() {
                 saved: true
               };
             } else {
+              // Valeurs par défaut selon le jour de la semaine
+              const dayOfWeek = selectedDate.getDay();
+              // Lundi (1) à Jeudi (4) : matin 3h, après-midi 3.5h
+              // Vendredi (5) et weekend (0, 6) : 0h
+              const isLundiAJeudi = dayOfWeek >= 1 && dayOfWeek <= 4;
+
               initialLocal[ep.employee.id] = {
-                matin: '',
-                apresmidi: '',
+                matin: isLundiAJeudi ? '3' : '',
+                apresmidi: isLundiAJeudi ? '3.5' : '',
                 typeJournee: 'travail',
                 notes: '',
                 saved: true
