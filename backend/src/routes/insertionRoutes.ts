@@ -12,6 +12,11 @@ router.get('/agenda', insertionController.getAgendaEvents);
 router.get('/rapport/dialogue-gestion', insertionController.getRapportDialogueGestion);
 
 // ============================================
+// SYNCHRONISATION
+// ============================================
+router.post('/employees/sync', insertionController.syncEmployees);
+
+// ============================================
 // SALARIÉS
 // ============================================
 router.get('/employees', insertionController.getInsertionEmployees);

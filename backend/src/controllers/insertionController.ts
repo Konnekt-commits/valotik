@@ -1633,6 +1633,316 @@ function formatTypeSuivi(type: string): string {
   return types[type] || type;
 }
 
+// ============================================
+// SYNCHRONISATION DES EMPLOYÉS
+// ============================================
+
+// Endpoint pour synchroniser (remplacer) tous les employés avec les données fournies
+export const syncEmployees = async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Début de la synchronisation des employés...');
+
+    // Liste des salariés à synchroniser (données du fichier des salariés)
+    const employeesData = [
+      {
+        civilite: 'M.',
+        nom: 'BOURET',
+        prenom: 'Franck',
+        dateNaissance: new Date('1974-05-19'),
+        lieuNaissance: 'DECHY (59)',
+        nationalite: 'Française',
+        numeroSecu: '1740559170082',
+        adresse: '22 grand rue',
+        codePostal: '59259',
+        ville: 'LÉCLUSE',
+        telephone: '',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-05-27'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'Mme',
+        nom: 'BOUZIDI',
+        prenom: 'Warda',
+        dateNaissance: new Date('1990-01-30'),
+        lieuNaissance: 'DECHY (59)',
+        nationalite: 'Française',
+        numeroSecu: '2900159170134',
+        adresse: '3 rue Henri Beauchamps',
+        codePostal: '59187',
+        ville: 'DECHY',
+        telephone: '',
+        email: 'wardanassiri@outlook.fr',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-02-10'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'DUBOIS',
+        prenom: 'Mehdi',
+        dateNaissance: new Date('1987-09-09'),
+        lieuNaissance: 'DOUAI (59)',
+        nationalite: 'Française',
+        numeroSecu: '1870959178043',
+        adresse: 'Appt 36, Le lauragais',
+        codePostal: '59540',
+        ville: 'SIN-LE-NOBLE',
+        telephone: '',
+        email: 'medhidubois@hotmail.com',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-05-12'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'Mme',
+        nom: 'ESSERGHINI',
+        prenom: 'Awatef',
+        dateNaissance: new Date('1989-11-08'),
+        lieuNaissance: 'SECLIN (59)',
+        nationalite: 'Française',
+        numeroSecu: '2891159560057',
+        adresse: '2 rue des Tulipes',
+        codePostal: '62590',
+        ville: 'OIGNIES',
+        telephone: '',
+        email: 'esserghini.awatef@hotmail.fr',
+        typeContrat: 'CDDI',
+        dureeHebdo: 35,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2023-06-05'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'Mme',
+        nom: 'GUILBERT',
+        prenom: 'Amandine',
+        dateNaissance: new Date('1994-11-11'),
+        lieuNaissance: 'DECHY (59)',
+        nationalite: 'Française',
+        numeroSecu: '2941159170244',
+        adresse: '156 rue Emile Zola',
+        codePostal: '59450',
+        ville: 'SIN-LE-NOBLE',
+        telephone: '',
+        typeContrat: 'CDI',
+        dureeHebdo: 35,
+        poste: 'C.I.P',
+        dateEntree: new Date('2025-04-07'),
+        salaireBrut: 2023.10,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'JARDOT',
+        prenom: 'Martial',
+        dateNaissance: new Date('1972-04-22'),
+        lieuNaissance: 'DUNKERQUE (59)',
+        nationalite: 'Française',
+        numeroSecu: '1721159183236',
+        adresse: '39 rue Saint-Denis',
+        codePostal: '59287',
+        ville: 'GUESNAIN',
+        telephone: '',
+        email: 'mJARDOT71@gmail.com',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2024-04-27'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'KACED',
+        prenom: 'Hugo',
+        dateNaissance: new Date('1985-09-22'),
+        lieuNaissance: 'CAMBRAI (59)',
+        nationalite: 'Française',
+        numeroSecu: '1850959122134',
+        adresse: '22 rue Maginot',
+        codePostal: '59252',
+        ville: 'MARCQ EN OSTREVENT',
+        telephone: '',
+        email: 'yoanekaced@gmail.com',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-03-03'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'LEDUC',
+        prenom: 'Cédric',
+        dateNaissance: new Date('1989-05-12'),
+        lieuNaissance: 'DECHY (59)',
+        nationalite: 'Française',
+        numeroSecu: '1890559170061',
+        adresse: '2 rue Trégastel',
+        codePostal: '59450',
+        ville: 'SIN-LE-NOBLE',
+        telephone: '',
+        email: 'cedric59.leduc@hotmail.fr',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-03-19'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'MOHEBI',
+        prenom: 'Daniel',
+        dateNaissance: new Date('2003-12-22'),
+        lieuNaissance: 'AFGHANISTAN',
+        nationalite: 'Afghane',
+        numeroSecu: '1031299212081',
+        adresse: '180 rue victor pecqueur appt 25',
+        codePostal: '59500',
+        ville: 'DOUAI',
+        telephone: '',
+        email: 'mohebidaniel1@gmail.com',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-06-10'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'RAHIMI',
+        prenom: 'Abass',
+        dateNaissance: new Date('1998-02-02'),
+        lieuNaissance: 'AFGHANISTAN',
+        nationalite: 'Afghane',
+        numeroSecu: '1980299212429',
+        adresse: '122 cours de l\'Arsenal appt 124',
+        codePostal: '59500',
+        ville: 'DOUAI',
+        telephone: '',
+        email: 'rahimiabbas658@gmail.com',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-04-28'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'GALOUITE',
+        prenom: 'Hassan',
+        dateNaissance: new Date('1983-01-01'),
+        lieuNaissance: 'DECHY (59)',
+        nationalite: 'Française',
+        numeroSecu: '1830159170000',
+        adresse: '328 rue Gambetta',
+        codePostal: '59450',
+        ville: 'SIN LE NOBLE',
+        telephone: '',
+        email: 'hgalouite@hotmail.com',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-11-05'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      },
+      {
+        civilite: 'M.',
+        nom: 'MORTELETTE',
+        prenom: 'Jonathan',
+        dateNaissance: new Date('1985-06-27'),
+        lieuNaissance: 'DECHY (59)',
+        nationalite: 'Française',
+        numeroSecu: '1850659170127',
+        adresse: '292 rue de Nantes le bois duriez',
+        codePostal: '59167',
+        ville: 'LALLAING',
+        telephone: '',
+        typeContrat: 'CDDI',
+        dureeHebdo: 26,
+        poste: 'OUVRIER POLYVALENT',
+        dateEntree: new Date('2025-11-10'),
+        salaireBrut: 1338.52,
+        statut: 'actif'
+      }
+    ];
+
+    // Supprimer tous les employés existants et leurs données liées
+    console.log('🗑️ Suppression des données existantes...');
+
+    // Supprimer dans l'ordre pour respecter les contraintes de clé étrangère
+    await prisma.pointageJournalier.deleteMany({});
+    await prisma.pointageMensuel.deleteMany({});
+    await prisma.objectifIndividuel.deleteMany({});
+    await prisma.formation.deleteMany({});
+    await prisma.avertissement.deleteMany({});
+    await prisma.contratInsertion.deleteMany({});
+    await prisma.insertionDocument.deleteMany({});
+    await prisma.conventionPMSMP.deleteMany({});
+    await prisma.suiviEntretien.deleteMany({});
+    await prisma.fichePro.deleteMany({});
+    await prisma.insertionEmployee.deleteMany({});
+
+    console.log('✅ Données existantes supprimées');
+
+    // Créer les nouveaux employés
+    console.log('➕ Création des nouveaux employés...');
+    const createdEmployees = [];
+
+    for (const empData of employeesData) {
+      const employee = await prisma.insertionEmployee.create({
+        data: empData
+      });
+      createdEmployees.push(employee);
+      console.log(`  ✅ ${employee.prenom} ${employee.nom} créé`);
+
+      // Créer une fiche PRO vide pour chaque employé
+      await prisma.fichePro.create({
+        data: {
+          employeeId: employee.id
+        }
+      });
+    }
+
+    console.log(`\n🎉 Synchronisation terminée: ${createdEmployees.length} employés créés`);
+
+    res.json({
+      success: true,
+      message: `Synchronisation réussie: ${createdEmployees.length} employés importés`,
+      data: {
+        count: createdEmployees.length,
+        employees: createdEmployees.map(e => ({
+          id: e.id,
+          nom: e.nom,
+          prenom: e.prenom,
+          dateEntree: e.dateEntree,
+          poste: e.poste,
+          typeContrat: e.typeContrat
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur syncEmployees:', error);
+    res.status(500).json({ success: false, error: 'Erreur lors de la synchronisation' });
+  }
+};
+
 // Helper pour calculer la progression avec configuration
 async function calculateProgressionWithConfig(employee: any, config: any): Promise<number> {
   // Config par défaut si aucune n'existe
