@@ -513,25 +513,10 @@ export default function RHInsertionApp() {
       if (res.ok) {
         const data = await res.json();
         setPointagesData(data.data);
-        // Initialiser les valeurs de pointage
+        // Initialiser les valeurs de pointage avec les données réelles uniquement
         const values: Record<string, Record<string, number>> = {};
         data.data.pointages.forEach((p: any) => {
           values[p.employee.id] = {};
-          // D'abord, initialiser les valeurs par défaut pour les jours ouvrés
-          // Lundi (1) à Jeudi (4) : 6.5h (3h matin + 3.5h après-midi)
-          // Vendredi (5) et weekend : 0h
-          data.data.joursMois?.forEach((jour: any) => {
-            if (!jour.estWeekend) {
-              const date = new Date(jour.date);
-              const dayOfWeek = date.getDay();
-              // Lundi (1) à Jeudi (4) : valeur par défaut 6.5h
-              if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-                values[p.employee.id][jour.date] = 6.5;
-              }
-              // Vendredi : pas de valeur par défaut (0)
-            }
-          });
-          // Ensuite, écraser avec les valeurs réelles enregistrées
           p.pointage.journees?.forEach((j: any) => {
             const dateStr = new Date(j.date).toISOString().split('T')[0];
             values[p.employee.id][dateStr] = j.heuresTravaillees;
