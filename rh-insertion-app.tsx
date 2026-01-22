@@ -3686,36 +3686,29 @@ export default function RHInsertionApp() {
       doc.text(`Intervenant : ${org?.responsable || 'Encadrant technique'}`, 14, 40);
       doc.text(`Lieu : ${org?.adresse || ''} ${org?.codePostal || ''} ${org?.ville || ''}`, 14, 46);
 
-      // Calculer les jours de la semaine sélectionnée
-      const premierJourMois = new Date(pointagesAnnee, pointagesMois - 1, 1);
-      const dernierJourMois = new Date(pointagesAnnee, pointagesMois, 0);
+      // Calculer les jours ouvrés du mois pour la semaine sélectionnée
+      // On regroupe les jours ouvrés par paquet de 5 (une semaine de travail)
+      const joursOuvresMois: { date: Date; dateStr: string; label: string }[] = [];
+      const joursSemaine = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
-      // Trouver le premier lundi du mois ou le premier jour
-      let premierLundi = new Date(premierJourMois);
-      while (premierLundi.getDay() !== 1) {
-        premierLundi.setDate(premierLundi.getDate() + 1);
-        if (premierLundi > dernierJourMois) {
-          premierLundi = premierJourMois;
-          break;
+      // Parcourir tous les jours du mois et garder les jours ouvrés (Lun-Ven)
+      const dernierJourMois = new Date(pointagesAnnee, pointagesMois, 0).getDate();
+      for (let d = 1; d <= dernierJourMois; d++) {
+        const jour = new Date(pointagesAnnee, pointagesMois - 1, d);
+        const dayOfWeek = jour.getDay();
+        // Jours ouvrés : Lundi (1) à Vendredi (5)
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          joursOuvresMois.push({
+            date: jour,
+            dateStr: `${pointagesAnnee}-${String(pointagesMois).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+            label: `${joursSemaine[dayOfWeek]} ${String(d).padStart(2, '0')}/${String(pointagesMois).padStart(2, '0')}`
+          });
         }
       }
 
-      // Aller à la semaine sélectionnée
-      const debutSemaine = new Date(premierLundi);
-      debutSemaine.setDate(debutSemaine.getDate() + (semaine - 1) * 7);
-
-      // Générer les 5 jours ouvrés (Lun-Ven)
-      const joursOuvres: { date: Date; dateStr: string; label: string }[] = [];
-      for (let i = 0; i < 5; i++) {
-        const jour = new Date(debutSemaine);
-        jour.setDate(jour.getDate() + i);
-        const joursSemaine = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-        joursOuvres.push({
-          date: jour,
-          dateStr: jour.toISOString().split('T')[0],
-          label: `${joursSemaine[jour.getDay()]} ${jour.getDate().toString().padStart(2, '0')}/${(jour.getMonth() + 1).toString().padStart(2, '0')}`
-        });
-      }
+      // Prendre les 5 jours de la semaine sélectionnée (semaine 1 = jours 0-4, semaine 2 = jours 5-9, etc.)
+      const startIndex = (semaine - 1) * 5;
+      const joursOuvres = joursOuvresMois.slice(startIndex, startIndex + 5);
 
       // Préparer les données du tableau
       const employees = pointagesData.pointages || [];
@@ -3812,17 +3805,20 @@ export default function RHInsertionApp() {
       doc.save(`Feuille_Emargement_${moisNoms[pointagesMois]}_${pointagesAnnee}_S${semaine}.pdf`);
     };
 
-    // Calculer le nombre de semaines dans le mois
+    // Calculer le nombre de semaines dans le mois (basé sur les jours ouvrés)
     const getNombreSemaines = () => {
-      const premierJour = new Date(pointagesAnnee, pointagesMois - 1, 1);
-      const dernierJour = new Date(pointagesAnnee, pointagesMois, 0);
-      let premierLundi = new Date(premierJour);
-      while (premierLundi.getDay() !== 1 && premierLundi <= dernierJour) {
-        premierLundi.setDate(premierLundi.getDate() + 1);
+      // Compter les jours ouvrés du mois
+      const dernierJourMois = new Date(pointagesAnnee, pointagesMois, 0).getDate();
+      let joursOuvres = 0;
+      for (let d = 1; d <= dernierJourMois; d++) {
+        const jour = new Date(pointagesAnnee, pointagesMois - 1, d);
+        const dayOfWeek = jour.getDay();
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          joursOuvres++;
+        }
       }
-      if (premierLundi > dernierJour) return 1;
-      const joursRestants = Math.ceil((dernierJour.getTime() - premierLundi.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      return Math.ceil(joursRestants / 7);
+      // Nombre de semaines = nombre de jours ouvrés / 5 (arrondi supérieur)
+      return Math.ceil(joursOuvres / 5);
     };
 
     return (
