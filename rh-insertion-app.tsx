@@ -16,6 +16,32 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const API_URL = 'https://valotik-api-546691893264.europe-west1.run.app/api/insertion';
+const AUTH_API = 'https://valotik-api-546691893264.europe-west1.run.app/api/auth';
+
+// Gestion de l'authentification
+const getAuthToken = (): string | null => localStorage.getItem('rh_auth_token');
+const setAuthToken = (token: string) => localStorage.setItem('rh_auth_token', token);
+const removeAuthToken = () => localStorage.removeItem('rh_auth_token');
+const getAuthUser = (): { username: string; role: string } | null => {
+  const user = localStorage.getItem('rh_auth_user');
+  return user ? JSON.parse(user) : null;
+};
+const setAuthUser = (user: { username: string; role: string }) =>
+  localStorage.setItem('rh_auth_user', JSON.stringify(user));
+const removeAuthUser = () => localStorage.removeItem('rh_auth_user');
+
+// Fonction fetch avec authentification
+const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = getAuthToken();
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (!headers.has('Content-Type') && options.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(url, { ...options, headers });
+};
 
 // Types complets
 interface InsertionEmployee {
@@ -76,6 +102,14 @@ interface InsertionEmployee {
 }
 
 export default function RHInsertionApp() {
+  // Auth states
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authUser, setAuthUserState] = useState<{ username: string; role: string } | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginError, setLoginError] = useState<string>('');
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginLoading, setLoginLoading] = useState(false);
+
   const [darkMode, setDarkMode] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'dashboard' | 'liste' | 'fiche' | 'pointages' | 'agenda' | 'reglages' | 'organisme'>('dashboard');
@@ -155,14 +189,84 @@ export default function RHInsertionApp() {
   const bg = (dark: string, light: string) => darkMode ? dark : light;
   const text = (dark: string, light: string) => darkMode ? dark : light;
 
+  // Vérification de l'authentification au démarrage
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        setAuthLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${AUTH_API}/verify`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAuthUserState(data.data.user);
+          setIsAuthenticated(true);
+        } else {
+          removeAuthToken();
+          removeAuthUser();
+        }
+      } catch {
+        removeAuthToken();
+        removeAuthUser();
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Fonction de connexion
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch(`${AUTH_API}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAuthToken(data.data.token);
+        setAuthUser(data.data.user);
+        setAuthUserState(data.data.user);
+        setIsAuthenticated(true);
+        setLoginForm({ username: '', password: '' });
+      } else {
+        setLoginError(data.message || 'Identifiants incorrects');
+      }
+    } catch {
+      setLoginError('Erreur de connexion au serveur');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Fonction de déconnexion
+  const handleLogout = () => {
+    removeAuthToken();
+    removeAuthUser();
+    setIsAuthenticated(false);
+    setAuthUserState(null);
+    setEmployees([]);
+    setStats(null);
+    setAlertes(null);
+  };
+
   // Chargement des données
   const loadData = useCallback(async () => {
+    if (!isAuthenticated) return;
     setLoading(true);
     try {
       const [employeesRes, statsRes, alertesRes] = await Promise.all([
-        fetch(`${API_URL}/employees`),
-        fetch(`${API_URL}/stats`),
-        fetch(`${API_URL}/alertes`)
+        authFetch(`${API_URL}/employees`),
+        authFetch(`${API_URL}/stats`),
+        authFetch(`${API_URL}/alertes`)
       ]);
       if (employeesRes.ok) {
         const data = await employeesRes.json();
@@ -181,13 +285,13 @@ export default function RHInsertionApp() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (isAuthenticated) loadData(); }, [isAuthenticated, loadData]);
 
   const loadEmployeeDetails = async (id: string) => {
     try {
-      const res = await fetch(`${API_URL}/employees/${id}`);
+      const res = await authFetch(`${API_URL}/employees/${id}`);
       if (res.ok) {
         const data = await res.json();
         setSelectedEmployee(data.data);
@@ -207,7 +311,7 @@ export default function RHInsertionApp() {
   const loadParcours = useCallback(async (employeeId: string) => {
     setParcoursLoading(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${employeeId}/parcours`);
+      const res = await authFetch(`${API_URL}/employees/${employeeId}/parcours`);
       if (res.ok) {
         const data = await res.json();
         setParcoursData(data.data);
@@ -230,7 +334,7 @@ export default function RHInsertionApp() {
 
   const loadObjectifConfig = useCallback(async () => {
     try {
-      const res = await fetch(`${OBJECTIF_API}/configuration`);
+      const res = await authFetch(`${OBJECTIF_API}/configuration`);
       if (res.ok) {
         const data = await res.json();
         setObjectifConfig(data.data);
@@ -244,7 +348,7 @@ export default function RHInsertionApp() {
     if (!objectifConfig?.id) return;
     setSaving(true);
     try {
-      const res = await fetch(`${OBJECTIF_API}/configuration/${objectifConfig.id}`, {
+      const res = await authFetch(`${OBJECTIF_API}/configuration/${objectifConfig.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(objectifConfig)
@@ -266,7 +370,7 @@ export default function RHInsertionApp() {
 
   const loadObjectifsIndividuels = useCallback(async (employeeId: string) => {
     try {
-      const res = await fetch(`${OBJECTIF_API}/employees/${employeeId}/objectifs`);
+      const res = await authFetch(`${OBJECTIF_API}/employees/${employeeId}/objectifs`);
       if (res.ok) {
         const data = await res.json();
         setObjectifsIndividuels(data.data.objectifs || []);
@@ -285,7 +389,7 @@ export default function RHInsertionApp() {
         : `${OBJECTIF_API}/employees/${selectedEmployee.id}/objectifs`;
       const method = editingObjectifId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(objectifForm)
@@ -307,7 +411,7 @@ export default function RHInsertionApp() {
   const deleteObjectifIndividuel = async (id: string) => {
     if (!confirm('Supprimer cet objectif ?')) return;
     try {
-      await fetch(`${OBJECTIF_API}/objectifs/${id}`, { method: 'DELETE' });
+      await authFetch(`${OBJECTIF_API}/objectifs/${id}`, { method: 'DELETE' });
       if (selectedEmployee) {
         loadObjectifsIndividuels(selectedEmployee.id);
         setParcoursData(null);
@@ -323,7 +427,7 @@ export default function RHInsertionApp() {
   const loadOrganisme = useCallback(async () => {
     setOrganismeLoading(true);
     try {
-      const res = await fetch(ORGANISME_API);
+      const res = await authFetch(ORGANISME_API);
       if (res.ok) {
         const data = await res.json();
         setOrganismeData(data.data);
@@ -340,7 +444,7 @@ export default function RHInsertionApp() {
 
   const loadDashboardObjectifs = useCallback(async () => {
     try {
-      const res = await fetch(`${ORGANISME_API}/dashboard/objectifs`);
+      const res = await authFetch(`${ORGANISME_API}/dashboard/objectifs`);
       if (res.ok) {
         const data = await res.json();
         setDashboardObjectifs(data.data);
@@ -353,7 +457,7 @@ export default function RHInsertionApp() {
   const saveOrganisme = async () => {
     setSaving(true);
     try {
-      const res = await fetch(ORGANISME_API, {
+      const res = await authFetch(ORGANISME_API, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(organismeForm)
@@ -379,7 +483,7 @@ export default function RHInsertionApp() {
         : `${ORGANISME_API}/conventions`;
       const method = conventionForm.id ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...conventionForm, organismeId: organismeData.id })
@@ -400,7 +504,7 @@ export default function RHInsertionApp() {
     setSaving(true);
     try {
       const conventionId = organismeData.conventions[0].id;
-      const res = await fetch(`${ORGANISME_API}/conventions/${conventionId}/objectifs`, {
+      const res = await authFetch(`${ORGANISME_API}/conventions/${conventionId}/objectifs`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(objectifsNegociesForm)
@@ -421,7 +525,7 @@ export default function RHInsertionApp() {
     if (!objectifNegocie?.id) return;
     setSaving(true);
     try {
-      const res = await fetch(`${ORGANISME_API}/objectifs/${objectifNegocie.id}/suivis`, {
+      const res = await authFetch(`${ORGANISME_API}/objectifs/${objectifNegocie.id}/suivis`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(suiviObjectifForm)
@@ -448,7 +552,7 @@ export default function RHInsertionApp() {
         : `${ORGANISME_API}/ateliers`;
       const method = editingAtelierId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...atelierForm, organismeId: organismeData.id })
@@ -469,7 +573,7 @@ export default function RHInsertionApp() {
   const deleteAtelier = async (id: string) => {
     if (!confirm('Supprimer cet atelier ?')) return;
     try {
-      await fetch(`${ORGANISME_API}/ateliers/${id}`, { method: 'DELETE' });
+      await authFetch(`${ORGANISME_API}/ateliers/${id}`, { method: 'DELETE' });
       loadOrganisme();
     } catch (error) {
       console.error('Erreur suppression atelier:', error);
@@ -509,7 +613,7 @@ export default function RHInsertionApp() {
   const loadPointages = useCallback(async () => {
     setPointagesLoading(true);
     try {
-      const res = await fetch(`${POINTAGE_API}/mensuel?mois=${pointagesMois}&annee=${pointagesAnnee}`);
+      const res = await authFetch(`${POINTAGE_API}/mensuel?mois=${pointagesMois}&annee=${pointagesAnnee}`);
       if (res.ok) {
         const data = await res.json();
         setPointagesData(data.data);
@@ -539,7 +643,7 @@ export default function RHInsertionApp() {
 
   const savePointageValue = async (employeeId: string, pointageMensuelId: string, date: string, heures: number) => {
     try {
-      await fetch(`${POINTAGE_API}/journalier/batch`, {
+      await authFetch(`${POINTAGE_API}/journalier/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -555,7 +659,7 @@ export default function RHInsertionApp() {
 
   const utiliserBanqueHeures = async (pointageMensuelId: string, heures: number) => {
     try {
-      await fetch(`${POINTAGE_API}/banque/utiliser`, {
+      await authFetch(`${POINTAGE_API}/banque/utiliser`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pointageMensuelId, heuresAUtiliser: heures })
@@ -572,7 +676,7 @@ export default function RHInsertionApp() {
       : `Valider le pointage de ${employeeName} ?`;
     if (!confirm(message)) return;
     try {
-      await fetch(`${POINTAGE_API}/banque/transferer`, {
+      await authFetch(`${POINTAGE_API}/banque/transferer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pointageMensuelId })
@@ -587,7 +691,7 @@ export default function RHInsertionApp() {
   const loadAgenda = useCallback(async () => {
     setAgendaLoading(true);
     try {
-      const res = await fetch(`${API_URL}/agenda?mois=${agendaMois}&annee=${agendaAnnee}`);
+      const res = await authFetch(`${API_URL}/agenda?mois=${agendaMois}&annee=${agendaAnnee}`);
       if (res.ok) {
         const data = await res.json();
         setAgendaEvents(data.data.events || []);
@@ -611,7 +715,7 @@ export default function RHInsertionApp() {
     try {
       const url = selectedEmployee ? `${API_URL}/employees/${selectedEmployee.id}` : `${API_URL}/employees`;
       const method = selectedEmployee ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -637,7 +741,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/fiche-pro`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/fiche-pro`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ficheProForm)
@@ -657,7 +761,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/suivis`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/suivis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(suiviForm)
@@ -677,7 +781,7 @@ export default function RHInsertionApp() {
   const deleteSuivi = async (id: string) => {
     if (!confirm('Supprimer cet entretien ?')) return;
     try {
-      await fetch(`${API_URL}/suivis/${id}`, { method: 'DELETE' });
+      await authFetch(`${API_URL}/suivis/${id}`, { method: 'DELETE' });
       if (selectedEmployee) loadEmployeeDetails(selectedEmployee.id);
     } catch (error) {
       console.error('Erreur:', error);
@@ -689,7 +793,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/pmsmp`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/pmsmp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pmsmpForm)
@@ -711,7 +815,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/formations`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/formations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formationForm)
@@ -733,7 +837,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/documents`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...documentForm, url: `/uploads/${documentForm.typeDocument}_${Date.now()}.pdf` })
@@ -753,7 +857,7 @@ export default function RHInsertionApp() {
   const deleteDocument = async (id: string) => {
     if (!confirm('Supprimer ce document ?')) return;
     try {
-      await fetch(`${API_URL}/documents/${id}`, { method: 'DELETE' });
+      await authFetch(`${API_URL}/documents/${id}`, { method: 'DELETE' });
       if (selectedEmployee) loadEmployeeDetails(selectedEmployee.id);
     } catch (error) {
       console.error('Erreur:', error);
@@ -765,7 +869,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/contrats`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/contrats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(contratForm)
@@ -787,7 +891,7 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/avertissements`, {
+      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/avertissements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(avertissementForm)
@@ -3630,7 +3734,7 @@ export default function RHInsertionApp() {
       const heuresParJour = Math.round(dureeHebdo / 5 * 100) / 100;
       const pointages = dates.map(date => ({ date, heures: heuresParJour }));
       try {
-        await fetch(`${POINTAGE_API}/journalier/batch`, {
+        await authFetch(`${POINTAGE_API}/journalier/batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pointageMensuelId, pointages })
@@ -5166,6 +5270,94 @@ export default function RHInsertionApp() {
   };
 
   // RENDU PRINCIPAL
+
+  // Écran de chargement initial (vérification auth)
+  if (authLoading) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
+          <p className="text-slate-400">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Écran de connexion
+  if (!isAuthenticated) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-slate-800 rounded-2xl p-8 shadow-xl border border-slate-700">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold text-white">RH Insertion</h1>
+              <p className="text-slate-400 mt-2">Connexion requise</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              {loginError && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm text-center">
+                  {loginError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Identifiant</label>
+                <input
+                  type="text"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Entrez votre identifiant"
+                  required
+                  autoComplete="username"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Mot de passe</label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Entrez votre mot de passe"
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {loginLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                    Connexion...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-5 h-5" />
+                    Se connecter
+                  </>
+                )}
+              </button>
+            </form>
+
+            <p className="text-center text-slate-500 text-xs mt-6">
+              Accès restreint - Personnel autorisé uniquement
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`h-screen overflow-hidden ${bg('bg-slate-900', 'bg-gray-50')}`}>
       {/* Sidebar */}
@@ -5196,9 +5388,11 @@ export default function RHInsertionApp() {
         <header className={`sticky top-0 z-30 ${bg('bg-slate-800/90', 'bg-white/90')} backdrop-blur border-b ${bg('border-slate-700', 'border-gray-200')}`}>
           <div className="flex items-center justify-between px-6 py-3">
             <a href="/" className={`text-sm ${text('text-slate-400 hover:text-white', 'text-gray-500 hover:text-gray-900')}`}>Retour CRM</a>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              {authUser && <span className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{authUser.username}</span>}
               <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`}>{darkMode ? '☀️' : '🌙'}</button>
               <button onClick={loadData} className={`p-2 rounded-lg ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`}><RefreshCw className="w-5 h-5" /></button>
+              <button onClick={handleLogout} className={`p-2 rounded-lg text-red-400 ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`} title="Déconnexion"><LogOut className="w-5 h-5" /></button>
             </div>
           </div>
         </header>

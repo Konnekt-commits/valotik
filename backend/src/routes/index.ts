@@ -14,10 +14,15 @@ import insertionRoutes from './insertionRoutes';
 import pointageRoutes from './pointageRoutes';
 import objectifRoutes from './objectifRoutes';
 import organismeRoutes from './organismeRoutes';
+import authRoutes from './authRoutes';
+import { requireAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-// Monter les routes
+// Routes d'authentification (non protégées)
+router.use('/auth', authRoutes);
+
+// Routes D3E (non protégées - application différente)
 router.use('/pickup-requests', pickupRequestRoutes);
 router.use('/case-files', caseFileRoutes);
 router.use('/users', userRoutes);
@@ -27,12 +32,14 @@ router.use('/quotations', quotationRoutes);
 router.use('/end-customers', endCustomerRoutes);
 router.use('/ai', aiRoutes);
 router.use('/lots', lotRoutes);
-router.use('/insertion', insertionRoutes);
-router.use('/pointage', pointageRoutes);
-router.use('/objectifs', objectifRoutes);
-router.use('/organisme', organismeRoutes);
 router.use('/', saleRoutes);
 router.use('/', documentRoutes);
+
+// Routes RH Insertion (PROTÉGÉES par authentification)
+router.use('/insertion', requireAuth, insertionRoutes);
+router.use('/pointage', requireAuth, pointageRoutes);
+router.use('/objectifs', requireAuth, objectifRoutes);
+router.use('/organisme', requireAuth, organismeRoutes);
 
 // Route de santé
 router.get('/health', (req, res) => {

@@ -1,0 +1,24 @@
+# Bloquer tous les robots de recherche
+User-agent: *
+Disallow: /
+
+# Bloquer spécifiquement Googlebot
+User-agent: Googlebot
+Disallow: /
+
+# Bloquer Bingbot
+User-agent: Bingbot
+Disallow: /
+
+# Bloquer tous les autres crawlers
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
