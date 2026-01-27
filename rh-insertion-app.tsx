@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import {
   Users, UserPlus, FileText, Calendar, AlertTriangle, CheckCircle, Clock,
   Building2, GraduationCap, Briefcase, FileCheck, Upload, Download,
@@ -100,6 +100,67 @@ interface InsertionEmployee {
   stats?: { documentsManquants: number; documentsExpires: number; dossierComplet: boolean };
   _count?: { suivis: number; conventionsPMSMP: number; formations: number; avertissements: number };
 }
+
+// Theme Context pour éviter les re-renders des composants
+const ThemeContext = createContext<{ darkMode: boolean }>({ darkMode: true });
+
+// Composant Input déplacé hors du composant principal pour éviter la perte de focus
+const Input = ({ label, name, type = 'text', value, onChange, required = false, disabled = false, options, placeholder, className = '' }: any) => {
+  const { darkMode } = useContext(ThemeContext);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+
+  return (
+    <div className={className}>
+      <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {type === 'select' ? (
+        <select
+          name={name}
+          value={value || ''}
+          onChange={onChange}
+          disabled={disabled}
+          className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
+        >
+          <option value="">{placeholder || 'Sélectionner...'}</option>
+          {options?.map((opt: any) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      ) : type === 'textarea' ? (
+        <textarea
+          name={name}
+          value={value || ''}
+          onChange={onChange}
+          disabled={disabled}
+          rows={3}
+          placeholder={placeholder}
+          className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
+        />
+      ) : type === 'checkbox' ? (
+        <input
+          type="checkbox"
+          name={name}
+          checked={value || false}
+          onChange={onChange}
+          disabled={disabled}
+          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          value={value || ''}
+          onChange={onChange}
+          disabled={disabled}
+          placeholder={placeholder}
+          className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
+        />
+      )}
+    </div>
+  );
+};
 
 export default function RHInsertionApp() {
   // Auth states
@@ -1836,58 +1897,6 @@ export default function RHInsertionApp() {
   };
 
   // =================== FIN GENERATION PDF ===================
-
-  // Composant Input réutilisable
-  const Input = ({ label, name, type = 'text', value, onChange, required = false, disabled = false, options, placeholder, className = '' }: any) => (
-    <div className={className}>
-      <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      {type === 'select' ? (
-        <select
-          name={name}
-          value={value || ''}
-          onChange={onChange}
-          disabled={disabled}
-          className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
-        >
-          <option value="">{placeholder || 'Sélectionner...'}</option>
-          {options?.map((opt: any) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      ) : type === 'textarea' ? (
-        <textarea
-          name={name}
-          value={value || ''}
-          onChange={onChange}
-          disabled={disabled}
-          rows={3}
-          placeholder={placeholder}
-          className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
-        />
-      ) : type === 'checkbox' ? (
-        <input
-          type="checkbox"
-          name={name}
-          checked={value || false}
-          onChange={onChange}
-          disabled={disabled}
-          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-        />
-      ) : (
-        <input
-          type={type}
-          name={name}
-          value={value || ''}
-          onChange={onChange}
-          disabled={disabled}
-          placeholder={placeholder}
-          className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
-        />
-      )}
-    </div>
-  );
 
   // Section réutilisable
   const Section = ({ title, icon: Icon, children, action }: any) => (
@@ -5359,6 +5368,7 @@ export default function RHInsertionApp() {
   }
 
   return (
+    <ThemeContext.Provider value={{ darkMode }}>
     <div className={`h-screen overflow-hidden ${bg('bg-slate-900', 'bg-gray-50')}`}>
       {/* Sidebar */}
       <div className={`fixed left-0 top-0 h-full ${sidebarOpen ? 'w-64' : 'w-16'} ${bg('bg-slate-800', 'bg-white')} border-r ${bg('border-slate-700', 'border-gray-200')} transition-all z-40`}>
@@ -5802,5 +5812,6 @@ export default function RHInsertionApp() {
         </div>
       </Modal>
     </div>
+    </ThemeContext.Provider>
   );
 }
