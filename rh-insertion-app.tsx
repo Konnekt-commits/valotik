@@ -250,6 +250,12 @@ export default function RHInsertionApp() {
   const bg = (dark: string, light: string) => darkMode ? dark : light;
   const text = (dark: string, light: string) => darkMode ? dark : light;
 
+  // Handler stable pour les changements de formulaire (évite la perte de focus)
+  const handleFormDataChange = useCallback((e: any) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev: any) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  }, []);
+
   // Vérification de l'authentification au démarrage
   useEffect(() => {
     const checkAuth = async () => {
@@ -4289,10 +4295,7 @@ export default function RHInsertionApp() {
   const renderFicheInformation = () => {
     if (!selectedEmployee) return null;
     const emp = editingEmployee ? formData : selectedEmployee;
-    const handleChange = (e: any) => {
-      const { name, value, type, checked } = e.target;
-      setFormData((prev: any) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-    };
+    const handleChange = handleFormDataChange;
 
     return (
       <div className="space-y-6">
