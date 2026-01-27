@@ -962,6 +962,19 @@ export default function RHInsertionApp() {
     }
   };
 
+  const viewDocument = async (id: string) => {
+    try {
+      const res = await authFetch(`${API_URL}/documents/${id}/download`);
+      if (!res.ok) throw new Error('Erreur téléchargement');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Erreur:', error);
+      alert('Erreur lors de l\'ouverture du document');
+    }
+  };
+
   // CRUD Contrat
   const saveContrat = async () => {
     if (!selectedEmployee) return;
@@ -5126,7 +5139,7 @@ export default function RHInsertionApp() {
                   <div className="flex items-center gap-2">
                     {docPresent ? (
                       <>
-                        <button onClick={() => window.open(`${API_URL}/documents/${docPresent.id}/download`, '_blank')} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30">
+                        <button onClick={() => viewDocument(docPresent.id)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30">
                           <Eye className="w-4 h-4" /> Voir
                         </button>
                         <button onClick={() => { setDocumentForm({ categorie: 'ADMIN', typeDocument: doc.type, nomDocument: doc.label }); setShowDocumentModal(true); }} className="flex items-center gap-1 px-3 py-1.5 bg-green-500/20 text-green-400 rounded text-sm hover:bg-green-500/30">
@@ -5204,7 +5217,7 @@ export default function RHInsertionApp() {
                   </div>
                   {docPresent ? (
                     <div className="flex gap-2">
-                      <button onClick={() => window.open(`${API_URL}/documents/${docPresent.id}/download`, '_blank')} className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => viewDocument(docPresent.id)} className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm"><Eye className="w-4 h-4" /></button>
                       <button onClick={() => deleteDocument(docPresent.id)} className="p-1.5 bg-red-500/20 text-red-400 rounded"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   ) : (
