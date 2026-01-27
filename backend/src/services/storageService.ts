@@ -66,4 +66,27 @@ export const deleteFromGCS = async (gcsPath: string): Promise<void> => {
   }
 };
 
-export default { uploadToGCS, deleteFromGCS, getSignedUrl, BUCKET_NAME };
+// Stream un fichier depuis GCS
+export const streamFromGCS = async (gcsPath: string): Promise<{ stream: NodeJS.ReadableStream; contentType: string } | null> => {
+  try {
+    const match = gcsPath.match(/^gs:\/\/([^/]+)\/(.+)$/);
+    if (!match) return null;
+
+    const [, bucketName, filename] = match;
+    const bucket = storage.bucket(bucketName);
+    const file = bucket.file(filename);
+
+    const [metadata] = await file.getMetadata();
+    const stream = file.createReadStream();
+
+    return {
+      stream,
+      contentType: metadata.contentType || 'application/octet-stream'
+    };
+  } catch (error) {
+    console.error('Erreur stream GCS:', error);
+    return null;
+  }
+};
+
+export default { uploadToGCS, deleteFromGCS, getSignedUrl, streamFromGCS, BUCKET_NAME };

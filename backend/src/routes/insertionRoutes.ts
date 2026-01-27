@@ -78,6 +78,7 @@ router.put('/pmsmp/:id', insertionController.updateConventionPMSMP);
 // ============================================
 router.get('/employees/:employeeId/documents', insertionController.getDocuments);
 router.post('/employees/:employeeId/documents', upload.single('file'), insertionController.createDocument);
+router.get('/documents/:id/download', insertionController.downloadDocument);
 router.delete('/documents/:id', insertionController.deleteDocument);
 
 // ============================================

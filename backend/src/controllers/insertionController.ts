@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { uploadToGCS, deleteFromGCS, getSignedUrl } from '../services/storageService';
+import { uploadToGCS, deleteFromGCS, getSignedUrl, streamFromGCS } from '../services/storageService';
 
 const prisma = new PrismaClient();
 
@@ -466,6 +466,36 @@ export const deleteDocument = async (req: Request, res: Response) => {
     res.json({ success: true, message: 'Document supprimé' });
   } catch (error) {
     console.error('Erreur deleteDocument:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// Télécharger/visualiser un document
+export const downloadDocument = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const document = await prisma.insertionDocument.findUnique({ where: { id } });
+    if (!document || !document.url) {
+      return res.status(404).json({ success: false, error: 'Document non trouvé' });
+    }
+
+    // Si c'est un chemin GCS, streamer le fichier
+    if (document.url.startsWith('gs://')) {
+      const result = await streamFromGCS(document.url);
+      if (!result) {
+        return res.status(404).json({ success: false, error: 'Fichier non trouvé dans le stockage' });
+      }
+
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Disposition', `inline; filename="${document.nomDocument}"`);
+      result.stream.pipe(res);
+    } else {
+      // URL externe, rediriger
+      res.redirect(document.url);
+    }
+  } catch (error) {
+    console.error('Erreur downloadDocument:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 };
