@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { uploadToGCS, deleteFromGCS } from '../services/storageService';
+import { uploadToGCS, deleteFromGCS, getSignedUrl } from '../services/storageService';
 
 const prisma = new PrismaClient();
 
@@ -404,7 +404,18 @@ export const getDocuments = async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, data: documents });
+    // Générer les URLs signées pour les documents GCS
+    const documentsWithUrls = await Promise.all(
+      documents.map(async (doc) => {
+        if (doc.url && doc.url.startsWith('gs://')) {
+          const signedUrl = await getSignedUrl(doc.url);
+          return { ...doc, signedUrl };
+        }
+        return { ...doc, signedUrl: doc.url };
+      })
+    );
+
+    res.json({ success: true, data: documentsWithUrls });
   } catch (error) {
     console.error('Erreur getDocuments:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });

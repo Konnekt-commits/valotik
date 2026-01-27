@@ -23,22 +23,47 @@ export const uploadToGCS = async (
     },
   });
 
-  // Rendre le fichier public ou retourner une URL signée
-  // Pour simplifier, on retourne l'URL publique
-  const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filename}`;
-
-  return publicUrl;
+  // Retourne le chemin GCS (pas une URL publique)
+  // L'URL signée sera générée à la demande
+  return `gs://${BUCKET_NAME}/${filename}`;
 };
 
-export const deleteFromGCS = async (fileUrl: string): Promise<void> => {
+// Génère une URL signée valide 1 heure pour accès sécurisé
+export const getSignedUrl = async (gcsPath: string): Promise<string> => {
   try {
-    const bucket = storage.bucket(BUCKET_NAME);
-    // Extraire le chemin du fichier depuis l'URL
-    const filePath = fileUrl.replace(`https://storage.googleapis.com/${BUCKET_NAME}/`, '');
-    await bucket.file(filePath).delete();
+    // Extraire bucket et filename depuis gs://bucket/path
+    const match = gcsPath.match(/^gs:\/\/([^/]+)\/(.+)$/);
+    if (!match) {
+      return gcsPath; // Retourne tel quel si pas un chemin GCS
+    }
+
+    const [, bucketName, filename] = match;
+    const bucket = storage.bucket(bucketName);
+    const file = bucket.file(filename);
+
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 60 * 60 * 1000, // 1 heure
+    });
+
+    return signedUrl;
+  } catch (error) {
+    console.error('Erreur génération URL signée:', error);
+    return gcsPath;
+  }
+};
+
+export const deleteFromGCS = async (gcsPath: string): Promise<void> => {
+  try {
+    const match = gcsPath.match(/^gs:\/\/([^/]+)\/(.+)$/);
+    if (!match) return;
+
+    const [, bucketName, filename] = match;
+    const bucket = storage.bucket(bucketName);
+    await bucket.file(filename).delete();
   } catch (error) {
     console.error('Erreur suppression GCS:', error);
   }
 };
 
-export default { uploadToGCS, deleteFromGCS, BUCKET_NAME };
+export default { uploadToGCS, deleteFromGCS, getSignedUrl, BUCKET_NAME };
