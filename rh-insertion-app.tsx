@@ -5767,9 +5767,37 @@ export default function RHInsertionApp() {
             ]} />
           <Input label="Nom du fichier" name="nomDocument" value={documentForm.nomDocument} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
           <Input label="Date d'expiration" name="dateExpiration" type="date" value={documentForm.dateExpiration} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
-          <div className="p-8 border-2 border-dashed border-slate-500 rounded-lg text-center">
-            <Upload className="w-8 h-8 mx-auto mb-2 text-slate-400" />
-            <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Glisser-déposer ou cliquer pour sélectionner</p>
+          <div
+            className={`p-8 border-2 border-dashed ${documentForm.file ? 'border-green-500 bg-green-500/10' : 'border-slate-500'} rounded-lg text-center cursor-pointer hover:border-blue-500 transition-colors`}
+            onClick={() => document.getElementById('document-file-input')?.click()}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const file = e.dataTransfer.files[0];
+              if (file) {
+                setDocumentForm({...documentForm, file, nomDocument: documentForm.nomDocument || file.name});
+              }
+            }}
+          >
+            <input
+              id="document-file-input"
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setDocumentForm({...documentForm, file, nomDocument: documentForm.nomDocument || file.name});
+                }
+              }}
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+            />
+            <Upload className={`w-8 h-8 mx-auto mb-2 ${documentForm.file ? 'text-green-500' : 'text-slate-400'}`} />
+            {documentForm.file ? (
+              <p className="text-sm text-green-500 font-medium">{documentForm.file.name}</p>
+            ) : (
+              <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Glisser-déposer ou cliquer pour sélectionner</p>
+            )}
           </div>
         </div>
       </Modal>
