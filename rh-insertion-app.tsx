@@ -162,6 +162,26 @@ const Input = ({ label, name, type = 'text', value, onChange, required = false, 
   );
 };
 
+// Composant Section déplacé hors du composant principal pour éviter les re-renders
+const Section = ({ title, icon: Icon, children, action }: any) => {
+  const { darkMode } = useContext(ThemeContext);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+
+  return (
+    <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} overflow-hidden`}>
+      <div className={`px-4 py-3 border-b ${bg('border-slate-700', 'border-gray-200')} flex items-center justify-between`}>
+        <h3 className={`font-semibold flex items-center gap-2 ${text('text-white', 'text-gray-900')}`}>
+          {Icon && <Icon className="w-5 h-5 text-blue-500" />}
+          {title}
+        </h3>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+};
+
 export default function RHInsertionApp() {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -1903,20 +1923,6 @@ export default function RHInsertionApp() {
   };
 
   // =================== FIN GENERATION PDF ===================
-
-  // Section réutilisable
-  const Section = ({ title, icon: Icon, children, action }: any) => (
-    <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} overflow-hidden`}>
-      <div className={`px-4 py-3 border-b ${bg('border-slate-700', 'border-gray-200')} flex items-center justify-between`}>
-        <h3 className={`font-semibold flex items-center gap-2 ${text('text-white', 'text-gray-900')}`}>
-          {Icon && <Icon className="w-5 h-5 text-blue-500" />}
-          {title}
-        </h3>
-        {action}
-      </div>
-      <div className="p-4">{children}</div>
-    </div>
-  );
 
   // =================== AGENDA (Google Calendar Style) ===================
 
