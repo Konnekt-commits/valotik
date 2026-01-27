@@ -1,7 +1,29 @@
 import { Router } from 'express';
+import multer from 'multer';
 import * as insertionController from '../controllers/insertionController';
 
 const router = Router();
+
+// Configuration multer pour l'upload en mémoire (pour GCS)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Type de fichier non autorisé'));
+    }
+  }
+});
 
 // ============================================
 // DASHBOARD & STATISTIQUES
@@ -55,7 +77,7 @@ router.put('/pmsmp/:id', insertionController.updateConventionPMSMP);
 // DOCUMENTS
 // ============================================
 router.get('/employees/:employeeId/documents', insertionController.getDocuments);
-router.post('/employees/:employeeId/documents', insertionController.createDocument);
+router.post('/employees/:employeeId/documents', upload.single('file'), insertionController.createDocument);
 router.delete('/documents/:id', insertionController.deleteDocument);
 
 // ============================================

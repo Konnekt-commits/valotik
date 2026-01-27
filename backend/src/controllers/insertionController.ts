@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { uploadToGCS, deleteFromGCS } from '../services/storageService';
 
 const prisma = new PrismaClient();
 
@@ -414,12 +415,25 @@ export const createDocument = async (req: Request, res: Response) => {
   try {
     const { employeeId } = req.params;
     const data = req.body;
+    let fileUrl = data.url || null;
+
+    // Si un fichier a été uploadé via multer
+    if (req.file) {
+      try {
+        fileUrl = await uploadToGCS(req.file, `insertion-documents/${employeeId}`);
+      } catch (uploadError) {
+        console.error('Erreur upload GCS:', uploadError);
+        // Continuer sans fichier si l'upload échoue
+      }
+    }
 
     const document = await prisma.insertionDocument.create({
       data: {
         employeeId,
-        ...data,
-        dateDocument: data.dateDocument ? new Date(data.dateDocument) : null,
+        typeDocument: data.typeDocument,
+        nomDocument: data.nomDocument || req.file?.originalname,
+        url: fileUrl,
+        dateDocument: data.dateDocument ? new Date(data.dateDocument) : new Date(),
         dateExpiration: data.dateExpiration ? new Date(data.dateExpiration) : null
       }
     });

@@ -924,10 +924,21 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/documents`, {
+      const formData = new FormData();
+      formData.append('typeDocument', documentForm.typeDocument || '');
+      formData.append('nomDocument', documentForm.nomDocument || '');
+      if (documentForm.dateExpiration) {
+        formData.append('dateExpiration', documentForm.dateExpiration);
+      }
+      if (documentForm.file) {
+        formData.append('file', documentForm.file);
+      }
+
+      const token = getAuthToken();
+      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/documents`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...documentForm, url: `/uploads/${documentForm.typeDocument}_${Date.now()}.pdf` })
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData
       });
       if (res.ok) {
         setShowDocumentModal(false);
