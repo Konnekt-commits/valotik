@@ -441,11 +441,12 @@ export const createDocument = async (req: Request, res: Response) => {
     const document = await prisma.insertionDocument.create({
       data: {
         employeeId,
-        typeDocument: data.typeDocument,
-        nomDocument: data.nomDocument || req.file?.originalname,
-        url: fileUrl,
+        categorie: data.categorie || 'ADMIN',
+        typeDocument: data.typeDocument || 'AUTRE',
+        nomDocument: data.nomDocument || req.file?.originalname || 'Document',
+        url: fileUrl || '',
         dateDocument: data.dateDocument ? new Date(data.dateDocument) : new Date(),
-        dateExpiration: data.dateExpiration ? new Date(data.dateExpiration) : null
+        dateExpiration: data.dateExpiration ? new Date(data.dateExpiration) : undefined
       }
     });
 
