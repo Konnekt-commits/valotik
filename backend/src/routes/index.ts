@@ -35,9 +35,11 @@ router.use('/lots', lotRoutes);
 router.use('/', saleRoutes);
 router.use('/', documentRoutes);
 
+// Routes Pointage (non protégées - utilisées par app mobile employés)
+router.use('/pointage', pointageRoutes);
+
 // Routes RH Insertion (PROTÉGÉES par authentification)
 router.use('/insertion', requireAuth, insertionRoutes);
-router.use('/pointage', requireAuth, pointageRoutes);
 router.use('/objectifs', requireAuth, objectifRoutes);
 router.use('/organisme', requireAuth, organismeRoutes);
 
