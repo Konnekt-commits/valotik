@@ -210,6 +210,10 @@ export default function RHInsertionApp() {
   const [showPMSMPModal, setShowPMSMPModal] = useState(false);
   const [showFormationModal, setShowFormationModal] = useState(false);
   const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [previewType, setPreviewType] = useState<string>('');
+  const [previewName, setPreviewName] = useState<string>('');
   const [showContratModal, setShowContratModal] = useState(false);
   const [showAvertissementModal, setShowAvertissementModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(false);
@@ -962,13 +966,17 @@ export default function RHInsertionApp() {
     }
   };
 
-  const viewDocument = async (id: string) => {
+  const viewDocument = async (id: string, name?: string) => {
     try {
       const res = await authFetch(`${API_URL}/documents/${id}/download`);
       if (!res.ok) throw new Error('Erreur téléchargement');
+      const contentType = res.headers.get('Content-Type') || '';
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      setPreviewUrl(url);
+      setPreviewType(contentType);
+      setPreviewName(name || 'Document');
+      setShowDocumentPreview(true);
     } catch (error) {
       console.error('Erreur:', error);
       alert('Erreur lors de l\'ouverture du document');
@@ -5139,7 +5147,7 @@ export default function RHInsertionApp() {
                   <div className="flex items-center gap-2">
                     {docPresent ? (
                       <>
-                        <button onClick={() => viewDocument(docPresent.id)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30">
+                        <button onClick={() => viewDocument(docPresent.id, docPresent.nomDocument || doc.label)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30">
                           <Eye className="w-4 h-4" /> Voir
                         </button>
                         <button onClick={() => { setDocumentForm({ categorie: 'ADMIN', typeDocument: doc.type, nomDocument: doc.label }); setShowDocumentModal(true); }} className="flex items-center gap-1 px-3 py-1.5 bg-green-500/20 text-green-400 rounded text-sm hover:bg-green-500/30">
@@ -5217,7 +5225,7 @@ export default function RHInsertionApp() {
                   </div>
                   {docPresent ? (
                     <div className="flex gap-2">
-                      <button onClick={() => viewDocument(docPresent.id)} className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => viewDocument(docPresent.id, docPresent.nomDocument || doc.label)} className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm"><Eye className="w-4 h-4" /></button>
                       <button onClick={() => deleteDocument(docPresent.id)} className="p-1.5 bg-red-500/20 text-red-400 rounded"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   ) : (
@@ -5872,6 +5880,35 @@ export default function RHInsertionApp() {
           <Input label="Notes" name="notes" type="textarea" value={objectifForm.notes || ''} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} placeholder="Notes additionnelles..." />
         </div>
       </Modal>
+
+      {/* Modal prévisualisation document */}
+      {showDocumentPreview && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => { setShowDocumentPreview(false); URL.revokeObjectURL(previewUrl); }}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
+            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-t-xl p-4 flex items-center justify-between`}>
+              <h3 className={`font-semibold ${text('text-white', 'text-gray-900')}`}>{previewName}</h3>
+              <button onClick={() => { setShowDocumentPreview(false); URL.revokeObjectURL(previewUrl); }} className="p-2 hover:bg-slate-700 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className={`${bg('bg-slate-900', 'bg-gray-100')} rounded-b-xl overflow-auto max-h-[80vh] flex items-center justify-center p-4`}>
+              {previewType.startsWith('image/') ? (
+                <img src={previewUrl} alt={previewName} className="max-w-full max-h-[75vh] object-contain" />
+              ) : previewType === 'application/pdf' ? (
+                <iframe src={previewUrl} className="w-full h-[75vh]" title={previewName} />
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="w-16 h-16 mx-auto mb-4 text-slate-400" />
+                  <p className={text('text-slate-400', 'text-gray-500')}>Prévisualisation non disponible</p>
+                  <a href={previewUrl} download={previewName} className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg">
+                    Télécharger
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </ThemeContext.Provider>
   );
