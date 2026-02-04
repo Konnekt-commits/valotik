@@ -3873,19 +3873,23 @@ export default function RHInsertionApp() {
         ]
       ];
 
-      // Préparer un map des signatures par employé et date pour un accès rapide
-      const signaturesMap: Record<string, Record<string, { matin?: string; apresmidi?: string }>> = {};
+      // Préparer un map des signatures et types de journée par employé et date
+      const journeesMap: Record<string, Record<string, { matin?: string; apresmidi?: string; typeJournee?: string }>> = {};
       employees.forEach((p: any) => {
         const emp = p.employee;
-        signaturesMap[emp.id] = {};
+        journeesMap[emp.id] = {};
         p.pointage.journees?.forEach((j: any) => {
           const dateStr = new Date(j.date).toISOString().split('T')[0];
-          signaturesMap[emp.id][dateStr] = {
+          journeesMap[emp.id][dateStr] = {
             matin: j.signatureMatin,
-            apresmidi: j.signatureApresmidi
+            apresmidi: j.signatureApresmidi,
+            typeJournee: j.typeJournee
           };
         });
       });
+
+      // Renommer pour compatibilité avec didDrawCell
+      const signaturesMap = journeesMap;
 
       // Données des employés
       const body = employees.map((p: any) => {
@@ -3896,54 +3900,55 @@ export default function RHInsertionApp() {
 
         joursOuvres.forEach(j => {
           const heures = pointageValues[emp.id]?.[j.dateStr] || 0;
-          const sigs = signaturesMap[emp.id]?.[j.dateStr];
+          const journee = journeesMap[emp.id]?.[j.dateStr];
+          const typeJournee = journee?.typeJournee || 'travail';
 
-          // Vérifier si c'est une vraie signature image (base64)
-          const hasImageMatin = sigs?.matin?.startsWith('data:image');
-          const hasImageApresmidi = sigs?.apresmidi?.startsWith('data:image');
+          // Types considérés comme absence
+          const typesAbsence = ['absence', 'conge', 'maladie', 'ferie'];
+          const isAbsent = typesAbsence.includes(typeJournee);
 
-          if (heures > 0) {
-            // Cases pour signature - vide si image (sera dessinée par didDrawCell), sinon vide pour signer
+          if (isAbsent) {
+            // Marqué comme ABSENT dans la page pointage
             row.push({
-              content: '',
+              content: 'ABSENT',
               styles: {
                 minCellHeight: 18,
+                fillColor: [254, 226, 226],
+                textColor: [220, 38, 38],
                 halign: 'center',
-                valign: 'middle'
+                valign: 'middle',
+                fontStyle: 'bold',
+                fontSize: 7
               }
             });
             row.push({
-              content: '',
+              content: 'ABSENT',
               styles: {
                 minCellHeight: 18,
+                fillColor: [254, 226, 226],
+                textColor: [220, 38, 38],
                 halign: 'center',
-                valign: 'middle'
+                valign: 'middle',
+                fontStyle: 'bold',
+                fontSize: 7
               }
             });
           } else {
-            // Pas de pointage = ABSENT en rouge
+            // Journée de travail - cellules pour signatures (vides, seront remplies par didDrawCell si signature existe)
             row.push({
-              content: 'ABSENT',
+              content: '',
               styles: {
                 minCellHeight: 18,
-                fillColor: [254, 226, 226],
-                textColor: [220, 38, 38],
                 halign: 'center',
-                valign: 'middle',
-                fontStyle: 'bold',
-                fontSize: 7
+                valign: 'middle'
               }
             });
             row.push({
-              content: 'ABSENT',
+              content: '',
               styles: {
                 minCellHeight: 18,
-                fillColor: [254, 226, 226],
-                textColor: [220, 38, 38],
                 halign: 'center',
-                valign: 'middle',
-                fontStyle: 'bold',
-                fontSize: 7
+                valign: 'middle'
               }
             });
           }
