@@ -3898,30 +3898,54 @@ export default function RHInsertionApp() {
           const heures = pointageValues[emp.id]?.[j.dateStr] || 0;
           const sigs = signaturesMap[emp.id]?.[j.dateStr];
 
+          // Vérifier si c'est une vraie signature image (base64)
+          const hasImageMatin = sigs?.matin?.startsWith('data:image');
+          const hasImageApresmidi = sigs?.apresmidi?.startsWith('data:image');
+
           if (heures > 0) {
-            // Cases pour signature (on met un indicateur si signé, sinon vide)
+            // Cases pour signature - vide si image (sera dessinée par didDrawCell), sinon vide pour signer
             row.push({
-              content: sigs?.matin ? '✓' : '',
+              content: '',
               styles: {
                 minCellHeight: 18,
                 halign: 'center',
-                valign: 'middle',
-                textColor: sigs?.matin ? [34, 197, 94] : [0, 0, 0]
+                valign: 'middle'
               }
             });
             row.push({
-              content: sigs?.apresmidi ? '✓' : '',
+              content: '',
               styles: {
                 minCellHeight: 18,
                 halign: 'center',
-                valign: 'middle',
-                textColor: sigs?.apresmidi ? [34, 197, 94] : [0, 0, 0]
+                valign: 'middle'
               }
             });
           } else {
-            // Pas de pointage
-            row.push({ content: '', styles: { minCellHeight: 18, fillColor: [245, 245, 245] } });
-            row.push({ content: '', styles: { minCellHeight: 18, fillColor: [245, 245, 245] } });
+            // Pas de pointage = ABSENT en rouge
+            row.push({
+              content: 'ABSENT',
+              styles: {
+                minCellHeight: 18,
+                fillColor: [254, 226, 226],
+                textColor: [220, 38, 38],
+                halign: 'center',
+                valign: 'middle',
+                fontStyle: 'bold',
+                fontSize: 7
+              }
+            });
+            row.push({
+              content: 'ABSENT',
+              styles: {
+                minCellHeight: 18,
+                fillColor: [254, 226, 226],
+                textColor: [220, 38, 38],
+                halign: 'center',
+                valign: 'middle',
+                fontStyle: 'bold',
+                fontSize: 7
+              }
+            });
           }
         });
 
