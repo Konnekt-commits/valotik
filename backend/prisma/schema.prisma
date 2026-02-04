@@ -871,11 +871,21 @@ model PointageJournalier {
   // Date
   date                DateTime @db.Date
 
-  // Heures travaillées
+  // Heures travaillées - séparées matin/après-midi
+  heuresMatin         Float    @default(0) // Heures du matin
+  heuresApresmidi     Float    @default(0) // Heures de l'après-midi
+  heuresTravaillees   Float    @default(0) // Total = matin + après-midi
+
+  // Signatures séparées
+  signatureMatin      String?  @db.Text // Base64 de la signature matin
+  signatureApresmidi  String?  @db.Text // Base64 de la signature après-midi
+  signatureMatinAt    DateTime? // Date/heure de signature matin
+  signatureApresmidiAt DateTime? // Date/heure de signature après-midi
+
+  // Anciens champs (conservés pour compatibilité)
   heureDebut          String?  @db.VarChar(5) // Format HH:MM
   heureFin            String?  @db.VarChar(5) // Format HH:MM
   pauseMinutes        Int      @default(0) // Pause en minutes
-  heuresTravaillees   Float    @default(0) // Total heures de la journée
 
   // Type de journée
   typeJournee         String   @db.VarChar(20) @default("travail") // travail, absence, conge, maladie, formation, ferie

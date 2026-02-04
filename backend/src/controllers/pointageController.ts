@@ -323,6 +323,107 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
   }
 };
 
+// Signer le pointage matin ou après-midi (nouvelle API)
+export const signerPointage = async (req: Request, res: Response) => {
+  try {
+    const { pointageMensuelId, date, periode, heures, signature } = req.body;
+    // periode = 'matin' ou 'apresmidi'
+    // heures = nombre d'heures pour cette période
+    // signature = base64 de la signature
+
+    if (!['matin', 'apresmidi'].includes(periode)) {
+      return res.status(400).json({ success: false, error: 'Période invalide (matin ou apresmidi)' });
+    }
+
+    const dateObj = new Date(date);
+
+    // Récupérer le pointage existant ou créer un nouveau
+    let pointageExistant = await prisma.pointageJournalier.findUnique({
+      where: {
+        pointageMensuelId_date: {
+          pointageMensuelId,
+          date: dateObj
+        }
+      }
+    });
+
+    const now = new Date();
+
+    if (periode === 'matin') {
+      // Signer le matin
+      const heuresMatin = parseFloat(heures) || 0;
+      const heuresApresmidi = pointageExistant?.heuresApresmidi || 0;
+      const heuresTravaillees = heuresMatin + heuresApresmidi;
+
+      const pointageJour = await prisma.pointageJournalier.upsert({
+        where: {
+          pointageMensuelId_date: {
+            pointageMensuelId,
+            date: dateObj
+          }
+        },
+        create: {
+          pointageMensuelId,
+          date: dateObj,
+          heuresMatin,
+          heuresApresmidi: 0,
+          heuresTravaillees: heuresMatin,
+          signatureMatin: signature,
+          signatureMatinAt: now,
+          typeJournee: 'travail'
+        },
+        update: {
+          heuresMatin,
+          heuresTravaillees,
+          signatureMatin: signature,
+          signatureMatinAt: now
+        }
+      });
+
+      await recalculerPointageMensuel(pointageMensuelId);
+      res.json({ success: true, data: pointageJour });
+
+    } else {
+      // Signer l'après-midi
+      const heuresApresmidi = parseFloat(heures) || 0;
+      const heuresMatin = pointageExistant?.heuresMatin || 0;
+      const heuresTravaillees = heuresMatin + heuresApresmidi;
+
+      const pointageJour = await prisma.pointageJournalier.upsert({
+        where: {
+          pointageMensuelId_date: {
+            pointageMensuelId,
+            date: dateObj
+          }
+        },
+        create: {
+          pointageMensuelId,
+          date: dateObj,
+          heuresMatin: 0,
+          heuresApresmidi,
+          heuresTravaillees: heuresApresmidi,
+          signatureApresmidi: signature,
+          signatureApresmidiAt: now,
+          typeJournee: 'travail'
+        },
+        update: {
+          heuresApresmidi,
+          heuresTravaillees,
+          signatureApresmidi: signature,
+          signatureApresmidiAt: now
+        }
+      });
+
+      await recalculerPointageMensuel(pointageMensuelId);
+      res.json({ success: true, data: pointageJour });
+    }
+
+  } catch (error: any) {
+    console.error('Erreur signerPointage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // Enregistrer plusieurs pointages d'un coup (mode grille)
 export const savePointagesMultiples = async (req: Request, res: Response) => {
   try {

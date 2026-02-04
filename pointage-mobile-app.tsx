@@ -21,10 +21,16 @@ interface Employee {
 interface PointageJournalier {
   id: string;
   date: string;
+  heuresMatin: number;
+  heuresApresmidi: number;
+  heuresTravaillees: number;
+  signatureMatin?: string;
+  signatureApresmidi?: string;
+  signatureMatinAt?: string;
+  signatureApresmidiAt?: string;
   heureDebut?: string;
   heureFin?: string;
   pauseMinutes: number;
-  heuresTravaillees: number;
   typeJournee: string;
   motifAbsence?: string;
   notes?: string;
@@ -53,7 +59,10 @@ interface LocalPointage {
   apresmidi: string;
   typeJournee: string;
   notes: string;
-  saved: boolean;
+  matinSigne: boolean;
+  apresmidiSigne: boolean;
+  signatureMatinAt?: string;
+  signatureApresmidiAt?: string;
 }
 
 // Format de date
@@ -128,33 +137,38 @@ export default function PointageMobileApp() {
               (j: PointageJournalier) => j.date.split('T')[0] === dateStr
             );
 
+            // Valeurs par défaut selon le jour de la semaine
+            const dayOfWeek = selectedDate.getDay();
+            // Lundi (1) à Jeudi (4) : matin 3h, après-midi 3.5h
+            // Vendredi (5) et weekend (0, 6) : 0h
+            const isLundiAJeudi = dayOfWeek >= 1 && dayOfWeek <= 4;
+            const defaultMatin = isLundiAJeudi ? '3' : '';
+            const defaultApresmidi = isLundiAJeudi ? '3.5' : '';
+
             if (journee) {
-              // Convertir heures travaillées en matin/après-midi
-              const heures = journee.heuresTravaillees || 0;
-              // Convention: max 4h matin, reste en après-midi
-              const matin = Math.min(heures, 4);
-              const apresmidi = Math.max(0, heures - 4);
+              // Utiliser les heures matin/après-midi stockées directement
+              const matinSigne = !!journee.signatureMatin;
+              const apresmidiSigne = !!journee.signatureApresmidi;
 
               initialLocal[ep.employee.id] = {
-                matin: journee.typeJournee === 'travail' ? matin.toString() : '',
-                apresmidi: journee.typeJournee === 'travail' ? apresmidi.toString() : '',
+                // Si signé, utiliser la valeur stockée, sinon la valeur par défaut
+                matin: matinSigne ? journee.heuresMatin.toString() : defaultMatin,
+                apresmidi: apresmidiSigne ? journee.heuresApresmidi.toString() : defaultApresmidi,
                 typeJournee: journee.typeJournee || 'travail',
                 notes: journee.notes || '',
-                saved: true
+                matinSigne,
+                apresmidiSigne,
+                signatureMatinAt: journee.signatureMatinAt,
+                signatureApresmidiAt: journee.signatureApresmidiAt
               };
             } else {
-              // Valeurs par défaut selon le jour de la semaine
-              const dayOfWeek = selectedDate.getDay();
-              // Lundi (1) à Jeudi (4) : matin 3h, après-midi 3.5h
-              // Vendredi (5) et weekend (0, 6) : 0h
-              const isLundiAJeudi = dayOfWeek >= 1 && dayOfWeek <= 4;
-
               initialLocal[ep.employee.id] = {
-                matin: isLundiAJeudi ? '3' : '',
-                apresmidi: isLundiAJeudi ? '3.5' : '',
+                matin: defaultMatin,
+                apresmidi: defaultApresmidi,
                 typeJournee: 'travail',
                 notes: '',
-                saved: true
+                matinSigne: false,
+                apresmidiSigne: false
               };
             }
           });
@@ -190,66 +204,61 @@ export default function PointageMobileApp() {
     setSelectedDate(new Date());
   };
 
-  // Mettre à jour un pointage local
+  // Mettre à jour un pointage local (seulement si pas encore signé)
   const updateLocalPointage = (employeeId: string, field: keyof LocalPointage, value: string) => {
+    const local = localPointages[employeeId];
+    if (!local) return;
+
+    // Ne pas modifier si déjà signé
+    if (field === 'matin' && local.matinSigne) return;
+    if (field === 'apresmidi' && local.apresmidiSigne) return;
+
     setLocalPointages(prev => ({
       ...prev,
       [employeeId]: {
         ...prev[employeeId],
-        [field]: value,
-        saved: false
+        [field]: value
       }
     }));
   };
 
-  // Sauvegarder un pointage
-  const savePointage = async (employeeId: string) => {
+  // Signer une période (matin ou après-midi)
+  const signerPeriode = async (employeeId: string, periode: 'matin' | 'apresmidi', signature: string) => {
     const ep = employees.find(e => e.employee.id === employeeId);
     if (!ep) return;
 
     const local = localPointages[employeeId];
     if (!local) return;
 
-    setSaving(prev => ({ ...prev, [employeeId]: true }));
+    // Vérifier si déjà signé
+    if (periode === 'matin' && local.matinSigne) {
+      setSaveError('Le matin est déjà signé');
+      return;
+    }
+    if (periode === 'apresmidi' && local.apresmidiSigne) {
+      setSaveError("L'après-midi est déjà signé");
+      return;
+    }
+
+    const savingKey = `${employeeId}_${periode}`;
+    setSaving(prev => ({ ...prev, [savingKey]: true }));
     setSaveError(null);
     setSaveSuccess(null);
 
     try {
-      const matin = parseFloat(local.matin) || 0;
-      const apresmidi = parseFloat(local.apresmidi) || 0;
-      const heuresTravaillees = matin + apresmidi;
-
-      // Calculer heureDebut et heureFin
-      let heureDebut: string | null = null;
-      let heureFin: string | null = null;
-
-      if (local.typeJournee === 'travail' && heuresTravaillees > 0) {
-        if (matin > 0) {
-          heureDebut = '08:00';
-          const matinFin = 8 + matin;
-          if (apresmidi > 0) {
-            heureFin = `${Math.floor(13 + apresmidi)}:${String(Math.round((apresmidi % 1) * 60)).padStart(2, '0')}`;
-          } else {
-            heureFin = `${Math.floor(matinFin)}:${String(Math.round((matinFin % 1) * 60)).padStart(2, '0')}`;
-          }
-        } else if (apresmidi > 0) {
-          heureDebut = '13:00';
-          const pmFin = 13 + apresmidi;
-          heureFin = `${Math.floor(pmFin)}:${String(Math.round((pmFin % 1) * 60)).padStart(2, '0')}`;
-        }
-      }
+      const heures = periode === 'matin'
+        ? parseFloat(local.matin) || 0
+        : parseFloat(local.apresmidi) || 0;
 
       const payload = {
         pointageMensuelId: ep.pointage.id,
         date: formatDateISO(selectedDate),
-        heureDebut,
-        heureFin,
-        pauseMinutes: matin > 0 && apresmidi > 0 ? 60 : 0,
-        typeJournee: local.typeJournee,
-        notes: local.notes || `Matin: ${matin}h, Après-midi: ${apresmidi}h`
+        periode,
+        heures,
+        signature
       };
 
-      const res = await fetch(`${API_URL}/pointage/journalier`, {
+      const res = await fetch(`${API_URL}/pointage/signer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -258,35 +267,29 @@ export default function PointageMobileApp() {
       if (res.ok) {
         setLocalPointages(prev => ({
           ...prev,
-          [employeeId]: { ...prev[employeeId], saved: true }
+          [employeeId]: {
+            ...prev[employeeId],
+            [periode === 'matin' ? 'matinSigne' : 'apresmidiSigne']: true,
+            [periode === 'matin' ? 'signatureMatinAt' : 'signatureApresmidiAt']: new Date().toISOString()
+          }
         }));
-        setSaveSuccess(employeeId);
+        setSaveSuccess(savingKey);
         setTimeout(() => setSaveSuccess(null), 2000);
       } else {
         const error = await res.json();
-        setSaveError(error.error || 'Erreur de sauvegarde');
+        setSaveError(error.error || 'Erreur de signature');
       }
     } catch (error: any) {
       setSaveError(error.message || 'Erreur réseau');
     } finally {
-      setSaving(prev => ({ ...prev, [employeeId]: false }));
+      setSaving(prev => ({ ...prev, [savingKey]: false }));
     }
   };
 
-  // Sauvegarder tous les pointages modifiés
-  const saveAllPointages = async () => {
-    const unsavedIds = Object.entries(localPointages)
-      .filter(([_, p]) => !p.saved)
-      .map(([id]) => id);
-
-    for (const id of unsavedIds) {
-      await savePointage(id);
-    }
-  };
-
-  // Calculer les totaux du jour
+  // Calculer les totaux du jour (seulement les heures signées)
   const getTotauxJour = () => {
-    let heuresTotal = 0;
+    let heuresSignees = 0;
+    let heuresNonSignees = 0;
     let heuresContratTotal = 0;
 
     employees.forEach(ep => {
@@ -294,24 +297,38 @@ export default function PointageMobileApp() {
       if (local && local.typeJournee === 'travail') {
         const matin = parseFloat(local.matin) || 0;
         const apresmidi = parseFloat(local.apresmidi) || 0;
-        heuresTotal += matin + apresmidi;
+        // Compter les heures signées
+        if (local.matinSigne) heuresSignees += matin;
+        else heuresNonSignees += matin;
+        if (local.apresmidiSigne) heuresSignees += apresmidi;
+        else heuresNonSignees += apresmidi;
       }
       // Heures contractuelles par jour = dureeHebdo / 5
       heuresContratTotal += ep.employee.dureeHebdo / 5;
     });
 
+    const heuresTotal = heuresSignees + heuresNonSignees;
     const pourcentage = heuresContratTotal > 0
       ? Math.round(heuresTotal / heuresContratTotal * 100)
       : 0;
 
-    return { heuresTotal, heuresContratTotal, pourcentage };
+    return { heuresTotal, heuresSignees, heuresNonSignees, heuresContratTotal, pourcentage };
   };
 
   // Vérifier si c'est un weekend
   const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
 
-  // Compter les non sauvegardés
-  const unsavedCount = Object.values(localPointages).filter(p => !p.saved).length;
+  // Compter les périodes non signées
+  const getSignatureStats = () => {
+    let matinNonSignes = 0;
+    let apresmidiNonSignes = 0;
+    Object.values(localPointages).forEach(p => {
+      if (!p.matinSigne && parseFloat(p.matin) > 0) matinNonSignes++;
+      if (!p.apresmidiSigne && parseFloat(p.apresmidi) > 0) apresmidiNonSignes++;
+    });
+    return { matinNonSignes, apresmidiNonSignes, total: matinNonSignes + apresmidiNonSignes };
+  };
+  const signatureStats = getSignatureStats();
 
   const totaux = getTotauxJour();
 
@@ -346,7 +363,11 @@ export default function PointageMobileApp() {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.lineWidth = 2;
-        ctx.strokeStyle = isDark ? '#10b981' : '#059669';
+        // Couleur selon période : vert pour matin, bleu pour après-midi
+        const isMatin = activeSheet.includes('_matin');
+        ctx.strokeStyle = isMatin
+          ? (isDark ? '#10b981' : '#059669')  // Emerald pour matin
+          : (isDark ? '#3b82f6' : '#2563eb'); // Blue pour après-midi
 
         // Restaurer la signature existante si elle existe
         const existingSignature = signatures[activeSheet];
@@ -510,19 +531,26 @@ export default function PointageMobileApp() {
                 apresmidi: '',
                 typeJournee: 'travail',
                 notes: '',
-                saved: true
+                matinSigne: false,
+                apresmidiSigne: false
               };
 
-              const isSaving = saving[ep.employee.id];
-              const isSuccess = saveSuccess === ep.employee.id;
+              const isSavingMatin = saving[`${ep.employee.id}_matin`];
+              const isSavingApresmidi = saving[`${ep.employee.id}_apresmidi`];
+              const isSuccessMatin = saveSuccess === `${ep.employee.id}_matin`;
+              const isSuccessApresmidi = saveSuccess === `${ep.employee.id}_apresmidi`;
               const heuresJour = (parseFloat(local.matin) || 0) + (parseFloat(local.apresmidi) || 0);
               const typeOption = typeJourneeOptions.find(t => t.value === local.typeJournee);
               const TypeIcon = typeOption?.icon || Briefcase;
 
+              // Statut global des signatures
+              const toutSigne = local.matinSigne && local.apresmidiSigne;
+              const partielSigne = local.matinSigne || local.apresmidiSigne;
+
               return (
                 <div
                   key={ep.employee.id}
-                  className={`rounded-xl ${bg('bg-slate-800', 'bg-white')} shadow-lg overflow-hidden transition-all duration-200 ${!local.saved ? 'ring-2 ring-amber-500' : ''}`}
+                  className={`rounded-xl ${bg('bg-slate-800', 'bg-white')} shadow-lg overflow-hidden transition-all duration-200 ${toutSigne ? 'ring-2 ring-emerald-500' : partielSigne ? 'ring-2 ring-amber-500' : ''}`}
                 >
                   {/* En-tête employé */}
                   <div
@@ -531,7 +559,7 @@ export default function PointageMobileApp() {
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${bg('bg-emerald-600', 'bg-emerald-500')}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${toutSigne ? 'bg-emerald-600' : partielSigne ? 'bg-amber-600' : bg('bg-slate-600', 'bg-gray-400')}`}>
                           <User size={20} className="text-white" />
                         </div>
                         <div>
@@ -548,9 +576,17 @@ export default function PointageMobileApp() {
                           <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${typeOption?.color || 'gray'}-500/20 text-${typeOption?.color || 'gray'}-400`}>
                             {typeOption?.label}
                           </span>
+                        ) : toutSigne ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
+                            <Check size={12} /> {heuresJour}h
+                          </span>
+                        ) : partielSigne ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400">
+                            {local.matinSigne ? 'Matin' : 'PM'} signé
+                          </span>
                         ) : heuresJour > 0 ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400">
-                            {heuresJour}h
+                          <span className={`px-2 py-1 rounded-full text-xs ${text('text-gray-500 bg-gray-700/50', 'text-gray-400 bg-gray-200')}`}>
+                            À signer
                           </span>
                         ) : (
                           <span className={`px-2 py-1 rounded-full text-xs ${text('text-gray-500 bg-gray-700/50', 'text-gray-400 bg-gray-200')}`}>
@@ -560,65 +596,82 @@ export default function PointageMobileApp() {
                       </div>
                     </div>
 
-                    {/* Inputs inline matin/après-midi */}
+                    {/* Inputs inline matin/après-midi avec boutons de signature */}
                     {local.typeJournee === 'travail' && (
-                      <div className="flex gap-3" onClick={e => e.stopPropagation()}>
-                        <div className="flex-1">
-                          <label className={`text-xs ${text('text-gray-400', 'text-gray-500')} mb-1 block`}>
-                            Matin
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.5"
-                              min="0"
-                              max="5"
-                              value={local.matin}
-                              onChange={e => updateLocalPointage(ep.employee.id, 'matin', e.target.value)}
-                              placeholder="0"
-                              className={`w-full px-3 py-2 rounded-lg text-center font-semibold ${bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                            />
-                            <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${text('text-gray-500', 'text-gray-400')}`}>h</span>
+                      <div className="space-y-3" onClick={e => e.stopPropagation()}>
+                        {/* MATIN */}
+                        <div className={`flex gap-2 items-end p-2 rounded-lg ${local.matinSigne ? 'bg-emerald-500/10' : bg('bg-slate-700/50', 'bg-gray-50')}`}>
+                          <div className="flex-1">
+                            <label className={`text-xs ${local.matinSigne ? 'text-emerald-500' : text('text-gray-400', 'text-gray-500')} mb-1 flex items-center gap-1`}>
+                              <Sun size={12} /> Matin {local.matinSigne && <Check size={12} />}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min="0"
+                                max="5"
+                                value={local.matin}
+                                onChange={e => updateLocalPointage(ep.employee.id, 'matin', e.target.value)}
+                                placeholder="0"
+                                disabled={local.matinSigne}
+                                className={`w-full px-3 py-2 rounded-lg text-center font-semibold ${local.matinSigne
+                                  ? 'bg-emerald-500/20 text-emerald-400 cursor-not-allowed'
+                                  : bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')
+                                } focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                              />
+                              <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${text('text-gray-500', 'text-gray-400')}`}>h</span>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex-1">
-                          <label className={`text-xs ${text('text-gray-400', 'text-gray-500')} mb-1 block`}>
-                            Après-midi
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.5"
-                              min="0"
-                              max="5"
-                              value={local.apresmidi}
-                              onChange={e => updateLocalPointage(ep.employee.id, 'apresmidi', e.target.value)}
-                              placeholder="0"
-                              className={`w-full px-3 py-2 rounded-lg text-center font-semibold ${bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                            />
-                            <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${text('text-gray-500', 'text-gray-400')}`}>h</span>
-                          </div>
-                        </div>
-                        <div className="flex items-end">
                           <button
-                            onClick={() => savePointage(ep.employee.id)}
-                            disabled={local.saved || isSaving}
-                            className={`p-2 rounded-lg transition-all ${local.saved
-                              ? isSuccess
-                                ? 'bg-emerald-500 text-white'
-                                : bg('bg-slate-600 text-gray-500', 'bg-gray-200 text-gray-400')
+                            onClick={() => setActiveSheet(`${ep.employee.id}_matin`)}
+                            disabled={local.matinSigne || isSavingMatin}
+                            className={`px-3 py-2 rounded-lg font-medium text-sm flex items-center gap-1 transition-all ${local.matinSigne
+                              ? 'bg-emerald-500/20 text-emerald-400 cursor-not-allowed'
                               : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                              }`}
+                            }`}
                           >
-                            {isSaving ? (
-                              <Loader2 size={20} className="animate-spin" />
-                            ) : isSuccess ? (
-                              <Check size={20} />
-                            ) : (
-                              <Save size={20} />
-                            )}
+                            {isSavingMatin ? <Loader2 size={16} className="animate-spin" /> : isSuccessMatin ? <Check size={16} /> : <PenTool size={16} />}
+                            {local.matinSigne ? 'Signé' : 'Signer'}
+                          </button>
+                        </div>
+
+                        {/* APRÈS-MIDI */}
+                        <div className={`flex gap-2 items-end p-2 rounded-lg ${local.apresmidiSigne ? 'bg-emerald-500/10' : bg('bg-slate-700/50', 'bg-gray-50')}`}>
+                          <div className="flex-1">
+                            <label className={`text-xs ${local.apresmidiSigne ? 'text-emerald-500' : text('text-gray-400', 'text-gray-500')} mb-1 flex items-center gap-1`}>
+                              <Moon size={12} /> Après-midi {local.apresmidiSigne && <Check size={12} />}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min="0"
+                                max="5"
+                                value={local.apresmidi}
+                                onChange={e => updateLocalPointage(ep.employee.id, 'apresmidi', e.target.value)}
+                                placeholder="0"
+                                disabled={local.apresmidiSigne}
+                                className={`w-full px-3 py-2 rounded-lg text-center font-semibold ${local.apresmidiSigne
+                                  ? 'bg-emerald-500/20 text-emerald-400 cursor-not-allowed'
+                                  : bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')
+                                } focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                              />
+                              <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${text('text-gray-500', 'text-gray-400')}`}>h</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setActiveSheet(`${ep.employee.id}_apresmidi`)}
+                            disabled={local.apresmidiSigne || isSavingApresmidi}
+                            className={`px-3 py-2 rounded-lg font-medium text-sm flex items-center gap-1 transition-all ${local.apresmidiSigne
+                              ? 'bg-emerald-500/20 text-emerald-400 cursor-not-allowed'
+                              : 'bg-blue-500 hover:bg-blue-600 text-white'
+                            }`}
+                          >
+                            {isSavingApresmidi ? <Loader2 size={16} className="animate-spin" /> : isSuccessApresmidi ? <Check size={16} /> : <PenTool size={16} />}
+                            {local.apresmidiSigne ? 'Signé' : 'Signer'}
                           </button>
                         </div>
                       </div>
@@ -626,30 +679,13 @@ export default function PointageMobileApp() {
 
                     {/* Tags rapides pour absences */}
                     {local.typeJournee !== 'travail' && (
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-center">
                         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bg(`bg-${typeOption?.color}-500/20`, `bg-${typeOption?.color}-100`)}`}>
                           <TypeIcon size={16} className={`text-${typeOption?.color}-500`} />
                           <span className={`text-sm font-medium text-${typeOption?.color}-${isDark ? '400' : '600'}`}>
                             {typeOption?.label}
                           </span>
                         </div>
-                        <button
-                          onClick={e => {
-                            e.stopPropagation();
-                            savePointage(ep.employee.id);
-                          }}
-                          disabled={local.saved || isSaving}
-                          className={`p-2 rounded-lg transition-all ${local.saved
-                            ? bg('bg-slate-600 text-gray-500', 'bg-gray-200 text-gray-400')
-                            : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                            }`}
-                        >
-                          {isSaving ? (
-                            <Loader2 size={20} className="animate-spin" />
-                          ) : (
-                            <Save size={20} />
-                          )}
-                        </button>
                       </div>
                     )}
                   </div>
@@ -664,45 +700,55 @@ export default function PointageMobileApp() {
       <footer className={`fixed bottom-0 left-0 right-0 ${bg('bg-slate-800', 'bg-white')} border-t ${bg('border-slate-700', 'border-gray-200')} shadow-lg`}>
         <div className="px-4 py-3">
           {/* Stats */}
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-2">
             <div>
-              <p className={`text-xs ${text('text-gray-400', 'text-gray-500')}`}>Total du jour</p>
-              <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
-                {totaux.heuresTotal.toFixed(1)}h / {totaux.heuresContratTotal.toFixed(1)}h
+              <p className={`text-xs ${text('text-gray-400', 'text-gray-500')}`}>Heures signées</p>
+              <p className={`text-lg font-bold text-emerald-500`}>
+                {totaux.heuresSignees.toFixed(1)}h
+              </p>
+            </div>
+            <div className="text-center">
+              <p className={`text-xs ${text('text-gray-400', 'text-gray-500')}`}>En attente</p>
+              <p className={`text-lg font-bold text-amber-500`}>
+                {totaux.heuresNonSignees.toFixed(1)}h
               </p>
             </div>
             <div className="text-right">
-              <p className={`text-xs ${text('text-gray-400', 'text-gray-500')}`}>Taux</p>
-              <p className={`text-lg font-bold ${totaux.pourcentage >= 95
-                ? 'text-emerald-500'
-                : totaux.pourcentage >= 80
-                  ? 'text-amber-500'
-                  : 'text-red-500'
-                }`}>
-                {totaux.pourcentage}%
+              <p className={`text-xs ${text('text-gray-400', 'text-gray-500')}`}>Contrat</p>
+              <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
+                {totaux.heuresContratTotal.toFixed(1)}h
               </p>
             </div>
           </div>
 
-          {/* Bouton sauvegarder tout */}
-          <button
-            onClick={saveAllPointages}
-            disabled={unsavedCount === 0}
-            className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${unsavedCount > 0
-              ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-              : bg('bg-slate-700 text-gray-500', 'bg-gray-200 text-gray-400')
-              }`}
-          >
-            <Save size={20} />
-            {unsavedCount > 0
-              ? `Enregistrer tout (${unsavedCount})`
-              : 'Tout est sauvegardé'
-            }
-          </button>
+          {/* Indicateur signatures */}
+          <div className={`py-2 px-3 rounded-xl ${signatureStats.total === 0
+            ? 'bg-emerald-500/20'
+            : 'bg-amber-500/20'
+          }`}>
+            <div className="flex items-center justify-center gap-2">
+              {signatureStats.total === 0 ? (
+                <>
+                  <Check size={20} className="text-emerald-500" />
+                  <span className="text-emerald-500 font-medium">Toutes les signatures sont complètes</span>
+                </>
+              ) : (
+                <>
+                  <PenTool size={20} className="text-amber-500" />
+                  <span className="text-amber-500 font-medium">
+                    {signatureStats.matinNonSignes > 0 && `${signatureStats.matinNonSignes} matin`}
+                    {signatureStats.matinNonSignes > 0 && signatureStats.apresmidiNonSignes > 0 && ' + '}
+                    {signatureStats.apresmidiNonSignes > 0 && `${signatureStats.apresmidiNonSignes} après-midi`}
+                    {' à signer'}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </footer>
 
-      {/* Bottom Sheet détail */}
+      {/* Bottom Sheet pour signature matin/après-midi */}
       {activeSheet && (
         <div className="fixed inset-0 z-50 flex items-end">
           {/* Backdrop */}
@@ -722,7 +768,12 @@ export default function PointageMobileApp() {
             </div>
 
             {(() => {
-              const ep = employees.find(e => e.employee.id === activeSheet);
+              // Parse activeSheet pour extraire employeeId et période
+              const [employeeId, periode] = activeSheet.includes('_')
+                ? [activeSheet.split('_')[0], activeSheet.split('_')[1] as 'matin' | 'apresmidi']
+                : [activeSheet, null];
+
+              const ep = employees.find(e => e.employee.id === employeeId);
               if (!ep) return null;
 
               const local = localPointages[ep.employee.id] || {
@@ -730,118 +781,51 @@ export default function PointageMobileApp() {
                 apresmidi: '',
                 typeJournee: 'travail',
                 notes: '',
-                saved: true
+                matinSigne: false,
+                apresmidiSigne: false
               };
+
+              const isMatin = periode === 'matin';
+              const heures = isMatin ? local.matin : local.apresmidi;
+              const savingKey = `${employeeId}_${periode}`;
+              const isSaving = saving[savingKey];
 
               return (
                 <div className="px-6 pb-8">
-                  {/* Header employé */}
+                  {/* Header */}
                   <div className="flex items-center gap-4 mb-6">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center ${bg('bg-emerald-600', 'bg-emerald-500')}`}>
-                      <User size={28} className="text-white" />
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isMatin ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                      {isMatin ? <Sun size={28} className="text-white" /> : <Moon size={28} className="text-white" />}
                     </div>
                     <div>
                       <h2 className={`text-xl font-bold ${text('text-white', 'text-gray-900')}`}>
-                        {ep.employee.prenom} {ep.employee.nom}
+                        Signature {isMatin ? 'Matin' : 'Après-midi'}
                       </h2>
                       <p className={`${text('text-gray-400', 'text-gray-500')}`}>
-                        {ep.employee.poste || 'Agent'} - {ep.employee.dureeHebdo}h/sem
+                        {ep.employee.prenom} {ep.employee.nom}
                       </p>
                     </div>
                   </div>
 
-                  {/* Date */}
-                  <div className={`flex items-center gap-2 mb-6 px-4 py-3 rounded-xl ${bg('bg-slate-700', 'bg-gray-100')}`}>
-                    <Calendar size={20} className={text('text-gray-400', 'text-gray-500')} />
-                    <span className={text('text-white', 'text-gray-900')}>{formatDate(selectedDate)}</span>
-                  </div>
-
-                  {/* Heures matin/après-midi */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div>
-                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-2 block`}>
-                        Matin
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.5"
-                          min="0"
-                          max="5"
-                          value={local.matin}
-                          onChange={e => updateLocalPointage(ep.employee.id, 'matin', e.target.value)}
-                          placeholder="0"
-                          disabled={local.typeJournee !== 'travail'}
-                          className={`w-full px-4 py-4 rounded-xl text-center text-2xl font-bold ${bg('bg-slate-700 text-white disabled:opacity-50', 'bg-gray-100 text-gray-900 disabled:opacity-50')} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                        />
-                        <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-lg ${text('text-gray-500', 'text-gray-400')}`}>h</span>
-                      </div>
+                  {/* Date et heures */}
+                  <div className={`flex items-center justify-between mb-6 px-4 py-3 rounded-xl ${bg('bg-slate-700', 'bg-gray-100')}`}>
+                    <div className="flex items-center gap-2">
+                      <Calendar size={20} className={text('text-gray-400', 'text-gray-500')} />
+                      <span className={text('text-white', 'text-gray-900')}>{formatDate(selectedDate)}</span>
                     </div>
-                    <div>
-                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-2 block`}>
-                        Après-midi
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.5"
-                          min="0"
-                          max="5"
-                          value={local.apresmidi}
-                          onChange={e => updateLocalPointage(ep.employee.id, 'apresmidi', e.target.value)}
-                          placeholder="0"
-                          disabled={local.typeJournee !== 'travail'}
-                          className={`w-full px-4 py-4 rounded-xl text-center text-2xl font-bold ${bg('bg-slate-700 text-white disabled:opacity-50', 'bg-gray-100 text-gray-900 disabled:opacity-50')} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                        />
-                        <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-lg ${text('text-gray-500', 'text-gray-400')}`}>h</span>
-                      </div>
+                    <div className={`px-3 py-1 rounded-lg ${isMatin ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'} font-bold`}>
+                      {heures}h
                     </div>
                   </div>
 
-                  {/* Type de journée */}
-                  <div className="mb-6">
-                    <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-3 block`}>
-                      Type de journée
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {typeJourneeOptions.map(option => {
-                        const Icon = option.icon;
-                        const isSelected = local.typeJournee === option.value;
-
-                        return (
-                          <button
-                            key={option.value}
-                            onClick={() => updateLocalPointage(ep.employee.id, 'typeJournee', option.value)}
-                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${isSelected
-                              ? `bg-${option.color}-500 text-white`
-                              : bg(`bg-slate-700 text-gray-400 hover:bg-slate-600`, `bg-gray-100 text-gray-600 hover:bg-gray-200`)
-                              }`}
-                          >
-                            <Icon size={20} />
-                            <span className="text-xs font-medium">{option.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  {/* Message explicatif */}
+                  <div className={`mb-6 p-4 rounded-xl ${bg('bg-slate-700/50', 'bg-gray-50')} border ${isMatin ? 'border-emerald-500/30' : 'border-blue-500/30'}`}>
+                    <p className={`text-sm ${text('text-gray-300', 'text-gray-600')}`}>
+                      En signant, je confirme avoir travaillé <strong>{heures}h</strong> {isMatin ? 'ce matin' : "cet après-midi"} le {formatDate(selectedDate)}.
+                    </p>
                   </div>
 
-                  {/* Notes */}
-                  <div className="mb-6">
-                    <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-2 block`}>
-                      Note (optionnel)
-                    </label>
-                    <textarea
-                      value={local.notes}
-                      onChange={e => updateLocalPointage(ep.employee.id, 'notes', e.target.value)}
-                      placeholder="Ajouter une note..."
-                      rows={2}
-                      className={`w-full px-4 py-3 rounded-xl ${bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
-                    />
-                  </div>
-
-                  {/* Signature du salarié */}
+                  {/* Zone de signature */}
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-2">
                       <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} flex items-center gap-2`}>
@@ -855,10 +839,10 @@ export default function PointageMobileApp() {
                         <Trash2 size={16} className={text('text-gray-400', 'text-gray-500')} />
                       </button>
                     </div>
-                    <div className={`relative rounded-xl overflow-hidden ${bg('bg-slate-700', 'bg-gray-100')} border-2 border-dashed ${signatures[ep.employee.id] ? 'border-emerald-500' : bg('border-slate-600', 'border-gray-300')}`}>
+                    <div className={`relative rounded-xl overflow-hidden ${bg('bg-slate-700', 'bg-gray-100')} border-2 border-dashed ${signatures[activeSheet] ? (isMatin ? 'border-emerald-500' : 'border-blue-500') : bg('border-slate-600', 'border-gray-300')}`}>
                       <canvas
                         ref={signatureCanvasRef}
-                        className="w-full h-32 touch-none cursor-crosshair"
+                        className="w-full h-40 touch-none cursor-crosshair"
                         onMouseDown={startDrawing}
                         onMouseMove={draw}
                         onMouseUp={stopDrawing}
@@ -867,15 +851,15 @@ export default function PointageMobileApp() {
                         onTouchMove={draw}
                         onTouchEnd={stopDrawing}
                       />
-                      {!signatures[ep.employee.id] && (
+                      {!signatures[activeSheet] && (
                         <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${text('text-gray-500', 'text-gray-400')}`}>
-                          <span className="text-sm">Signez ici</span>
+                          <span className="text-sm">Signez ici avec votre doigt</span>
                         </div>
                       )}
                     </div>
-                    {signatures[ep.employee.id] && (
-                      <p className="mt-1 text-xs text-emerald-500 flex items-center gap-1">
-                        <Check size={12} /> Signature enregistrée
+                    {signatures[activeSheet] && (
+                      <p className={`mt-1 text-xs ${isMatin ? 'text-emerald-500' : 'text-blue-500'} flex items-center gap-1`}>
+                        <Check size={12} /> Signature prête
                       </p>
                     )}
                   </div>
@@ -883,18 +867,34 @@ export default function PointageMobileApp() {
                   {/* Bouton valider */}
                   <button
                     onClick={() => {
-                      savePointage(ep.employee.id);
+                      const sig = signatures[activeSheet];
+                      if (!sig) {
+                        setSaveError('Veuillez signer avant de valider');
+                        return;
+                      }
+                      signerPeriode(employeeId, periode as 'matin' | 'apresmidi', sig);
                       setTimeout(() => setActiveSheet(null), 500);
                     }}
-                    disabled={saving[ep.employee.id]}
-                    className="w-full py-4 rounded-xl font-semibold bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center gap-2 transition-all"
+                    disabled={isSaving || !signatures[activeSheet]}
+                    className={`w-full py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${signatures[activeSheet]
+                      ? (isMatin ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-blue-500 hover:bg-blue-600') + ' text-white'
+                      : bg('bg-slate-600 text-gray-500 cursor-not-allowed', 'bg-gray-200 text-gray-400 cursor-not-allowed')
+                    }`}
                   >
-                    {saving[ep.employee.id] ? (
+                    {isSaving ? (
                       <Loader2 size={20} className="animate-spin" />
                     ) : (
                       <Check size={20} />
                     )}
-                    Valider
+                    {signatures[activeSheet] ? `Valider ${isMatin ? 'Matin' : 'Après-midi'}` : 'Signez pour valider'}
+                  </button>
+
+                  {/* Bouton annuler */}
+                  <button
+                    onClick={() => setActiveSheet(null)}
+                    className={`w-full mt-3 py-3 rounded-xl font-medium ${bg('bg-slate-700 text-gray-300 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')} transition-all`}
+                  >
+                    Annuler
                   </button>
                 </div>
               );

@@ -15,6 +15,9 @@ router.get('/employee/:employeeId', pointageController.getPointageEmployee);
 // Enregistrer un pointage journalier
 router.post('/journalier', pointageController.savePointageJournalier);
 
+// Signer un pointage (matin ou après-midi séparément)
+router.post('/signer', pointageController.signerPointage);
+
 // Enregistrer plusieurs pointages (mode grille)
 router.post('/journalier/batch', pointageController.savePointagesMultiples);
 
