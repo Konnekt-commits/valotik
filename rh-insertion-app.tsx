@@ -3867,7 +3867,7 @@ export default function RHInsertionApp() {
         ],
         [
           ...joursOuvres.flatMap(() => [
-            { content: 'Matin\n08:00 - 12:00', styles: { halign: 'center', fillColor: headerColor, textColor: [255, 255, 255], fontSize: 7 } },
+            { content: 'Matin\n09:00 - 12:00', styles: { halign: 'center', fillColor: headerColor, textColor: [255, 255, 255], fontSize: 7 } },
             { content: 'Après-midi\n13:00 - 16:30', styles: { halign: 'center', fillColor: headerColor, textColor: [255, 255, 255], fontSize: 7 } }
           ])
         ]
