@@ -785,18 +785,18 @@ export default function PointageMobileApp() {
                 apresmidiSigne: false
               };
 
-              // Si pas de période, afficher le panneau de configuration (type de journée, notes)
+              // Si pas de période (clic sur la carte), afficher le panneau complet
               if (!periode) {
                 const typeOption = typeJourneeOptions.find(t => t.value === local.typeJournee);
 
-                // Fonction pour sauvegarder le type de journée
-                const saveTypeJournee = async (type: string) => {
+                // Fonction pour sauvegarder le type de journée et les notes
+                const saveTypeAndNotes = async (type?: string) => {
                   setSaving(prev => ({ ...prev, [employeeId]: true }));
                   try {
                     const payload = {
                       pointageMensuelId: ep.pointage.id,
                       date: formatDateISO(selectedDate),
-                      typeJournee: type,
+                      typeJournee: type || local.typeJournee,
                       notes: local.notes
                     };
 
@@ -807,10 +807,12 @@ export default function PointageMobileApp() {
                     });
 
                     if (res.ok) {
-                      setLocalPointages(prev => ({
-                        ...prev,
-                        [employeeId]: { ...prev[employeeId], typeJournee: type }
-                      }));
+                      if (type) {
+                        setLocalPointages(prev => ({
+                          ...prev,
+                          [employeeId]: { ...prev[employeeId], typeJournee: type }
+                        }));
+                      }
                       setSaveSuccess(employeeId);
                       setTimeout(() => setSaveSuccess(null), 2000);
                     }
@@ -821,39 +823,11 @@ export default function PointageMobileApp() {
                   }
                 };
 
-                // Fonction pour sauvegarder les notes
-                const saveNotes = async () => {
-                  setSaving(prev => ({ ...prev, [`${employeeId}_notes`]: true }));
-                  try {
-                    const payload = {
-                      pointageMensuelId: ep.pointage.id,
-                      date: formatDateISO(selectedDate),
-                      typeJournee: local.typeJournee,
-                      notes: local.notes
-                    };
-
-                    const res = await fetch(`${API_URL}/pointage/journalier`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(payload)
-                    });
-
-                    if (res.ok) {
-                      setSaveSuccess(`${employeeId}_notes`);
-                      setTimeout(() => setSaveSuccess(null), 2000);
-                    }
-                  } catch (error) {
-                    console.error('Erreur sauvegarde notes:', error);
-                  } finally {
-                    setSaving(prev => ({ ...prev, [`${employeeId}_notes`]: false }));
-                  }
-                };
-
                 return (
                   <div className="px-6 pb-8">
-                    {/* Header */}
+                    {/* Header employé */}
                     <div className="flex items-center gap-4 mb-6">
-                      <div className={`w-14 h-14 rounded-full flex items-center justify-center ${bg('bg-slate-600', 'bg-gray-400')}`}>
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center ${bg('bg-emerald-600', 'bg-emerald-500')}`}>
                         <User size={28} className="text-white" />
                       </div>
                       <div>
@@ -861,9 +835,15 @@ export default function PointageMobileApp() {
                           {ep.employee.prenom} {ep.employee.nom}
                         </h2>
                         <p className={`${text('text-gray-400', 'text-gray-500')}`}>
-                          {formatDate(selectedDate)}
+                          {ep.employee.poste || 'Agent'} - {ep.employee.dureeHebdo}h/sem
                         </p>
                       </div>
+                    </div>
+
+                    {/* Date */}
+                    <div className={`flex items-center gap-2 mb-6 px-4 py-3 rounded-xl ${bg('bg-slate-700', 'bg-gray-100')}`}>
+                      <Calendar size={20} className={text('text-gray-400', 'text-gray-500')} />
+                      <span className={text('text-white', 'text-gray-900')}>{formatDate(selectedDate)}</span>
                     </div>
 
                     {/* Type de journée */}
@@ -871,35 +851,23 @@ export default function PointageMobileApp() {
                       <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-3 block`}>
                         Type de journée
                       </label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         {typeJourneeOptions.map(option => {
                           const Icon = option.icon;
                           const isSelected = local.typeJournee === option.value;
-                          const colorClasses: Record<string, { bg: string; text: string; border: string }> = {
-                            emerald: { bg: 'bg-emerald-500', text: 'text-emerald-400', border: 'border-emerald-500' },
-                            blue: { bg: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500' },
-                            rose: { bg: 'bg-rose-500', text: 'text-rose-400', border: 'border-rose-500' },
-                            purple: { bg: 'bg-purple-500', text: 'text-purple-400', border: 'border-purple-500' },
-                            amber: { bg: 'bg-amber-500', text: 'text-amber-400', border: 'border-amber-500' },
-                            orange: { bg: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500' }
-                          };
-                          const colors = colorClasses[option.color] || colorClasses.emerald;
 
                           return (
                             <button
                               key={option.value}
-                              onClick={() => saveTypeJournee(option.value)}
+                              onClick={() => saveTypeAndNotes(option.value)}
                               disabled={saving[employeeId]}
-                              className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                                isSelected
-                                  ? `${colors.bg} text-white border-transparent`
-                                  : `${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-100 hover:bg-gray-200')} ${colors.border} border-opacity-30`
+                              className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${isSelected
+                                ? `bg-${option.color}-500 text-white`
+                                : bg(`bg-slate-700 text-gray-400 hover:bg-slate-600`, `bg-gray-100 text-gray-600 hover:bg-gray-200`)
                               }`}
                             >
-                              <Icon size={18} className={isSelected ? 'text-white' : colors.text} />
-                              <span className={`text-sm font-medium ${isSelected ? 'text-white' : text('text-gray-300', 'text-gray-700')}`}>
-                                {option.label}
-                              </span>
+                              <Icon size={20} />
+                              <span className="text-xs font-medium">{option.label}</span>
                             </button>
                           );
                         })}
@@ -909,41 +877,94 @@ export default function PointageMobileApp() {
                     {/* Notes */}
                     <div className="mb-6">
                       <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-2 block`}>
-                        Notes (optionnel)
+                        Note (optionnel)
                       </label>
-                      <div className="relative">
-                        <textarea
-                          value={local.notes}
-                          onChange={e => setLocalPointages(prev => ({
-                            ...prev,
-                            [employeeId]: { ...prev[employeeId], notes: e.target.value }
-                          }))}
-                          placeholder="Ajouter une note..."
-                          rows={3}
-                          className={`w-full px-4 py-3 rounded-xl ${bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
-                        />
-                      </div>
+                      <textarea
+                        value={local.notes}
+                        onChange={e => setLocalPointages(prev => ({
+                          ...prev,
+                          [employeeId]: { ...prev[employeeId], notes: e.target.value }
+                        }))}
+                        placeholder="Ajouter une note..."
+                        rows={2}
+                        className={`w-full px-4 py-3 rounded-xl ${bg('bg-slate-700 text-white placeholder-gray-500', 'bg-gray-100 text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
+                      />
                       {local.notes && (
                         <button
-                          onClick={saveNotes}
-                          disabled={saving[`${employeeId}_notes`]}
-                          className={`mt-2 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
-                            saveSuccess === `${employeeId}_notes`
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                          }`}
+                          onClick={() => saveTypeAndNotes()}
+                          disabled={saving[employeeId]}
+                          className="mt-2 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white"
                         >
-                          {saving[`${employeeId}_notes`] ? (
-                            <Loader2 size={16} className="animate-spin" />
-                          ) : saveSuccess === `${employeeId}_notes` ? (
-                            <Check size={16} />
-                          ) : (
-                            <Save size={16} />
-                          )}
-                          {saveSuccess === `${employeeId}_notes` ? 'Sauvegardé' : 'Sauvegarder la note'}
+                          {saving[employeeId] ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          Sauvegarder
                         </button>
                       )}
                     </div>
+
+                    {/* Boutons de signature matin/après-midi (si type = travail) */}
+                    {local.typeJournee === 'travail' && (
+                      <div className="mb-6 space-y-3">
+                        <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} block`}>
+                          Signatures
+                        </label>
+
+                        {/* Bouton Signer Matin */}
+                        <button
+                          onClick={() => setActiveSheet(`${employeeId}_matin`)}
+                          disabled={local.matinSigne}
+                          className={`w-full p-4 rounded-xl flex items-center justify-between transition-all ${
+                            local.matinSigne
+                              ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                              : 'bg-emerald-500 hover:bg-emerald-600'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Sun size={24} className={local.matinSigne ? 'text-emerald-500' : 'text-white'} />
+                            <div className="text-left">
+                              <p className={`font-semibold ${local.matinSigne ? 'text-emerald-500' : 'text-white'}`}>
+                                Matin - {local.matin}h
+                              </p>
+                              <p className={`text-xs ${local.matinSigne ? 'text-emerald-400' : 'text-emerald-100'}`}>
+                                {local.matinSigne ? 'Signé ✓' : 'Cliquez pour signer'}
+                              </p>
+                            </div>
+                          </div>
+                          {local.matinSigne ? (
+                            <Check size={24} className="text-emerald-500" />
+                          ) : (
+                            <PenTool size={24} className="text-white" />
+                          )}
+                        </button>
+
+                        {/* Bouton Signer Après-midi */}
+                        <button
+                          onClick={() => setActiveSheet(`${employeeId}_apresmidi`)}
+                          disabled={local.apresmidiSigne}
+                          className={`w-full p-4 rounded-xl flex items-center justify-between transition-all ${
+                            local.apresmidiSigne
+                              ? 'bg-blue-500/20 border-2 border-blue-500'
+                              : 'bg-blue-500 hover:bg-blue-600'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Moon size={24} className={local.apresmidiSigne ? 'text-blue-500' : 'text-white'} />
+                            <div className="text-left">
+                              <p className={`font-semibold ${local.apresmidiSigne ? 'text-blue-500' : 'text-white'}`}>
+                                Après-midi - {local.apresmidi}h
+                              </p>
+                              <p className={`text-xs ${local.apresmidiSigne ? 'text-blue-400' : 'text-blue-100'}`}>
+                                {local.apresmidiSigne ? 'Signé ✓' : 'Cliquez pour signer'}
+                              </p>
+                            </div>
+                          </div>
+                          {local.apresmidiSigne ? (
+                            <Check size={24} className="text-blue-500" />
+                          ) : (
+                            <PenTool size={24} className="text-white" />
+                          )}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Bouton fermer */}
                     <button
