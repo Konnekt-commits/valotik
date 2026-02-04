@@ -565,8 +565,29 @@ model InsertionEmployee {
   formations          Formation[]
   pointages           PointageMensuel[]
   objectifsIndividuels ObjectifIndividuel[]
+  autorisationsSortie AutorisationSortie[]
 
   @@map("insertion_employees")
+}
+
+// Autorisation de sortie anticipée
+model AutorisationSortie {
+  id              String   @id @default(cuid())
+  employeeId      String
+  date            DateTime @db.Date
+  heureDebut      String   @db.VarChar(5)  // Format HH:MM
+  heureFin        String   @db.VarChar(5)  // Format HH:MM
+  dureeMinutes    Int                       // Durée en minutes
+  motif           String?  @db.Text
+  signature       String?  @db.Text        // Signature base64
+  signatureAt     DateTime?
+  pdfUrl          String?  @db.VarChar(500)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee        InsertionEmployee @relation(fields: [employeeId], references: [id])
+
+  @@map("autorisations_sortie")
 }
 
 // Fiche PRO - Diagnostic socio-professionnel

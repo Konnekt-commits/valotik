@@ -33,4 +33,8 @@ router.post('/valider', pointageController.validerPointageMensuel);
 // Clôturer le mois
 router.post('/cloturer', pointageController.cloturerMois);
 
+// Autorisations de sortie
+router.post('/autorisation-sortie', pointageController.createAutorisationSortie);
+router.get('/autorisation-sortie/:employeeId', pointageController.getAutorisationsSortie);
+
 export default router;

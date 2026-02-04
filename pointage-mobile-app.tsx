@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, User, Clock, Sun, Moon,
   Check, X, Calendar, AlertCircle, Coffee, GraduationCap,
-  Umbrella, Heart, Briefcase, Save, Loader2, RefreshCw, Trash2, PenTool
+  Umbrella, Heart, Briefcase, Save, Loader2, RefreshCw, Trash2, PenTool,
+  LogOut, FileText, Download
 } from 'lucide-react';
+import jsPDF from 'jspdf';
 
 const API_URL = 'https://valotik-api-546691893264.europe-west1.run.app/api';
 
@@ -108,8 +110,19 @@ export default function PointageMobileApp() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const autorisationCanvasRef = useRef<HTMLCanvasElement>(null);
   const [signatures, setSignatures] = useState<Record<string, string>>({});
   const [isDrawing, setIsDrawing] = useState(false);
+
+  // États pour autorisation de sortie
+  const [showAutorisationForm, setShowAutorisationForm] = useState<string | null>(null);
+  const [autorisationData, setAutorisationData] = useState({
+    heureDebut: '',
+    heureFin: '',
+    motif: ''
+  });
+  const [autorisationSignature, setAutorisationSignature] = useState<string | null>(null);
+  const [savingAutorisation, setSavingAutorisation] = useState(false);
 
   // Couleurs dynamiques
   const bg = (dark: string, light: string) => isDark ? dark : light;
@@ -966,9 +979,342 @@ export default function PointageMobileApp() {
                       </div>
                     )}
 
+                    {/* Section Autorisation de sortie */}
+                    {local.typeJournee === 'travail' && (
+                      <div className="mb-6">
+                        <button
+                          onClick={() => setShowAutorisationForm(showAutorisationForm === employeeId ? null : employeeId)}
+                          className={`w-full p-4 rounded-xl flex items-center justify-between transition-all ${bg('bg-orange-500/20 hover:bg-orange-500/30', 'bg-orange-100 hover:bg-orange-200')} border-2 border-orange-500/50`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <LogOut size={24} className="text-orange-500" />
+                            <div className="text-left">
+                              <p className="font-semibold text-orange-500">Autorisation de sortie</p>
+                              <p className={`text-xs ${text('text-orange-400', 'text-orange-600')}`}>
+                                Sortie anticipée avec signature
+                              </p>
+                            </div>
+                          </div>
+                          <ChevronRight size={24} className={`text-orange-500 transition-transform ${showAutorisationForm === employeeId ? 'rotate-90' : ''}`} />
+                        </button>
+
+                        {/* Formulaire autorisation de sortie */}
+                        {showAutorisationForm === employeeId && (
+                          <div className={`mt-4 p-4 rounded-xl ${bg('bg-slate-700', 'bg-gray-100')} space-y-4`}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} mb-1 block`}>
+                                  Heure début
+                                </label>
+                                <input
+                                  type="time"
+                                  value={autorisationData.heureDebut}
+                                  onChange={e => setAutorisationData(prev => ({ ...prev, heureDebut: e.target.value }))}
+                                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-600 text-white', 'bg-white text-gray-900')} focus:outline-none focus:ring-2 focus:ring-orange-500`}
+                                />
+                              </div>
+                              <div>
+                                <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} mb-1 block`}>
+                                  Heure fin
+                                </label>
+                                <input
+                                  type="time"
+                                  value={autorisationData.heureFin}
+                                  onChange={e => setAutorisationData(prev => ({ ...prev, heureFin: e.target.value }))}
+                                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-600 text-white', 'bg-white text-gray-900')} focus:outline-none focus:ring-2 focus:ring-orange-500`}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Durée calculée */}
+                            {autorisationData.heureDebut && autorisationData.heureFin && (
+                              <div className={`text-center py-2 px-4 rounded-lg ${bg('bg-orange-500/20', 'bg-orange-100')}`}>
+                                <span className="text-orange-500 font-semibold">
+                                  Durée: {(() => {
+                                    const [hD, mD] = autorisationData.heureDebut.split(':').map(Number);
+                                    const [hF, mF] = autorisationData.heureFin.split(':').map(Number);
+                                    const mins = (hF * 60 + mF) - (hD * 60 + mD);
+                                    if (mins <= 0) return 'Invalide';
+                                    const h = Math.floor(mins / 60);
+                                    const m = mins % 60;
+                                    return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
+                                  })()}
+                                </span>
+                              </div>
+                            )}
+
+                            <div>
+                              <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} mb-1 block`}>
+                                Motif (optionnel)
+                              </label>
+                              <input
+                                type="text"
+                                value={autorisationData.motif}
+                                onChange={e => setAutorisationData(prev => ({ ...prev, motif: e.target.value }))}
+                                placeholder="Ex: RDV médical"
+                                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-600 text-white placeholder-gray-400', 'bg-white text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-orange-500`}
+                              />
+                            </div>
+
+                            {/* Zone signature autorisation */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} flex items-center gap-2`}>
+                                  <PenTool size={14} />
+                                  Signature du salarié
+                                </label>
+                                <button
+                                  onClick={() => {
+                                    setAutorisationSignature(null);
+                                    const canvas = autorisationCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (ctx && canvas) {
+                                      const rect = canvas.getBoundingClientRect();
+                                      ctx.clearRect(0, 0, rect.width, rect.height);
+                                    }
+                                  }}
+                                  className={`p-1.5 rounded-lg ${bg('bg-slate-600 hover:bg-slate-500', 'bg-gray-200 hover:bg-gray-300')}`}
+                                >
+                                  <Trash2 size={14} className={text('text-gray-400', 'text-gray-500')} />
+                                </button>
+                              </div>
+                              <div className={`relative rounded-xl overflow-hidden ${bg('bg-slate-600', 'bg-white')} border-2 border-dashed ${autorisationSignature ? 'border-orange-500' : bg('border-slate-500', 'border-gray-300')}`}>
+                                <canvas
+                                  ref={autorisationCanvasRef}
+                                  className="w-full h-28 touch-none cursor-crosshair"
+                                  onMouseDown={(e) => {
+                                    const canvas = autorisationCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx || !canvas) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    if (canvas.width !== rect.width * 2) {
+                                      canvas.width = rect.width * 2;
+                                      canvas.height = rect.height * 2;
+                                      ctx.scale(2, 2);
+                                      ctx.lineCap = 'round';
+                                      ctx.lineJoin = 'round';
+                                      ctx.lineWidth = 2;
+                                      ctx.strokeStyle = '#f97316';
+                                    }
+                                    setIsDrawing(true);
+                                    const x = e.clientX - rect.left;
+                                    const y = e.clientY - rect.top;
+                                    ctx.beginPath();
+                                    ctx.moveTo(x, y);
+                                  }}
+                                  onMouseMove={(e) => {
+                                    if (!isDrawing) return;
+                                    const canvas = autorisationCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    const x = e.clientX - rect.left;
+                                    const y = e.clientY - rect.top;
+                                    ctx.lineTo(x, y);
+                                    ctx.stroke();
+                                  }}
+                                  onMouseUp={() => {
+                                    setIsDrawing(false);
+                                    const canvas = autorisationCanvasRef.current;
+                                    if (canvas) setAutorisationSignature(canvas.toDataURL('image/png'));
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (isDrawing) {
+                                      setIsDrawing(false);
+                                      const canvas = autorisationCanvasRef.current;
+                                      if (canvas) setAutorisationSignature(canvas.toDataURL('image/png'));
+                                    }
+                                  }}
+                                  onTouchStart={(e) => {
+                                    e.preventDefault();
+                                    const canvas = autorisationCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx || !canvas) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    if (canvas.width !== rect.width * 2) {
+                                      canvas.width = rect.width * 2;
+                                      canvas.height = rect.height * 2;
+                                      ctx.scale(2, 2);
+                                      ctx.lineCap = 'round';
+                                      ctx.lineJoin = 'round';
+                                      ctx.lineWidth = 2;
+                                      ctx.strokeStyle = '#f97316';
+                                    }
+                                    setIsDrawing(true);
+                                    const x = e.touches[0].clientX - rect.left;
+                                    const y = e.touches[0].clientY - rect.top;
+                                    ctx.beginPath();
+                                    ctx.moveTo(x, y);
+                                  }}
+                                  onTouchMove={(e) => {
+                                    e.preventDefault();
+                                    if (!isDrawing) return;
+                                    const canvas = autorisationCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    const x = e.touches[0].clientX - rect.left;
+                                    const y = e.touches[0].clientY - rect.top;
+                                    ctx.lineTo(x, y);
+                                    ctx.stroke();
+                                  }}
+                                  onTouchEnd={() => {
+                                    setIsDrawing(false);
+                                    const canvas = autorisationCanvasRef.current;
+                                    if (canvas) setAutorisationSignature(canvas.toDataURL('image/png'));
+                                  }}
+                                />
+                                {!autorisationSignature && (
+                                  <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${text('text-gray-500', 'text-gray-400')}`}>
+                                    <span className="text-xs">Signez ici</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Bouton valider autorisation */}
+                            <button
+                              onClick={async () => {
+                                if (!autorisationData.heureDebut || !autorisationData.heureFin) {
+                                  setSaveError('Veuillez renseigner les heures');
+                                  return;
+                                }
+                                if (!autorisationSignature) {
+                                  setSaveError('Veuillez signer l\'autorisation');
+                                  return;
+                                }
+
+                                setSavingAutorisation(true);
+                                try {
+                                  // Sauvegarder l'autorisation
+                                  const res = await fetch(`${API_URL}/pointage/autorisation-sortie`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      employeeId,
+                                      date: formatDateISO(selectedDate),
+                                      heureDebut: autorisationData.heureDebut,
+                                      heureFin: autorisationData.heureFin,
+                                      motif: autorisationData.motif,
+                                      signature: autorisationSignature
+                                    })
+                                  });
+
+                                  if (res.ok) {
+                                    const data = await res.json();
+
+                                    // Générer le PDF
+                                    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
+                                    const pageWidth = doc.internal.pageSize.getWidth();
+
+                                    // Titre
+                                    doc.setFontSize(20);
+                                    doc.setTextColor(249, 115, 22); // Orange
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text('AUTORISATION DE SORTIE', pageWidth / 2, 30, { align: 'center' });
+
+                                    // Cadre infos
+                                    doc.setDrawColor(200, 200, 200);
+                                    doc.setFillColor(250, 250, 250);
+                                    doc.roundedRect(20, 45, pageWidth - 40, 60, 3, 3, 'FD');
+
+                                    doc.setFontSize(12);
+                                    doc.setTextColor(60, 60, 60);
+                                    doc.setFont('helvetica', 'normal');
+
+                                    doc.text(`Salarié : ${ep.employee.prenom} ${ep.employee.nom}`, 30, 58);
+                                    doc.text(`Poste : ${ep.employee.poste || 'Agent'}`, 30, 68);
+                                    doc.text(`Date : ${formatDate(selectedDate)}`, 30, 78);
+                                    doc.text(`Heure de sortie : ${autorisationData.heureDebut}`, 30, 88);
+                                    doc.text(`Heure de retour : ${autorisationData.heureFin}`, 30, 98);
+
+                                    // Durée
+                                    const [hD, mD] = autorisationData.heureDebut.split(':').map(Number);
+                                    const [hF, mF] = autorisationData.heureFin.split(':').map(Number);
+                                    const mins = (hF * 60 + mF) - (hD * 60 + mD);
+                                    const h = Math.floor(mins / 60);
+                                    const m = mins % 60;
+                                    const dureeStr = `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
+
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.setTextColor(249, 115, 22);
+                                    doc.text(`Durée d'absence : ${dureeStr}`, pageWidth / 2, 115, { align: 'center' });
+
+                                    // Motif
+                                    if (autorisationData.motif) {
+                                      doc.setFont('helvetica', 'normal');
+                                      doc.setTextColor(60, 60, 60);
+                                      doc.text(`Motif : ${autorisationData.motif}`, 30, 130);
+                                    }
+
+                                    // Signature
+                                    doc.setFontSize(11);
+                                    doc.setTextColor(100, 100, 100);
+                                    doc.text('Signature du salarié :', 30, 155);
+
+                                    if (autorisationSignature) {
+                                      try {
+                                        doc.addImage(autorisationSignature, 'PNG', 30, 160, 60, 30);
+                                      } catch (e) {
+                                        console.error('Erreur signature PDF:', e);
+                                      }
+                                    }
+
+                                    // Pied de page
+                                    doc.setFontSize(8);
+                                    doc.setTextColor(150, 150, 150);
+                                    doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, 280, { align: 'center' });
+                                    doc.text('France Recycling - Insertion', pageWidth / 2, 286, { align: 'center' });
+
+                                    // Télécharger le PDF
+                                    doc.save(`Autorisation_Sortie_${ep.employee.nom}_${formatDateISO(selectedDate)}.pdf`);
+
+                                    // Reset
+                                    setAutorisationData({ heureDebut: '', heureFin: '', motif: '' });
+                                    setAutorisationSignature(null);
+                                    setShowAutorisationForm(null);
+                                    setSaveSuccess(employeeId);
+                                    setTimeout(() => setSaveSuccess(null), 3000);
+
+                                    // Recharger les données
+                                    loadData();
+                                  } else {
+                                    const err = await res.json();
+                                    setSaveError(err.error || 'Erreur lors de la sauvegarde');
+                                  }
+                                } catch (error: any) {
+                                  setSaveError(error.message || 'Erreur réseau');
+                                } finally {
+                                  setSavingAutorisation(false);
+                                }
+                              }}
+                              disabled={savingAutorisation || !autorisationData.heureDebut || !autorisationData.heureFin || !autorisationSignature}
+                              className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
+                                autorisationSignature && autorisationData.heureDebut && autorisationData.heureFin
+                                  ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                                  : bg('bg-slate-600 text-gray-500', 'bg-gray-200 text-gray-400')
+                              }`}
+                            >
+                              {savingAutorisation ? (
+                                <Loader2 size={20} className="animate-spin" />
+                              ) : (
+                                <>
+                                  <FileText size={20} />
+                                  Valider et générer PDF
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Bouton fermer */}
                     <button
-                      onClick={() => setActiveSheet(null)}
+                      onClick={() => {
+                        setActiveSheet(null);
+                        setShowAutorisationForm(null);
+                      }}
                       className={`w-full py-3 rounded-xl font-medium ${bg('bg-slate-700 text-gray-300 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')} transition-all`}
                     >
                       Fermer

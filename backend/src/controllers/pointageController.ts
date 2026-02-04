@@ -880,3 +880,154 @@ export const getPointageStats = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// ============================================
+// AUTORISATION DE SORTIE
+// ============================================
+
+// Créer une autorisation de sortie
+export const createAutorisationSortie = async (req: Request, res: Response) => {
+  try {
+    const { employeeId, date, heureDebut, heureFin, motif, signature } = req.body;
+
+    if (!employeeId || !date || !heureDebut || !heureFin) {
+      return res.status(400).json({
+        success: false,
+        error: 'employeeId, date, heureDebut et heureFin sont requis'
+      });
+    }
+
+    // Calculer la durée en minutes
+    const [hDebut, mDebut] = heureDebut.split(':').map(Number);
+    const [hFin, mFin] = heureFin.split(':').map(Number);
+    const dureeMinutes = (hFin * 60 + mFin) - (hDebut * 60 + mDebut);
+
+    if (dureeMinutes <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'L\'heure de fin doit être après l\'heure de début'
+      });
+    }
+
+    // Créer l'autorisation
+    const autorisation = await prisma.autorisationSortie.create({
+      data: {
+        employeeId,
+        date: new Date(date),
+        heureDebut,
+        heureFin,
+        dureeMinutes,
+        motif: motif || null,
+        signature: signature || null,
+        signatureAt: signature ? new Date() : null
+      },
+      include: {
+        employee: {
+          select: { nom: true, prenom: true, poste: true }
+        }
+      }
+    });
+
+    // Mettre à jour le pointage journalier pour déduire les heures
+    const dureeHeures = dureeMinutes / 60;
+    const dateStr = date.split('T')[0];
+
+    // Trouver le pointage mensuel de l'employé
+    const pointageMensuel = await prisma.pointageMensuel.findFirst({
+      where: {
+        employeeId,
+        mois: new Date(date).getMonth() + 1,
+        annee: new Date(date).getFullYear()
+      }
+    });
+
+    if (pointageMensuel) {
+      // Trouver ou créer le pointage journalier
+      let pointageJournalier = await prisma.pointageJournalier.findFirst({
+        where: {
+          pointageMensuelId: pointageMensuel.id,
+          date: new Date(dateStr)
+        }
+      });
+
+      if (pointageJournalier) {
+        // Déduire les heures de l'après-midi (ou du matin selon l'heure)
+        const heureDebutNum = hDebut + mDebut / 60;
+        let newHeuresMatin = pointageJournalier.heuresMatin;
+        let newHeuresApresmidi = pointageJournalier.heuresApresmidi;
+
+        if (heureDebutNum < 12) {
+          // Sortie le matin
+          newHeuresMatin = Math.max(0, newHeuresMatin - dureeHeures);
+        } else {
+          // Sortie l'après-midi
+          newHeuresApresmidi = Math.max(0, newHeuresApresmidi - dureeHeures);
+        }
+
+        const newTotal = newHeuresMatin + newHeuresApresmidi;
+
+        await prisma.pointageJournalier.update({
+          where: { id: pointageJournalier.id },
+          data: {
+            heuresMatin: newHeuresMatin,
+            heuresApresmidi: newHeuresApresmidi,
+            heuresTravaillees: newTotal
+          }
+        });
+
+        // Recalculer le total mensuel
+        const journees = await prisma.pointageJournalier.findMany({
+          where: { pointageMensuelId: pointageMensuel.id }
+        });
+        const totalHeures = journees.reduce((sum, j) => sum + j.heuresTravaillees, 0);
+
+        await prisma.pointageMensuel.update({
+          where: { id: pointageMensuel.id },
+          data: {
+            heuresPointees: totalHeures,
+            pourcentage: Math.round((totalHeures / pointageMensuel.heuresContrat) * 100)
+          }
+        });
+      }
+    }
+
+    res.json({ success: true, data: autorisation });
+  } catch (error: any) {
+    console.error('Erreur createAutorisationSortie:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Lister les autorisations de sortie d'un employé
+export const getAutorisationsSortie = async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const { mois, annee } = req.query;
+
+    const where: any = { employeeId };
+
+    if (mois && annee) {
+      const startDate = new Date(Number(annee), Number(mois) - 1, 1);
+      const endDate = new Date(Number(annee), Number(mois), 0);
+      where.date = {
+        gte: startDate,
+        lte: endDate
+      };
+    }
+
+    const autorisations = await prisma.autorisationSortie.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      include: {
+        employee: {
+          select: { nom: true, prenom: true }
+        }
+      }
+    });
+
+    res.json({ success: true, data: autorisations });
+  } catch (error: any) {
+    console.error('Erreur getAutorisationsSortie:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
