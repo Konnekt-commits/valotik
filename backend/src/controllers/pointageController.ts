@@ -268,20 +268,59 @@ export const getPointageEmployee = async (req: Request, res: Response) => {
 // ============================================
 
 // Enregistrer/Mettre à jour un pointage journalier
+// NOTE: Cette API est obsolète pour les signatures. Utiliser /signer à la place.
+// Cette API respecte les signatures existantes et ne modifie pas les heures signées.
 export const savePointageJournalier = async (req: Request, res: Response) => {
   try {
     const { pointageMensuelId, date, heureDebut, heureFin, pauseMinutes, typeJournee, motifAbsence, notes } = req.body;
 
-    // Calculer les heures travaillées
-    let heuresTravaillees = 0;
+    const dateObj = new Date(date);
+
+    // Vérifier si un pointage existe déjà avec des signatures
+    const existant = await prisma.pointageJournalier.findUnique({
+      where: {
+        pointageMensuelId_date: {
+          pointageMensuelId,
+          date: dateObj
+        }
+      }
+    });
+
+    // Calculer les heures travaillées à partir de heureDebut/heureFin
+    let heuresCalculees = 0;
     if (heureDebut && heureFin && typeJournee === 'travail') {
       const [hD, mD] = heureDebut.split(':').map(Number);
       const [hF, mF] = heureFin.split(':').map(Number);
       const minutesTravail = (hF * 60 + mF) - (hD * 60 + mD) - (pauseMinutes || 0);
-      heuresTravaillees = Math.round(minutesTravail / 60 * 100) / 100;
+      heuresCalculees = Math.round(minutesTravail / 60 * 100) / 100;
     }
 
-    const dateObj = new Date(date);
+    let heuresMatin: number;
+    let heuresApresmidi: number;
+    let heuresTravaillees: number;
+
+    if (existant) {
+      const matinSigne = !!existant.signatureMatin;
+      const apresmidiSigne = !!existant.signatureApresmidi;
+
+      // Respecter les heures signées
+      if (matinSigne && apresmidiSigne) {
+        // Les deux sont signés : ne rien modifier
+        return res.status(400).json({
+          success: false,
+          error: 'Les heures matin et après-midi sont déjà signées et ne peuvent pas être modifiées.'
+        });
+      }
+
+      heuresMatin = matinSigne ? existant.heuresMatin : Math.min(heuresCalculees, 4);
+      heuresApresmidi = apresmidiSigne ? existant.heuresApresmidi : Math.max(0, heuresCalculees - (matinSigne ? existant.heuresMatin : Math.min(heuresCalculees, 4)));
+      heuresTravaillees = heuresMatin + heuresApresmidi;
+    } else {
+      // Nouveau pointage : répartir entre matin et après-midi
+      heuresMatin = Math.min(heuresCalculees, 4);
+      heuresApresmidi = Math.max(0, heuresCalculees - 4);
+      heuresTravaillees = heuresCalculees;
+    }
 
     // Upsert le pointage journalier
     const pointageJour = await prisma.pointageJournalier.upsert({
@@ -297,6 +336,8 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
         heureDebut,
         heureFin,
         pauseMinutes: pauseMinutes || 0,
+        heuresMatin,
+        heuresApresmidi,
         heuresTravaillees,
         typeJournee: typeJournee || 'travail',
         motifAbsence,
@@ -306,6 +347,8 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
         heureDebut,
         heureFin,
         pauseMinutes: pauseMinutes || 0,
+        heuresMatin,
+        heuresApresmidi,
         heuresTravaillees,
         typeJournee: typeJournee || 'travail',
         motifAbsence,
@@ -425,32 +468,98 @@ export const signerPointage = async (req: Request, res: Response) => {
 };
 
 // Enregistrer plusieurs pointages d'un coup (mode grille)
+// IMPORTANT: Cette API respecte les signatures existantes et ne modifie pas les heures signées
 export const savePointagesMultiples = async (req: Request, res: Response) => {
   try {
     const { pointageMensuelId, pointages } = req.body;
 
-    // pointages = [{ date, heures }, ...]
+    // pointages = [{ date, heures, heuresMatin?, heuresApresmidi? }, ...]
     for (const p of pointages) {
       const dateObj = new Date(p.date);
 
-      await prisma.pointageJournalier.upsert({
+      // Vérifier si un pointage existe déjà avec des signatures
+      const existant = await prisma.pointageJournalier.findUnique({
         where: {
           pointageMensuelId_date: {
             pointageMensuelId,
             date: dateObj
           }
-        },
-        create: {
-          pointageMensuelId,
-          date: dateObj,
-          heuresTravaillees: p.heures || 0,
-          typeJournee: p.heures > 0 ? 'travail' : (p.typeJournee || 'travail')
-        },
-        update: {
-          heuresTravaillees: p.heures || 0,
-          typeJournee: p.heures > 0 ? 'travail' : (p.typeJournee || 'travail')
         }
       });
+
+      // Si des signatures existent, ne pas écraser les heures signées
+      if (existant) {
+        const matinSigne = !!existant.signatureMatin;
+        const apresmidiSigne = !!existant.signatureApresmidi;
+
+        // Calculer les nouvelles valeurs en respectant les signatures
+        let heuresMatin = existant.heuresMatin;
+        let heuresApresmidi = existant.heuresApresmidi;
+
+        if (p.heuresMatin !== undefined && !matinSigne) {
+          heuresMatin = p.heuresMatin;
+        }
+        if (p.heuresApresmidi !== undefined && !apresmidiSigne) {
+          heuresApresmidi = p.heuresApresmidi;
+        }
+
+        // Si seulement 'heures' est fourni (ancien format), répartir entre matin et après-midi non signés
+        if (p.heures !== undefined && p.heuresMatin === undefined && p.heuresApresmidi === undefined) {
+          if (!matinSigne && !apresmidiSigne) {
+            // Aucune signature : on peut tout modifier
+            // Répartition standard : max 4h matin, reste en après-midi
+            heuresMatin = Math.min(p.heures, 4);
+            heuresApresmidi = Math.max(0, p.heures - 4);
+          } else if (matinSigne && !apresmidiSigne) {
+            // Matin signé : on ne peut modifier que l'après-midi
+            heuresApresmidi = Math.max(0, p.heures - heuresMatin);
+          } else if (!matinSigne && apresmidiSigne) {
+            // Après-midi signé : on ne peut modifier que le matin
+            heuresMatin = Math.max(0, p.heures - heuresApresmidi);
+          }
+          // Si les deux sont signés, on ne modifie rien
+        }
+
+        const heuresTravaillees = heuresMatin + heuresApresmidi;
+
+        await prisma.pointageJournalier.update({
+          where: {
+            pointageMensuelId_date: {
+              pointageMensuelId,
+              date: dateObj
+            }
+          },
+          data: {
+            heuresMatin,
+            heuresApresmidi,
+            heuresTravaillees,
+            typeJournee: heuresTravaillees > 0 ? 'travail' : (p.typeJournee || existant.typeJournee)
+          }
+        });
+      } else {
+        // Nouveau pointage : créer avec les heures fournies
+        let heuresMatin = p.heuresMatin ?? 0;
+        let heuresApresmidi = p.heuresApresmidi ?? 0;
+
+        // Si seulement 'heures' est fourni, répartir
+        if (p.heures !== undefined && p.heuresMatin === undefined && p.heuresApresmidi === undefined) {
+          heuresMatin = Math.min(p.heures, 4);
+          heuresApresmidi = Math.max(0, p.heures - 4);
+        }
+
+        const heuresTravaillees = heuresMatin + heuresApresmidi;
+
+        await prisma.pointageJournalier.create({
+          data: {
+            pointageMensuelId,
+            date: dateObj,
+            heuresMatin,
+            heuresApresmidi,
+            heuresTravaillees,
+            typeJournee: heuresTravaillees > 0 ? 'travail' : (p.typeJournee || 'travail')
+          }
+        });
+      }
     }
 
     // Recalculer les totaux
