@@ -4127,7 +4127,7 @@ export default function RHInsertionApp() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>Heures pointées</p>
-                    <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{Math.round(pointagesData.totaux.heuresPointees)}h</p>
+                    <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{Math.round(pointagesData.totaux.heuresPointees * 10) / 10}h</p>
                   </div>
                   <Clock className="w-8 h-8 text-green-500/30" />
                 </div>
@@ -4251,7 +4251,7 @@ export default function RHInsertionApp() {
                           })}
                           {/* Total */}
                           <td className={`px-2 py-2 text-center font-medium border-l ${bg('border-slate-700', 'border-gray-200')}`}>
-                            {Math.round(pointage.heuresPointees)}h
+                            {Math.round(pointage.heuresPointees * 10) / 10}h
                           </td>
                           {/* Pourcentage */}
                           <td className="px-2 py-2 text-center">
