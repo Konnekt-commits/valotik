@@ -3873,6 +3873,20 @@ export default function RHInsertionApp() {
         ]
       ];
 
+      // Préparer un map des signatures par employé et date pour un accès rapide
+      const signaturesMap: Record<string, Record<string, { matin?: string; apresmidi?: string }>> = {};
+      employees.forEach((p: any) => {
+        const emp = p.employee;
+        signaturesMap[emp.id] = {};
+        p.pointage.journees?.forEach((j: any) => {
+          const dateStr = new Date(j.date).toISOString().split('T')[0];
+          signaturesMap[emp.id][dateStr] = {
+            matin: j.signatureMatin,
+            apresmidi: j.signatureApresmidi
+          };
+        });
+      });
+
       // Données des employés
       const body = employees.map((p: any) => {
         const emp = p.employee;
@@ -3882,18 +3896,28 @@ export default function RHInsertionApp() {
 
         joursOuvres.forEach(j => {
           const heures = pointageValues[emp.id]?.[j.dateStr] || 0;
-          const dayOfWeek = j.date.getDay();
-          // Lundi à Jeudi : 3h matin + 3.5h après-midi par défaut
-          // Vendredi : 0h par défaut
-          const isLundiAJeudi = dayOfWeek >= 1 && dayOfWeek <= 4;
+          const sigs = signaturesMap[emp.id]?.[j.dateStr];
 
           if (heures > 0) {
-            // Si des heures sont pointées, on les répartit matin/après-midi
-            const heureMatin = Math.min(heures, isLundiAJeudi ? 3 : 4);
-            const heureAprem = Math.max(0, heures - heureMatin);
-            // Cases pour signature (vides pour que l'employé signe)
-            row.push({ content: '', styles: { minCellHeight: 18 } });
-            row.push({ content: '', styles: { minCellHeight: 18 } });
+            // Cases pour signature (on met un indicateur si signé, sinon vide)
+            row.push({
+              content: sigs?.matin ? '✓' : '',
+              styles: {
+                minCellHeight: 18,
+                halign: 'center',
+                valign: 'middle',
+                textColor: sigs?.matin ? [34, 197, 94] : [0, 0, 0]
+              }
+            });
+            row.push({
+              content: sigs?.apresmidi ? '✓' : '',
+              styles: {
+                minCellHeight: 18,
+                halign: 'center',
+                valign: 'middle',
+                textColor: sigs?.apresmidi ? [34, 197, 94] : [0, 0, 0]
+              }
+            });
           } else {
             // Pas de pointage
             row.push({ content: '', styles: { minCellHeight: 18, fillColor: [245, 245, 245] } });
@@ -3914,7 +3938,7 @@ export default function RHInsertionApp() {
         body.push(emptyRow);
       }
 
-      // Générer le tableau
+      // Générer le tableau avec les signatures
       autoTable(doc, {
         startY: 52,
         head: headers,
@@ -3934,7 +3958,48 @@ export default function RHInsertionApp() {
         columnStyles: {
           0: { cellWidth: 45 }
         },
-        margin: { left: 14, right: 14 }
+        margin: { left: 14, right: 14 },
+        // Callback pour dessiner les signatures dans les cellules
+        didDrawCell: (data: any) => {
+          // Ignorer les headers et la première colonne (noms)
+          if (data.section !== 'body' || data.column.index === 0) return;
+          if (data.row.index >= employees.length) return; // Ignorer les lignes vides
+
+          const emp = employees[data.row.index]?.employee;
+          if (!emp) return;
+
+          // Calculer quel jour et quelle période (matin/apresmidi)
+          const colIndex = data.column.index - 1; // -1 car colonne 0 = noms
+          const jourIndex = Math.floor(colIndex / 2);
+          const isMatin = colIndex % 2 === 0;
+
+          if (jourIndex >= joursOuvres.length) return;
+
+          const jour = joursOuvres[jourIndex];
+          const sigs = signaturesMap[emp.id]?.[jour.dateStr];
+          const signature = isMatin ? sigs?.matin : sigs?.apresmidi;
+
+          // Si une signature existe, la dessiner dans la cellule
+          if (signature && signature.startsWith('data:image')) {
+            try {
+              const cell = data.cell;
+              const padding = 2;
+              const imgWidth = cell.width - padding * 2;
+              const imgHeight = cell.height - padding * 2;
+
+              doc.addImage(
+                signature,
+                'PNG',
+                cell.x + padding,
+                cell.y + padding,
+                imgWidth,
+                imgHeight
+              );
+            } catch (e) {
+              console.error('Erreur ajout signature:', e);
+            }
+          }
+        }
       });
 
       // Pied de page
