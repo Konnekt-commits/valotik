@@ -4037,8 +4037,13 @@ export default function RHInsertionApp() {
       doc.setTextColor(128, 128, 128);
       doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, finalY + 10);
 
-      // Télécharger le PDF
-      doc.save(`Feuille_Emargement_${moisNoms[pointagesMois]}_${pointagesAnnee}_S${semaine}.pdf`);
+      // Afficher le PDF dans le viewer au lieu de télécharger directement
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      setPreviewUrl(pdfUrl);
+      setPreviewType('application/pdf');
+      setPreviewName(`Feuille_Emargement_${moisNoms[pointagesMois]}_${pointagesAnnee}_S${semaine}.pdf`);
+      setShowDocumentPreview(true);
     };
 
     // Calculer le nombre de semaines dans le mois (basé sur les jours ouvrés)
@@ -5978,12 +5983,24 @@ export default function RHInsertionApp() {
       {/* Modal prévisualisation document */}
       {showDocumentPreview && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => { setShowDocumentPreview(false); URL.revokeObjectURL(previewUrl); }}>
-          <div className="relative max-w-4xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div className="relative max-w-5xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
             <div className={`${bg('bg-slate-800', 'bg-white')} rounded-t-xl p-4 flex items-center justify-between`}>
               <h3 className={`font-semibold ${text('text-white', 'text-gray-900')}`}>{previewName}</h3>
-              <button onClick={() => { setShowDocumentPreview(false); URL.revokeObjectURL(previewUrl); }} className="p-2 hover:bg-slate-700 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {previewType === 'application/pdf' && (
+                  <a
+                    href={previewUrl}
+                    download={previewName}
+                    className="flex items-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Télécharger
+                  </a>
+                )}
+                <button onClick={() => { setShowDocumentPreview(false); URL.revokeObjectURL(previewUrl); }} className="p-2 hover:bg-slate-700 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className={`${bg('bg-slate-900', 'bg-gray-100')} rounded-b-xl overflow-auto max-h-[80vh] flex items-center justify-center p-4`}>
               {previewType.startsWith('image/') ? (
