@@ -3817,6 +3817,37 @@ export default function RHInsertionApp() {
       savePointageValue(employeeId, pointageMensuelId, dateStr, heures);
     };
 
+    // Sauvegarder TOUS les pointages d'un employé (appelé quand on clique sur la disquette)
+    const saveAllPointagesForEmployee = async (employeeId: string, pointageMensuelId: string) => {
+      const empPointages = pointageValues[employeeId];
+      if (!empPointages) return;
+
+      // Collecter tous les pointages non-vides
+      const pointagesToSave = Object.entries(empPointages)
+        .filter(([_, heures]) => heures !== undefined && heures !== '')
+        .map(([date, heures]) => ({
+          date,
+          heures: parseFloat(String(heures)) || 0
+        }));
+
+      if (pointagesToSave.length === 0) return;
+
+      try {
+        await authFetch(`${POINTAGE_API}/journalier/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pointageMensuelId,
+            pointages: pointagesToSave
+          })
+        });
+        // Recharger pour mettre à jour les totaux
+        loadPointages();
+      } catch (error) {
+        console.error('Erreur sauvegarde pointages:', error);
+      }
+    };
+
     // Appliquer heures standard pour une journée (dureeHebdo / 5)
     const appliquerHeuresStandard = async (employeeId: string, pointageMensuelId: string, dureeHebdo: number, dates: string[]) => {
       const heuresParJour = Math.round(dureeHebdo / 5 * 100) / 100;
@@ -4380,9 +4411,13 @@ export default function RHInsertionApp() {
                                     <CheckCircle className="w-4 h-4" />
                                   </button>
                                   <button
-                                    onClick={() => setEditingPointage(null)}
+                                    onClick={() => {
+                                      // Sauvegarder tous les pointages de cet employé avant de quitter le mode édition
+                                      saveAllPointagesForEmployee(emp.id, pointage.id);
+                                      setEditingPointage(null);
+                                    }}
                                     className="p-1 text-blue-500 hover:bg-blue-500/20 rounded"
-                                    title="Terminer"
+                                    title="Enregistrer"
                                   >
                                     <Save className="w-4 h-4" />
                                   </button>
