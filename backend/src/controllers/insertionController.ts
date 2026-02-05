@@ -2100,3 +2100,179 @@ async function calculateProgressionWithConfig(employee: any, config: any): Promi
 
   return Math.round(score);
 }
+
+// ============================================
+// FICHES DE PAIE
+// ============================================
+
+// Liste des fiches de paie d'un salarié
+export const getFichesPaie = async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const { annee } = req.query;
+
+    const where: any = { employeeId };
+    if (annee) {
+      where.annee = parseInt(annee as string);
+    }
+
+    const fichesPaie = await prisma.fichePaie.findMany({
+      where,
+      orderBy: [{ annee: 'desc' }, { mois: 'desc' }]
+    });
+
+    // Générer les URLs signées pour les fichiers GCS
+    const fichesWithUrls = await Promise.all(
+      fichesPaie.map(async (fiche) => {
+        if (fiche.url && fiche.url.startsWith('gs://')) {
+          const signedUrl = await getSignedUrl(fiche.url);
+          return { ...fiche, signedUrl };
+        }
+        return { ...fiche, signedUrl: fiche.url };
+      })
+    );
+
+    res.json({ success: true, data: fichesWithUrls });
+  } catch (error) {
+    console.error('Erreur getFichesPaie:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// Créer/uploader une fiche de paie
+export const createFichePaie = async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const { mois, annee, notes } = req.body;
+
+    // Vérifier que le fichier a été uploadé
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Aucun fichier fourni' });
+    }
+
+    // Vérifier que mois et année sont fournis
+    if (!mois || !annee) {
+      return res.status(400).json({ success: false, error: 'Mois et année requis' });
+    }
+
+    const moisNum = parseInt(mois);
+    const anneeNum = parseInt(annee);
+
+    // Vérifier si une fiche existe déjà pour ce mois/année
+    const existingFiche = await prisma.fichePaie.findUnique({
+      where: {
+        employeeId_mois_annee: {
+          employeeId,
+          mois: moisNum,
+          annee: anneeNum
+        }
+      }
+    });
+
+    if (existingFiche) {
+      // Supprimer l'ancien fichier de GCS si présent
+      if (existingFiche.url && existingFiche.url.startsWith('gs://')) {
+        try {
+          await deleteFromGCS(existingFiche.url);
+        } catch (e) {
+          console.error('Erreur suppression ancien fichier GCS:', e);
+        }
+      }
+    }
+
+    // Upload vers GCS
+    const fileUrl = await uploadToGCS(req.file, `fiches-paie/${employeeId}/${anneeNum}`);
+
+    // Créer ou mettre à jour la fiche
+    const fichePaie = await prisma.fichePaie.upsert({
+      where: {
+        employeeId_mois_annee: {
+          employeeId,
+          mois: moisNum,
+          annee: anneeNum
+        }
+      },
+      update: {
+        url: fileUrl,
+        nomFichier: req.file.originalname,
+        taille: req.file.size,
+        mimeType: req.file.mimetype,
+        notes: notes || null
+      },
+      create: {
+        employeeId,
+        mois: moisNum,
+        annee: anneeNum,
+        url: fileUrl,
+        nomFichier: req.file.originalname,
+        taille: req.file.size,
+        mimeType: req.file.mimetype,
+        notes: notes || null
+      }
+    });
+
+    res.status(201).json({ success: true, data: fichePaie });
+  } catch (error) {
+    console.error('Erreur createFichePaie:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// Télécharger/visualiser une fiche de paie
+export const downloadFichePaie = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const fichePaie = await prisma.fichePaie.findUnique({ where: { id } });
+    if (!fichePaie || !fichePaie.url) {
+      return res.status(404).json({ success: false, error: 'Fiche de paie non trouvée' });
+    }
+
+    // Si c'est un chemin GCS, streamer le fichier
+    if (fichePaie.url.startsWith('gs://')) {
+      const result = await streamFromGCS(fichePaie.url);
+      if (!result) {
+        return res.status(404).json({ success: false, error: 'Fichier non trouvé dans le stockage' });
+      }
+
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Disposition', `inline; filename="${fichePaie.nomFichier}"`);
+      result.stream.pipe(res);
+    } else {
+      // URL externe, rediriger
+      res.redirect(fichePaie.url);
+    }
+  } catch (error) {
+    console.error('Erreur downloadFichePaie:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// Supprimer une fiche de paie
+export const deleteFichePaie = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const fichePaie = await prisma.fichePaie.findUnique({ where: { id } });
+    if (!fichePaie) {
+      return res.status(404).json({ success: false, error: 'Fiche de paie non trouvée' });
+    }
+
+    // Supprimer le fichier de GCS si présent
+    if (fichePaie.url && fichePaie.url.startsWith('gs://')) {
+      try {
+        await deleteFromGCS(fichePaie.url);
+      } catch (e) {
+        console.error('Erreur suppression fichier GCS:', e);
+      }
+    }
+
+    // Supprimer l'entrée de la base
+    await prisma.fichePaie.delete({ where: { id } });
+
+    res.json({ success: true, message: 'Fiche de paie supprimée' });
+  } catch (error) {
+    console.error('Erreur deleteFichePaie:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};

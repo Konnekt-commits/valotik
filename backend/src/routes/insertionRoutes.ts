@@ -100,4 +100,12 @@ router.get('/employees/:employeeId/formations', insertionController.getFormation
 router.post('/employees/:employeeId/formations', insertionController.createFormation);
 router.put('/formations/:id', insertionController.updateFormation);
 
+// ============================================
+// FICHES DE PAIE
+// ============================================
+router.get('/employees/:employeeId/fiches-paie', insertionController.getFichesPaie);
+router.post('/employees/:employeeId/fiches-paie', upload.single('file'), insertionController.createFichePaie);
+router.get('/fiches-paie/:id/download', insertionController.downloadFichePaie);
+router.delete('/fiches-paie/:id', insertionController.deleteFichePaie);
+
 export default router;

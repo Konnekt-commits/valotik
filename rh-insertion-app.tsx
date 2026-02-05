@@ -203,7 +203,7 @@ export default function RHInsertionApp() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'info' | 'pro' | 'admin' | 'rh'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'pro' | 'admin' | 'rh' | 'paie' | 'parcours'>('info');
 
   // Modals
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false);
@@ -250,6 +250,14 @@ export default function RHInsertionApp() {
   const [parcoursData, setParcoursData] = useState<any>(null);
   const [parcoursLoading, setParcoursLoading] = useState(false);
   const [selectedParcoursEvent, setSelectedParcoursEvent] = useState<any>(null);
+
+  // Fiches de paie states
+  const [fichesPaie, setFichesPaie] = useState<any[]>([]);
+  const [fichesPaieLoading, setFichesPaieLoading] = useState(false);
+  const [fichesPaieAnnee, setFichesPaieAnnee] = useState<number>(new Date().getFullYear());
+  const [showFichePaieModal, setShowFichePaieModal] = useState(false);
+  const [fichePaieForm, setFichePaieForm] = useState<any>({ mois: new Date().getMonth() + 1, annee: new Date().getFullYear() });
+  const [fichePaieFile, setFichePaieFile] = useState<File | null>(null);
 
   // Objectifs states
   const [objectifConfig, setObjectifConfig] = useState<any>(null);
@@ -935,11 +943,19 @@ export default function RHInsertionApp() {
   // CRUD Document
   const saveDocument = async () => {
     if (!selectedEmployee) return;
+
+    // Validation spécifique pour les avenants
+    if (documentForm.typeDocument === 'AVENANT' && !documentForm.dateExpiration) {
+      setNotification({ type: 'error', message: 'La date de fin de contrat est obligatoire pour les avenants' });
+      return;
+    }
+
     setSaving(true);
     try {
       const formData = new FormData();
       formData.append('typeDocument', documentForm.typeDocument || '');
       formData.append('nomDocument', documentForm.nomDocument || '');
+      formData.append('categorie', documentForm.categorie || 'ADMIN');
       if (documentForm.dateExpiration) {
         formData.append('dateExpiration', documentForm.dateExpiration);
       }
@@ -957,9 +973,19 @@ export default function RHInsertionApp() {
         setShowDocumentModal(false);
         setDocumentForm({});
         loadEmployeeDetails(selectedEmployee.id);
+
+        // Notification spécifique pour les avenants
+        if (documentForm.typeDocument === 'AVENANT') {
+          setNotification({ type: 'success', message: `Avenant enregistré. La date de fin (${formatDate(documentForm.dateExpiration)}) a été ajoutée à l'agenda.` });
+        } else {
+          setNotification({ type: 'success', message: 'Document enregistré' });
+        }
+      } else {
+        setNotification({ type: 'error', message: 'Erreur lors de l\'enregistrement' });
       }
     } catch (error) {
       console.error('Erreur:', error);
+      setNotification({ type: 'error', message: 'Erreur lors de l\'enregistrement' });
     } finally {
       setSaving(false);
     }
@@ -5288,14 +5314,14 @@ export default function RHInsertionApp() {
     if (!selectedEmployee) return null;
     const emp = selectedEmployee;
     const docsRH = [
-      { type: 'PASS_INCLUSION', label: 'Pass Inclusion (Agrément IAE)', obligatoire: true, icon: BadgeCheck },
-      { type: 'DPAE', label: 'DPAE - Déclaration Préalable à l\'Embauche', obligatoire: true, icon: FileSignature },
-      { type: 'FICHE_EMBAUCHE', label: 'Fiche d\'embauche', obligatoire: true, icon: ClipboardList },
-      { type: 'CONTRAT', label: 'Contrat de travail signé (CDDI)', obligatoire: true, icon: FileText },
-      { type: 'AVENANT', label: 'Avenant(s) au contrat', obligatoire: false, icon: FileText },
-      { type: 'RENOUVELLEMENT', label: 'Renouvellement + nouvelle DPAE', obligatoire: false, icon: RefreshCw },
-      { type: 'SOLDE_TOUT_COMPTE', label: 'Solde de tout compte', obligatoire: false, icon: Euro },
-      { type: 'CERTIFICAT_TRAVAIL', label: 'Certificat de travail', obligatoire: false, icon: Award }
+      { type: 'PASS_INCLUSION', label: 'Pass Inclusion (Agrément IAE)', obligatoire: true, icon: BadgeCheck, multiple: false },
+      { type: 'DPAE', label: 'DPAE - Déclaration Préalable à l\'Embauche', obligatoire: true, icon: FileSignature, multiple: true },
+      { type: 'FICHE_EMBAUCHE', label: 'Fiche d\'embauche', obligatoire: true, icon: ClipboardList, multiple: false },
+      { type: 'CONTRAT', label: 'Contrat de travail signé (CDDI)', obligatoire: true, icon: FileText, multiple: true },
+      { type: 'AVENANT', label: 'Avenant(s) au contrat', obligatoire: false, icon: FileText, multiple: true, needsDateFin: true },
+      { type: 'RENOUVELLEMENT', label: 'Renouvellement + nouvelle DPAE', obligatoire: false, icon: RefreshCw, multiple: true },
+      { type: 'SOLDE_TOUT_COMPTE', label: 'Solde de tout compte', obligatoire: false, icon: Euro, multiple: false },
+      { type: 'CERTIFICAT_TRAVAIL', label: 'Certificat de travail', obligatoire: false, icon: Award, multiple: false }
     ];
 
     return (
@@ -5307,39 +5333,82 @@ export default function RHInsertionApp() {
           </button>}>
           <div className="space-y-3">
             {docsRH.map(doc => {
-              const docPresent = emp.documents?.find((d: any) => d.typeDocument === doc.type);
+              // Récupérer TOUS les documents de ce type (pas juste le premier)
+              const docsPresents = emp.documents?.filter((d: any) => d.typeDocument === doc.type) || [];
+              const hasDoc = docsPresents.length > 0;
+
               return (
-                <div key={doc.type} className={`flex items-center justify-between p-4 rounded-lg border ${
-                  docPresent
+                <div key={doc.type} className={`p-4 rounded-lg border ${
+                  hasDoc
                     ? `${bg('bg-green-500/10', 'bg-green-50')} border-green-500/50`
                     : doc.obligatoire
                       ? 'bg-red-500/10 border-red-500/50'
                       : `${bg('bg-slate-700/50', 'bg-gray-50')} ${bg('border-slate-600', 'border-gray-200')}`
                 }`}>
-                  <div className="flex items-center gap-4">
-                    <doc.icon className={`w-6 h-6 ${docPresent ? 'text-green-500' : doc.obligatoire ? 'text-red-500' : text('text-slate-400', 'text-gray-400')}`} />
-                    <div>
-                      <p className={`font-medium ${text('text-white', 'text-gray-900')}`}>
-                        {doc.label} {doc.obligatoire && <span className="text-red-500">*</span>}
-                      </p>
-                      {docPresent ? (
-                        <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>Ajouté le {formatDate(docPresent.createdAt)}</p>
-                      ) : (
-                        <p className={`text-xs ${doc.obligatoire ? 'text-red-400' : text('text-slate-400', 'text-gray-500')}`}>
-                          {doc.obligatoire ? 'OBLIGATOIRE' : 'Non fourni'}
+                  {/* En-tête de la ligne */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <doc.icon className={`w-6 h-6 ${hasDoc ? 'text-green-500' : doc.obligatoire ? 'text-red-500' : text('text-slate-400', 'text-gray-400')}`} />
+                      <div>
+                        <p className={`font-medium ${text('text-white', 'text-gray-900')}`}>
+                          {doc.label} {doc.obligatoire && <span className="text-red-500">*</span>}
+                          {hasDoc && doc.multiple && <span className={`ml-2 text-xs ${text('text-slate-400', 'text-gray-500')}`}>({docsPresents.length} document{docsPresents.length > 1 ? 's' : ''})</span>}
                         </p>
-                      )}
+                        {!hasDoc && (
+                          <p className={`text-xs ${doc.obligatoire ? 'text-red-400' : text('text-slate-400', 'text-gray-500')}`}>
+                            {doc.obligatoire ? 'OBLIGATOIRE' : 'Non fourni'}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                    {/* Bouton Ajouter (toujours visible si multiple, sinon seulement si pas de doc) */}
+                    {(doc.multiple || !hasDoc) && (
+                      <button
+                        onClick={() => {
+                          setDocumentForm({
+                            categorie: 'RH',
+                            typeDocument: doc.type,
+                            nomDocument: doc.label + (docsPresents.length > 0 ? ` ${docsPresents.length + 1}` : ''),
+                            estObligatoire: doc.obligatoire,
+                            needsDateFin: doc.needsDateFin || false
+                          });
+                          setShowDocumentModal(true);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-1"
+                      >
+                        <Upload className="w-4 h-4" /> {hasDoc && doc.multiple ? 'Ajouter' : 'Ajouter'}
+                      </button>
+                    )}
                   </div>
-                  {docPresent ? (
-                    <div className="flex gap-2">
-                      <button onClick={() => viewDocument(docPresent.id, docPresent.nomDocument || doc.label)} className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded text-sm"><Eye className="w-4 h-4" /></button>
-                      <button onClick={() => deleteDocument(docPresent.id)} className="p-1.5 bg-red-500/20 text-red-400 rounded"><Trash2 className="w-4 h-4" /></button>
+
+                  {/* Liste des documents uploadés pour ce type */}
+                  {hasDoc && (
+                    <div className="mt-3 space-y-2">
+                      {docsPresents.map((docPresent: any, idx: number) => (
+                        <div key={docPresent.id} className={`flex items-center justify-between p-3 rounded-lg ${bg('bg-slate-700/30', 'bg-white')} border ${bg('border-slate-600/50', 'border-gray-200')}`}>
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-4 h-4 text-blue-400" />
+                            <div>
+                              <p className={`text-sm font-medium ${text('text-white', 'text-gray-900')}`}>
+                                {docPresent.nomDocument || `${doc.label} ${idx + 1}`}
+                              </p>
+                              <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>
+                                Ajouté le {formatDate(docPresent.createdAt)}
+                                {docPresent.dateExpiration && (
+                                  <span className="ml-2">
+                                    • Échéance : <span className={new Date(docPresent.dateExpiration) < new Date() ? 'text-red-400' : 'text-green-400'}>{formatDate(docPresent.dateExpiration)}</span>
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => viewDocument(docPresent.id, docPresent.nomDocument || doc.label)} className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => deleteDocument(docPresent.id)} className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    <button onClick={() => { setDocumentForm({ categorie: 'RH', typeDocument: doc.type, nomDocument: doc.label, estObligatoire: doc.obligatoire }); setShowDocumentModal(true); }} className="px-4 py-2 bg-blue-600 text-white rounded text-sm">
-                      <Upload className="w-4 h-4 inline mr-1" /> Ajouter
-                    </button>
                   )}
                 </div>
               );
@@ -5403,6 +5472,344 @@ export default function RHInsertionApp() {
             <p className={`text-sm text-green-400 text-center py-8`}>Aucune procédure disciplinaire</p>
           )}
         </Section>
+      </div>
+    );
+  };
+
+  // FICHES DE PAIE
+  const loadFichesPaie = useCallback(async (employeeId: string, annee?: number) => {
+    setFichesPaieLoading(true);
+    try {
+      const url = annee
+        ? `${API_URL}/employees/${employeeId}/fiches-paie?annee=${annee}`
+        : `${API_URL}/employees/${employeeId}/fiches-paie`;
+      const res = await authFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setFichesPaie(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement fiches de paie:', error);
+    } finally {
+      setFichesPaieLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'paie' && selectedEmployee?.id) {
+      loadFichesPaie(selectedEmployee.id, fichesPaieAnnee);
+    }
+  }, [activeTab, selectedEmployee?.id, fichesPaieAnnee, loadFichesPaie]);
+
+  const uploadFichePaie = async () => {
+    if (!selectedEmployee || !fichePaieFile) return;
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', fichePaieFile);
+      formData.append('mois', fichePaieForm.mois.toString());
+      formData.append('annee', fichePaieForm.annee.toString());
+      if (fichePaieForm.notes) formData.append('notes', fichePaieForm.notes);
+
+      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/fiches-paie`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+        body: formData
+      });
+
+      if (res.ok) {
+        setShowFichePaieModal(false);
+        setFichePaieFile(null);
+        setFichePaieForm({ mois: new Date().getMonth() + 1, annee: new Date().getFullYear() });
+        loadFichesPaie(selectedEmployee.id, fichesPaieAnnee);
+        setNotification({ type: 'success', message: 'Fiche de paie enregistrée' });
+      } else {
+        const data = await res.json();
+        setNotification({ type: 'error', message: data.error || 'Erreur lors de l\'upload' });
+      }
+    } catch (error) {
+      console.error('Erreur upload fiche de paie:', error);
+      setNotification({ type: 'error', message: 'Erreur lors de l\'upload' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteFichePaie = async (id: string) => {
+    if (!confirm('Supprimer cette fiche de paie ?')) return;
+    try {
+      const res = await authFetch(`${API_URL}/fiches-paie/${id}`, { method: 'DELETE' });
+      if (res.ok && selectedEmployee) {
+        loadFichesPaie(selectedEmployee.id, fichesPaieAnnee);
+        setNotification({ type: 'success', message: 'Fiche de paie supprimée' });
+      }
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+    }
+  };
+
+  const viewFichePaie = async (id: string, nomFichier: string) => {
+    try {
+      const res = await authFetch(`${API_URL}/fiches-paie/${id}/download`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+        setPreviewType(blob.type);
+        setPreviewName(nomFichier);
+        setShowDocumentPreview(true);
+      }
+    } catch (error) {
+      console.error('Erreur visualisation:', error);
+    }
+  };
+
+  const renderFichesPaie = () => {
+    if (!selectedEmployee) return null;
+
+    const moisNoms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const anneeActuelle = new Date().getFullYear();
+    const anneesDisponibles = [anneeActuelle, anneeActuelle - 1, anneeActuelle - 2];
+
+    // Créer un map des fiches par mois pour l'année sélectionnée
+    const fichesByMois: Record<number, any> = {};
+    fichesPaie.forEach(f => {
+      if (f.annee === fichesPaieAnnee) {
+        fichesByMois[f.mois] = f;
+      }
+    });
+
+    return (
+      <div className="space-y-6">
+        <Section
+          title="Fiches de Paie"
+          icon={Receipt}
+          action={
+            <button
+              onClick={() => {
+                setFichePaieForm({ mois: new Date().getMonth() + 1, annee: fichesPaieAnnee });
+                setFichePaieFile(null);
+                setShowFichePaieModal(true);
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" /> Ajouter
+            </button>
+          }
+        >
+          {/* Sélecteur d'année */}
+          <div className="flex items-center gap-4 mb-6">
+            <span className={`text-sm font-medium ${text('text-slate-400', 'text-gray-600')}`}>Année :</span>
+            <div className="flex gap-2">
+              {anneesDisponibles.map(a => (
+                <button
+                  key={a}
+                  onClick={() => setFichesPaieAnnee(a)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    fichesPaieAnnee === a
+                      ? 'bg-blue-600 text-white'
+                      : `${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-100 hover:bg-gray-200')} ${text('text-slate-300', 'text-gray-700')}`
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {fichesPaieLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {moisNoms.map((nom, index) => {
+                const mois = index + 1;
+                const fiche = fichesByMois[mois];
+                const isFuture = fichesPaieAnnee === anneeActuelle && mois > new Date().getMonth() + 1;
+
+                return (
+                  <div
+                    key={mois}
+                    className={`relative p-4 rounded-xl border-2 transition-all ${
+                      fiche
+                        ? 'bg-green-500/10 border-green-500/50 cursor-pointer hover:bg-green-500/20'
+                        : isFuture
+                          ? `${bg('bg-slate-800/50', 'bg-gray-50')} border-dashed ${bg('border-slate-700', 'border-gray-300')} opacity-50`
+                          : `${bg('bg-slate-800/50 hover:bg-slate-700/50', 'bg-gray-50 hover:bg-gray-100')} ${bg('border-slate-700', 'border-gray-200')} cursor-pointer`
+                    }`}
+                    onClick={() => {
+                      if (fiche) {
+                        viewFichePaie(fiche.id, fiche.nomFichier);
+                      } else if (!isFuture) {
+                        setFichePaieForm({ mois, annee: fichesPaieAnnee });
+                        setFichePaieFile(null);
+                        setShowFichePaieModal(true);
+                      }
+                    }}
+                  >
+                    <div className="text-center">
+                      <p className={`text-sm font-medium ${text('text-white', 'text-gray-900')}`}>{nom}</p>
+                      <p className={`text-xs mt-1 ${text('text-slate-400', 'text-gray-500')}`}>{fichesPaieAnnee}</p>
+                      <div className="mt-3">
+                        {fiche ? (
+                          <CheckCircle className="w-8 h-8 text-green-500 mx-auto" />
+                        ) : isFuture ? (
+                          <Clock className="w-8 h-8 text-slate-600 mx-auto" />
+                        ) : (
+                          <div className={`w-8 h-8 mx-auto rounded-full border-2 border-dashed ${bg('border-slate-600', 'border-gray-300')} flex items-center justify-center`}>
+                            <Plus className={`w-4 h-4 ${text('text-slate-500', 'text-gray-400')}`} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {fiche && (
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteFichePaie(fiche.id); }}
+                          className="p-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Récapitulatif */}
+          <div className={`mt-6 p-4 rounded-lg ${bg('bg-slate-700/50', 'bg-gray-100')}`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-sm ${text('text-slate-400', 'text-gray-600')}`}>
+                Fiches de paie {fichesPaieAnnee}
+              </span>
+              <span className={`text-sm font-medium ${text('text-white', 'text-gray-900')}`}>
+                {Object.keys(fichesByMois).length} / 12 mois
+              </span>
+            </div>
+            <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full transition-all"
+                style={{ width: `${(Object.keys(fichesByMois).length / 12) * 100}%` }}
+              />
+            </div>
+          </div>
+        </Section>
+
+        {/* Modal d'upload */}
+        {showFichePaieModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-md w-full`}>
+              <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+                <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
+                  {fichesByMois[fichePaieForm.mois] ? 'Remplacer la fiche de paie' : 'Ajouter une fiche de paie'}
+                </h2>
+                <button onClick={() => setShowFichePaieModal(false)}><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Mois</label>
+                    <select
+                      value={fichePaieForm.mois}
+                      onChange={(e) => setFichePaieForm({ ...fichePaieForm, mois: parseInt(e.target.value) })}
+                      className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}
+                    >
+                      {moisNoms.map((nom, idx) => (
+                        <option key={idx} value={idx + 1}>{nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Année</label>
+                    <select
+                      value={fichePaieForm.annee}
+                      onChange={(e) => setFichePaieForm({ ...fichePaieForm, annee: parseInt(e.target.value) })}
+                      className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}
+                    >
+                      {anneesDisponibles.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Fichier PDF <span className="text-red-500">*</span></label>
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                      fichePaieFile
+                        ? 'border-green-500/50 bg-green-500/10'
+                        : `${bg('border-slate-600 hover:border-slate-500', 'border-gray-300 hover:border-gray-400')}`
+                    }`}
+                    onClick={() => document.getElementById('fichePaieInput')?.click()}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type === 'application/pdf') {
+                        setFichePaieFile(file);
+                      }
+                    }}
+                  >
+                    <input
+                      id="fichePaieInput"
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setFichePaieFile(file);
+                      }}
+                    />
+                    {fichePaieFile ? (
+                      <div className="flex items-center justify-center gap-2 text-green-500">
+                        <CheckCircle className="w-6 h-6" />
+                        <span className="text-sm font-medium">{fichePaieFile.name}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className={`w-8 h-8 mx-auto mb-2 ${text('text-slate-500', 'text-gray-400')}`} />
+                        <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>
+                          Cliquez ou glissez un fichier PDF
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Notes (optionnel)</label>
+                  <textarea
+                    value={fichePaieForm.notes || ''}
+                    onChange={(e) => setFichePaieForm({ ...fichePaieForm, notes: e.target.value })}
+                    rows={2}
+                    className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}
+                    placeholder="Notes éventuelles..."
+                  />
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowFichePaieModal(false)}
+                  className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={uploadFichePaie}
+                  disabled={saving || !fichePaieFile}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                >
+                  {saving ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -5585,7 +5992,7 @@ export default function RHInsertionApp() {
             {/* Onglets */}
             <div className={`${bg('bg-slate-800', 'bg-white')} rounded-t-xl border-b ${bg('border-slate-700', 'border-gray-200')}`}>
               <div className="flex">
-                {[{ id: 'info', label: 'Informations', icon: User }, { id: 'parcours', label: 'Parcours', icon: TrendingUp }, { id: 'pro', label: 'Dossier PRO', icon: Briefcase }, { id: 'admin', label: 'Dossier ADMIN', icon: FolderOpen }, { id: 'rh', label: 'Dossier RH', icon: FileText }].map(tab => (
+                {[{ id: 'info', label: 'Informations', icon: User }, { id: 'parcours', label: 'Parcours', icon: TrendingUp }, { id: 'pro', label: 'Dossier PRO', icon: Briefcase }, { id: 'admin', label: 'Dossier ADMIN', icon: FolderOpen }, { id: 'rh', label: 'Dossier RH', icon: FileText }, { id: 'paie', label: 'Fiches de Paie', icon: Receipt }].map(tab => (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
                     className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-500 text-blue-500' : `border-transparent ${text('text-slate-400 hover:text-white', 'text-gray-500 hover:text-gray-900')}`}`}>
                     <tab.icon className="w-4 h-4" />{tab.label}
@@ -5599,6 +6006,7 @@ export default function RHInsertionApp() {
               {activeTab === 'pro' && renderDossierPro()}
               {activeTab === 'admin' && renderDossierAdmin()}
               {activeTab === 'rh' && renderDossierRH()}
+              {activeTab === 'paie' && renderFichesPaie()}
             </div>
           </div>
         ) : activeView === 'pointages' ? (
@@ -5911,11 +6319,36 @@ export default function RHInsertionApp() {
             options={[
               {value:'CNI',label:'Carte d\'identité'},{value:'CARTE_VITALE',label:'Carte Vitale'},{value:'JUSTIF_DOMICILE',label:'Justificatif domicile'},
               {value:'ATTESTATION_SECU',label:'Attestation sécu'},{value:'RIB',label:'RIB'},{value:'PERMIS',label:'Permis'},
-              {value:'PASS_INCLUSION',label:'Pass Inclusion'},{value:'DPAE',label:'DPAE'},{value:'CONTRAT',label:'Contrat'},
+              {value:'PASS_INCLUSION',label:'Pass Inclusion'},{value:'DPAE',label:'DPAE'},{value:'FICHE_EMBAUCHE',label:'Fiche d\'embauche'},
+              {value:'CONTRAT',label:'Contrat de travail'},{value:'AVENANT',label:'Avenant au contrat'},{value:'RENOUVELLEMENT',label:'Renouvellement + DPAE'},
+              {value:'SOLDE_TOUT_COMPTE',label:'Solde de tout compte'},{value:'CERTIFICAT_TRAVAIL',label:'Certificat de travail'},
               {value:'ATTESTATION_FT',label:'Attestation France Travail'},{value:'ATTESTATION_CAF',label:'Attestation CAF'}
             ]} />
           <Input label="Nom du fichier" name="nomDocument" value={documentForm.nomDocument} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
-          <Input label="Date d'expiration" name="dateExpiration" type="date" value={documentForm.dateExpiration} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
+
+          {/* Champ Date de fin pour les avenants (sera ajouté à l'agenda) */}
+          {documentForm.typeDocument === 'AVENANT' && (
+            <div className={`p-4 rounded-lg ${bg('bg-amber-500/10', 'bg-amber-50')} border ${bg('border-amber-500/30', 'border-amber-200')}`}>
+              <p className={`text-xs font-medium mb-2 ${text('text-amber-400', 'text-amber-700')}`}>
+                <CalendarDays className="w-4 h-4 inline mr-1" />
+                Nouvelle date de fin de contrat (sera ajoutée à l'agenda)
+              </p>
+              <Input
+                label="Date de fin de contrat"
+                name="dateExpiration"
+                type="date"
+                value={documentForm.dateExpiration}
+                onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})}
+                required
+              />
+            </div>
+          )}
+
+          {/* Date d'expiration standard pour les autres documents */}
+          {documentForm.typeDocument !== 'AVENANT' && (
+            <Input label="Date d'expiration (optionnel)" name="dateExpiration" type="date" value={documentForm.dateExpiration} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
+          )}
+
           <div
             className={`p-8 border-2 border-dashed ${documentForm.file ? 'border-green-500 bg-green-500/10' : 'border-slate-500'} rounded-lg text-center cursor-pointer hover:border-blue-500 transition-colors`}
             onClick={() => document.getElementById('document-file-input')?.click()}

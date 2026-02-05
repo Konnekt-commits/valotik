@@ -566,8 +566,33 @@ model InsertionEmployee {
   pointages           PointageMensuel[]
   objectifsIndividuels ObjectifIndividuel[]
   autorisationsSortie AutorisationSortie[]
+  fichesPaie          FichePaie[]
 
   @@map("insertion_employees")
+}
+
+// Fiches de paie - Bulletins de salaire mensuels
+model FichePaie {
+  id              String   @id @default(cuid())
+  employeeId      String
+
+  mois            Int      // 1-12
+  annee           Int      // 2024, 2025, etc.
+
+  // Fichier
+  url             String   @db.VarChar(500)
+  nomFichier      String   @db.VarChar(255)
+  taille          Int?
+  mimeType        String?  @db.VarChar(100)
+
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee        InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, mois, annee]) // Une seule fiche par mois/année
+  @@map("fiches_paie")
 }
 
 // Autorisation de sortie anticipée
