@@ -4394,34 +4394,17 @@ export default function RHInsertionApp() {
                           <td className="px-2 py-2 text-center">
                             <div className="flex items-center justify-center gap-1">
                               {isEditing ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      // Appliquer heures standard sur jours ouvrés sans pointage
-                                      const joursOuvresSansPointage = pointagesData.joursMois
-                                        .filter((j: any) => !j.estWeekend && !(pointageValues[emp.id]?.[j.date] > 0))
-                                        .map((j: any) => j.date);
-                                      if (joursOuvresSansPointage.length > 0) {
-                                        appliquerHeuresStandard(emp.id, pointage.id, emp.dureeHebdo, joursOuvresSansPointage);
-                                      }
-                                    }}
-                                    className="p-1 text-green-500 hover:bg-green-500/20 rounded"
-                                    title="Remplir jours vides"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      // Sauvegarder tous les pointages de cet employé avant de quitter le mode édition
-                                      saveAllPointagesForEmployee(emp.id, pointage.id);
-                                      setEditingPointage(null);
-                                    }}
-                                    className="p-1 text-blue-500 hover:bg-blue-500/20 rounded"
-                                    title="Enregistrer"
-                                  >
-                                    <Save className="w-4 h-4" />
-                                  </button>
-                                </>
+                                <button
+                                  onClick={() => {
+                                    // Sauvegarder tous les pointages de cet employé avant de quitter le mode édition
+                                    saveAllPointagesForEmployee(emp.id, pointage.id);
+                                    setEditingPointage(null);
+                                  }}
+                                  className="p-1 text-blue-500 hover:bg-blue-500/20 rounded"
+                                  title="Enregistrer"
+                                >
+                                  <Save className="w-4 h-4" />
+                                </button>
                               ) : pointage.statut === 'valide' ? (
                                 <span className="px-2 py-1 rounded text-xs bg-green-500/20 text-green-500 font-medium">Validé</span>
                               ) : (
