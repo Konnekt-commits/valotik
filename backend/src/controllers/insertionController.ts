@@ -149,21 +149,41 @@ export const getInsertionEmployee = async (req: Request, res: Response) => {
   }
 };
 
+// Champs autorisés pour la création d'un salarié (excluant les relations et les champs auto-générés)
+const ALLOWED_EMPLOYEE_CREATE_FIELDS = [
+  'civilite', 'nom', 'prenom', 'nomUsage', 'dateNaissance', 'lieuNaissance', 'nationalite', 'numeroSecu',
+  'adresse', 'codePostal', 'ville', 'telephone', 'telephoneSecondaire', 'email',
+  'situationFamiliale', 'nombreEnfants', 'permisConduire', 'typePermis', 'vehicule',
+  'typePieceIdentite', 'numeroPieceIdentite', 'dateExpirationPiece',
+  'inscritFranceTravail', 'numeroFranceTravail', 'beneficiaireRSA', 'beneficiaireASS', 'beneficiaireAAH', 'reconnaissanceTH',
+  'passInclusionNumero', 'passInclusionDate', 'passInclusionExpiration', 'eligibiliteIAE',
+  'dateEntree', 'dateSortie', 'typeContrat', 'dureeHebdo', 'poste', 'salaireBrut',
+  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes'
+];
+
 // Créer un salarié
 export const createInsertionEmployee = async (req: Request, res: Response) => {
   try {
-    const data = req.body;
+    const rawData = req.body;
+
+    // Filtrer uniquement les champs autorisés
+    const data: Record<string, any> = {};
+    for (const field of ALLOWED_EMPLOYEE_CREATE_FIELDS) {
+      if (rawData[field] !== undefined) {
+        data[field] = rawData[field];
+      }
+    }
+
+    // Convertir les dates
+    if (data.dateNaissance) data.dateNaissance = new Date(data.dateNaissance);
+    if (data.dateEntree) data.dateEntree = new Date(data.dateEntree);
+    if (data.dateSortie) data.dateSortie = new Date(data.dateSortie);
+    if (data.dateExpirationPiece) data.dateExpirationPiece = new Date(data.dateExpirationPiece);
+    if (data.passInclusionDate) data.passInclusionDate = new Date(data.passInclusionDate);
+    if (data.passInclusionExpiration) data.passInclusionExpiration = new Date(data.passInclusionExpiration);
 
     const employee = await prisma.insertionEmployee.create({
-      data: {
-        ...data,
-        dateNaissance: new Date(data.dateNaissance),
-        dateEntree: new Date(data.dateEntree),
-        dateSortie: data.dateSortie ? new Date(data.dateSortie) : null,
-        dateExpirationPiece: data.dateExpirationPiece ? new Date(data.dateExpirationPiece) : null,
-        passInclusionDate: data.passInclusionDate ? new Date(data.passInclusionDate) : null,
-        passInclusionExpiration: data.passInclusionExpiration ? new Date(data.passInclusionExpiration) : null
-      },
+      data: data as any,
       include: {
         fichePro: true
       }
@@ -176,11 +196,31 @@ export const createInsertionEmployee = async (req: Request, res: Response) => {
   }
 };
 
+// Champs autorisés pour la mise à jour d'un salarié (excluant les relations et les champs auto-générés)
+const ALLOWED_EMPLOYEE_FIELDS = [
+  'civilite', 'nom', 'prenom', 'nomUsage', 'dateNaissance', 'lieuNaissance', 'nationalite', 'numeroSecu',
+  'adresse', 'codePostal', 'ville', 'telephone', 'telephoneSecondaire', 'email',
+  'situationFamiliale', 'nombreEnfants', 'permisConduire', 'typePermis', 'vehicule',
+  'typePieceIdentite', 'numeroPieceIdentite', 'dateExpirationPiece',
+  'inscritFranceTravail', 'numeroFranceTravail', 'beneficiaireRSA', 'beneficiaireASS', 'beneficiaireAAH', 'reconnaissanceTH',
+  'passInclusionNumero', 'passInclusionDate', 'passInclusionExpiration', 'eligibiliteIAE',
+  'dateEntree', 'dateSortie', 'typeContrat', 'dureeHebdo', 'poste', 'salaireBrut',
+  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes'
+];
+
 // Mettre à jour un salarié
 export const updateInsertionEmployee = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const data = req.body;
+    const rawData = req.body;
+
+    // Filtrer uniquement les champs autorisés (exclure les relations comme fichePro, suivis, etc.)
+    const data: Record<string, any> = {};
+    for (const field of ALLOWED_EMPLOYEE_FIELDS) {
+      if (rawData[field] !== undefined) {
+        data[field] = rawData[field];
+      }
+    }
 
     // Convertir les dates
     if (data.dateNaissance) data.dateNaissance = new Date(data.dateNaissance);

@@ -200,6 +200,7 @@ export default function RHInsertionApp() {
   const [alertes, setAlertes] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'info' | 'pro' | 'admin' | 'rh'>('info');
@@ -803,6 +804,7 @@ export default function RHInsertionApp() {
   // CRUD Employee
   const saveEmployee = async () => {
     setSaving(true);
+    setNotification(null);
     try {
       const url = selectedEmployee ? `${API_URL}/employees/${selectedEmployee.id}` : `${API_URL}/employees`;
       const method = selectedEmployee ? 'PUT' : 'POST';
@@ -815,13 +817,20 @@ export default function RHInsertionApp() {
         const data = await res.json();
         if (selectedEmployee) {
           setSelectedEmployee(data.data);
+          setFormData(data.data);
         }
         setEditingEmployee(false);
         setShowNewEmployeeModal(false);
+        setNotification({ type: 'success', message: 'Salarié enregistré avec succès' });
         loadData();
+        setTimeout(() => setNotification(null), 3000);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setNotification({ type: 'error', message: errorData.error || 'Erreur lors de l\'enregistrement' });
       }
     } catch (error) {
       console.error('Erreur save:', error);
+      setNotification({ type: 'error', message: 'Erreur de connexion au serveur' });
     } finally {
       setSaving(false);
     }
@@ -5546,6 +5555,15 @@ export default function RHInsertionApp() {
             </div>
           </div>
         </header>
+
+        {/* Notification */}
+        {notification && (
+          <div className={`mx-6 mt-4 p-4 rounded-lg flex items-center gap-3 ${notification.type === 'success' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+            {notification.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            <span>{notification.message}</span>
+            <button onClick={() => setNotification(null)} className="ml-auto hover:opacity-70"><X className="w-4 h-4" /></button>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>
