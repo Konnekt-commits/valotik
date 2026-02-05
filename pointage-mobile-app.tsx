@@ -397,15 +397,13 @@ export default function PointageMobileApp() {
           ? (isDark ? '#10b981' : '#059669')  // Emerald pour matin
           : (isDark ? '#3b82f6' : '#2563eb'); // Blue pour après-midi
 
-        // Restaurer la signature existante si elle existe
-        const existingSignature = signatures[activeSheet];
-        if (existingSignature) {
-          const img = new Image();
-          img.onload = () => {
-            ctx.drawImage(img, 0, 0, rect.width, rect.height);
-          };
-          img.src = existingSignature;
-        }
+        // Toujours commencer avec un canvas vide (ne pas restaurer l'ancienne signature)
+        // Effacer aussi la signature en mémoire pour ce panneau
+        setSignatures(prev => {
+          const newSigs = { ...prev };
+          delete newSigs[activeSheet];
+          return newSigs;
+        });
       }
     }
   }, [activeSheet, isDark]);
