@@ -236,21 +236,28 @@ export default function PointageMobileApp() {
   };
 
   // Signer une période (matin ou après-midi)
-  const signerPeriode = async (employeeId: string, periode: 'matin' | 'apresmidi', signature: string) => {
+  // Retourne true si succès, false si erreur
+  const signerPeriode = async (employeeId: string, periode: 'matin' | 'apresmidi', signature: string): Promise<boolean> => {
     const ep = employees.find(e => e.employee.id === employeeId);
-    if (!ep) return;
+    if (!ep) {
+      setSaveError('Employé non trouvé');
+      return false;
+    }
 
     const local = localPointages[employeeId];
-    if (!local) return;
+    if (!local) {
+      setSaveError('Pointage non initialisé');
+      return false;
+    }
 
     // Vérifier si déjà signé
     if (periode === 'matin' && local.matinSigne) {
       setSaveError('Le matin est déjà signé');
-      return;
+      return false;
     }
     if (periode === 'apresmidi' && local.apresmidiSigne) {
       setSaveError("L'après-midi est déjà signé");
-      return;
+      return false;
     }
 
     const savingKey = `${employeeId}_${periode}`;
@@ -271,6 +278,8 @@ export default function PointageMobileApp() {
         signature
       };
 
+      console.log('Envoi signature:', payload.pointageMensuelId, payload.date, payload.periode, payload.heures);
+
       const res = await fetch(`${API_URL}/pointage/signer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -278,6 +287,7 @@ export default function PointageMobileApp() {
       });
 
       if (res.ok) {
+        console.log('Signature enregistrée avec succès');
         setLocalPointages(prev => ({
           ...prev,
           [employeeId]: {
@@ -288,12 +298,17 @@ export default function PointageMobileApp() {
         }));
         setSaveSuccess(savingKey);
         setTimeout(() => setSaveSuccess(null), 2000);
+        return true;
       } else {
         const error = await res.json();
+        console.error('Erreur serveur:', error);
         setSaveError(error.error || 'Erreur de signature');
+        return false;
       }
     } catch (error: any) {
+      console.error('Erreur réseau:', error);
       setSaveError(error.message || 'Erreur réseau');
+      return false;
     } finally {
       setSaving(prev => ({ ...prev, [savingKey]: false }));
     }
@@ -1404,14 +1419,17 @@ export default function PointageMobileApp() {
 
                   {/* Bouton valider */}
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const sig = signatures[activeSheet];
                       if (!sig) {
                         setSaveError('Veuillez signer avant de valider');
                         return;
                       }
-                      signerPeriode(employeeId, periode as 'matin' | 'apresmidi', sig);
-                      setTimeout(() => setActiveSheet(null), 500);
+                      const success = await signerPeriode(employeeId, periode as 'matin' | 'apresmidi', sig);
+                      // Fermer le panneau SEULEMENT si la signature a réussi
+                      if (success) {
+                        setTimeout(() => setActiveSheet(null), 1000);
+                      }
                     }}
                     disabled={isSaving || !signatures[activeSheet]}
                     className={`w-full py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${signatures[activeSheet]
