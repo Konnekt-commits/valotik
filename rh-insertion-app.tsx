@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { createPortal } from 'react-dom';
 import SignatureCanvas from 'react-signature-canvas';
 import {
   Users, UserPlus, FileText, Calendar, AlertTriangle, CheckCircle, Clock,
@@ -183,16 +184,16 @@ const Section = ({ title, icon: Icon, children, action }: any) => {
   );
 };
 
-// Composant Modal déplacé hors du composant principal pour éviter les re-renders (perte de focus sur saisie)
+// Composant Modal rendu via Portal pour isoler du cycle de rendu parent (évite perte de focus sur saisie)
 const Modal = ({ show, onClose, title, children, onSave, saving }: any) => {
   const { darkMode } = useContext(ThemeContext);
   const bg = (dark: string, light: string) => darkMode ? dark : light;
   const text = (dark: string, light: string) => darkMode ? dark : light;
 
   if (!show) return null;
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`}>
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onMouseDown={(e: any) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`} onMouseDown={(e: any) => e.stopPropagation()}>
         <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
           <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{title}</h2>
           <button onClick={onClose}><X className="w-5 h-5" /></button>
@@ -203,7 +204,8 @@ const Modal = ({ show, onClose, title, children, onSave, saving }: any) => {
           <button onClick={onSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -4067,9 +4069,9 @@ export default function RHInsertionApp() {
         </div>
 
         {/* Modal Atelier */}
-        {showAtelierModal && (
+        {showAtelierModal && createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-lg w-full`}>
+            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-lg w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
               <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
                 <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
                   {editingAtelierId ? 'Modifier l\'atelier' : 'Nouvel atelier'}
@@ -4117,13 +4119,14 @@ export default function RHInsertionApp() {
                 <button onClick={saveAtelier} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* Modal Suivi Objectif */}
-        {showSuiviObjectifModal && (
+        {showSuiviObjectifModal && createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full`}>
+            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
               <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
                 <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Suivi mensuel des objectifs</h2>
                 <button onClick={() => setShowSuiviObjectifModal(false)}><X className="w-5 h-5" /></button>
@@ -4201,7 +4204,8 @@ export default function RHInsertionApp() {
                 <button onClick={saveSuiviObjectif} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );
@@ -6237,9 +6241,9 @@ export default function RHInsertionApp() {
         </Section>
 
         {/* Modal d'upload */}
-        {showFichePaieModal && (
+        {showFichePaieModal && createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-md w-full`}>
+            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-md w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
               <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
                 <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
                   {fichesByMois[fichePaieForm.mois] ? 'Remplacer la fiche de paie' : 'Ajouter une fiche de paie'}
@@ -6346,7 +6350,8 @@ export default function RHInsertionApp() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );
@@ -6928,9 +6933,9 @@ export default function RHInsertionApp() {
       </Modal>
 
       {/* Modal Autorisation de sortie */}
-      {showAutorisationSortieModal && (
+      {showAutorisationSortieModal && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`}>
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`} onMouseDown={(e: any) => e.stopPropagation()}>
             <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
               <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Nouvelle autorisation de sortie</h2>
               <button onClick={() => setShowAutorisationSortieModal(false)}><X className="w-5 h-5" /></button>
@@ -7043,7 +7048,8 @@ export default function RHInsertionApp() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <Modal show={showObjectifModal} onClose={() => { setShowObjectifModal(false); setObjectifForm({}); setEditingObjectifId(null); }} title={editingObjectifId ? "Modifier l'objectif" : "Nouvel objectif"} onSave={saveObjectifIndividuel} saving={saving}>
