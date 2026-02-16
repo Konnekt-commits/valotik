@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import SignatureCanvas from 'react-signature-canvas';
 import {
   Users, UserPlus, FileText, Calendar, AlertTriangle, CheckCircle, Clock,
   Building2, GraduationCap, Briefcase, FileCheck, Upload, Download,
@@ -10,7 +11,7 @@ import {
   Home, Menu, Car, Heart, Baby, Globe, Monitor, Euro, CreditCard,
   Building, Landmark, Shield, IdCard, FileSignature, CalendarDays,
   UserCheck, UserX, Banknote, Receipt, Scale, Gavel, BadgeCheck,
-  FileDown
+  FileDown, Smartphone, Link2, Copy, QrCode
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -182,6 +183,30 @@ const Section = ({ title, icon: Icon, children, action }: any) => {
   );
 };
 
+// Composant Modal déplacé hors du composant principal pour éviter les re-renders (perte de focus sur saisie)
+const Modal = ({ show, onClose, title, children, onSave, saving }: any) => {
+  const { darkMode } = useContext(ThemeContext);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{title}</h2>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4">{children}</div>
+        <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+          <button onClick={onSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function RHInsertionApp() {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -238,6 +263,9 @@ export default function RHInsertionApp() {
   const [pointageValues, setPointageValues] = useState<Record<string, Record<string, number>>>({});
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
 
+  // Mobile link states
+  const [mobileLinkModal, setMobileLinkModal] = useState<{ employeeId: string; employeeName: string; token?: string; loading: boolean } | null>(null);
+
   // Agenda states
   const [agendaMois, setAgendaMois] = useState<number>(new Date().getMonth() + 1);
   const [agendaAnnee, setAgendaAnnee] = useState<number>(new Date().getFullYear());
@@ -258,6 +286,14 @@ export default function RHInsertionApp() {
   const [showFichePaieModal, setShowFichePaieModal] = useState(false);
   const [fichePaieForm, setFichePaieForm] = useState<any>({ mois: new Date().getMonth() + 1, annee: new Date().getFullYear() });
   const [fichePaieFile, setFichePaieFile] = useState<File | null>(null);
+
+  // Autorisations de sortie states
+  const [autorisationsSortie, setAutorisationsSortie] = useState<any[]>([]);
+  const [autorisationsSortieLoading, setAutorisationsSortieLoading] = useState(false);
+  const [showAutorisationSortieModal, setShowAutorisationSortieModal] = useState(false);
+  const [autorisationSortieForm, setAutorisationSortieForm] = useState<any>({});
+  const autorisationSignatureRef = useRef<SignatureCanvas>(null);
+  const superieurSignatureRef = useRef<SignatureCanvas>(null);
 
   // Objectifs states
   const [objectifConfig, setObjectifConfig] = useState<any>(null);
@@ -787,6 +823,51 @@ export default function RHInsertionApp() {
     }
   };
 
+  // Générer le lien mobile pour un employé
+  const generateMobileLink = async (employeeId: string, employeeName: string) => {
+    setMobileLinkModal({ employeeId, employeeName, loading: true });
+    try {
+      const res = await authFetch(`${POINTAGE_API}/generate-token/${employeeId}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const baseUrl = window.location.origin;
+        const fullUrl = `${baseUrl}/pointage-salarie.html?token=${data.data.mobileToken}`;
+        setMobileLinkModal({ employeeId, employeeName, token: fullUrl, loading: false });
+      } else {
+        setNotification({ type: 'error', message: 'Erreur lors de la génération du lien' });
+        setMobileLinkModal(null);
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      setNotification({ type: 'error', message: 'Erreur lors de la génération du lien' });
+      setMobileLinkModal(null);
+    }
+  };
+
+  // Copier le lien mobile dans le presse-papiers
+  const copyMobileLink = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setNotification({ type: 'success', message: 'Lien copié dans le presse-papiers' });
+    } catch (error) {
+      console.error('Erreur copie:', error);
+      // Fallback pour les navigateurs qui ne supportent pas clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = link;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setNotification({ type: 'success', message: 'Lien copié dans le presse-papiers' });
+      } catch (e) {
+        setNotification({ type: 'error', message: 'Erreur lors de la copie' });
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   // AGENDA
   const loadAgenda = useCallback(async () => {
     setAgendaLoading(true);
@@ -1060,6 +1141,348 @@ export default function RHInsertionApp() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ============ AUTORISATIONS DE SORTIE ============
+  const MOTIF_CATEGORIES = [
+    { value: 'sante', label: 'État de santé / Maladie' },
+    { value: 'rdv_medical', label: 'RDV médical' },
+    { value: 'rdv_administratif', label: 'RDV administratif (France Travail, CAF, Préfecture...)' },
+    { value: 'rdv_formation', label: 'RDV formation / insertion' },
+    { value: 'enfant', label: 'Enfant à récupérer (école, crèche...)' },
+    { value: 'urgence_familiale', label: 'Urgence familiale' },
+    { value: 'convocation_judiciaire', label: 'Convocation judiciaire' },
+    { value: 'autre', label: 'Autre motif légitime' }
+  ];
+
+  const getMotifCategorieLabel = (value: string) => {
+    return MOTIF_CATEGORIES.find(m => m.value === value)?.label || value || '-';
+  };
+
+  const loadAutorisationsSortie = useCallback(async (employeeId: string) => {
+    setAutorisationsSortieLoading(true);
+    try {
+      const res = await authFetch(`${POINTAGE_API}/autorisation-sortie/${employeeId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAutorisationsSortie(data.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement autorisations de sortie:', error);
+    } finally {
+      setAutorisationsSortieLoading(false);
+    }
+  }, []);
+
+  const deleteAutorisationSortie = async (id: string) => {
+    if (!confirm('Supprimer cette autorisation de sortie ?')) return;
+    try {
+      const res = await authFetch(`${POINTAGE_API}/autorisation-sortie/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setAutorisationsSortie(prev => prev.filter((a: any) => a.id !== id));
+      }
+    } catch (error) {
+      console.error('Erreur suppression autorisation:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'rh' && selectedEmployee?.id) {
+      loadAutorisationsSortie(selectedEmployee.id);
+    }
+  }, [activeTab, selectedEmployee?.id, loadAutorisationsSortie]);
+
+  const saveAutorisationSortie = async () => {
+    if (!selectedEmployee) return;
+    setSaving(true);
+    try {
+      const signatureData = autorisationSignatureRef.current && !autorisationSignatureRef.current.isEmpty()
+        ? autorisationSignatureRef.current.toDataURL('image/png')
+        : null;
+
+      const superieurSigData = superieurSignatureRef.current && !superieurSignatureRef.current.isEmpty()
+        ? superieurSignatureRef.current.toDataURL('image/png')
+        : null;
+
+      const payload = {
+        employeeId: selectedEmployee.id,
+        date: autorisationSortieForm.date,
+        heureDebut: autorisationSortieForm.heureDebut,
+        heureFin: autorisationSortieForm.heureFin,
+        motifCategorie: autorisationSortieForm.motifCategorie || null,
+        motif: autorisationSortieForm.motif || null,
+        signature: signatureData,
+        superieurNom: autorisationSortieForm.superieurNom || null,
+        superieurSignature: superieurSigData
+      };
+
+      const res = await authFetch(`${POINTAGE_API}/autorisation-sortie`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setShowAutorisationSortieModal(false);
+        setAutorisationSortieForm({});
+        loadAutorisationsSortie(selectedEmployee.id);
+        setNotification({ type: 'success', message: 'Autorisation de sortie enregistrée' });
+        // Générer le PDF automatiquement
+        generateAutorisationSortiePDF(selectedEmployee, { ...data.data, signature: signatureData });
+      } else {
+        const err = await res.json();
+        setNotification({ type: 'error', message: err.error || 'Erreur lors de la sauvegarde' });
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      setNotification({ type: 'error', message: 'Erreur lors de la sauvegarde' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const generateAutorisationSortiePDF = (employee: any, autorisation: any) => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 25;
+    const contentWidth = pageWidth - margin * 2;
+    const org = organismeData;
+
+    const dateEmission = new Date().toLocaleDateString('fr-FR');
+    const dateObj = new Date(autorisation.date);
+    const dateFormatted = dateObj.toLocaleDateString('fr-FR');
+    const motifLabel = getMotifCategorieLabel(autorisation.motifCategorie);
+    const motifTexte = autorisation.motif ? `${motifLabel} - ${autorisation.motif}` : motifLabel;
+
+    // ===== BANDEAU SUPÉRIEUR =====
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, 0, pageWidth, 8, 'F');
+    doc.setFillColor(249, 115, 22);
+    doc.rect(0, 8, pageWidth, 2, 'F');
+
+    let y = 22;
+
+    // ===== TITRE =====
+    doc.setFontSize(18);
+    doc.setTextColor(35, 41, 54);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AUTORISATION DE SORTIE DU SALARIÉ', pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    // ===== DATE D'ÉMISSION =====
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date d'émission du document : ${dateEmission}`, pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    // ===== INFOS STRUCTURE (encadré) =====
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'FD');
+
+    doc.setFontSize(11);
+    doc.setTextColor(35, 41, 54);
+    doc.setFont('helvetica', 'bold');
+    doc.text(org?.raisonSociale?.toUpperCase() || 'VALORISATION INCLUSION ÉTHIQUE 59', pageWidth / 2, y + 7, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    const adresseStr = org ? `${org.adresseSiege || ''}, ${org.codePostalSiege || ''} ${org.villeSiege || ''}` : '4120 route de Tournai, 59500 DOUAI';
+    doc.text(adresseStr, pageWidth / 2, y + 13, { align: 'center' });
+    doc.text(`Siret: ${org?.siret || '90001343400031'}`, pageWidth / 2, y + 18, { align: 'center' });
+    y += 30;
+
+    // ===== LIGNE SÉPARATRICE =====
+    doc.setDrawColor(249, 115, 22);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    // ===== CORPS DU DOCUMENT =====
+    const fontSize = 11;
+    const lineHeight = 7;
+    doc.setFontSize(fontSize);
+    doc.setTextColor(40, 40, 40);
+
+    // "Je soussigné(e)..."
+    doc.setFont('helvetica', 'normal');
+    doc.text('Je soussigné(e) ', margin, y);
+    const w1 = doc.getTextWidth('Je soussigné(e) ');
+    doc.setFont('helvetica', 'bold');
+    const representant = autorisation.superieurNom
+      || (org?.representantPrenom && org?.representantNom ? `${org.representantPrenom} ${org.representantNom}` : '........................................');
+    doc.text(representant, margin + w1, y);
+    const w2 = doc.getTextWidth(representant);
+    doc.setFont('helvetica', 'normal');
+    doc.text(', agissant en qualité de', margin + w1 + w2, y);
+    y += lineHeight;
+
+    doc.setFont('helvetica', 'bold');
+    const fonction = org?.representantFonction || 'Responsable de structure';
+    doc.text(fonction, margin, y);
+    const w3 = doc.getTextWidth(fonction);
+    doc.setFont('helvetica', 'normal');
+    doc.text(', autorise par la présente :', margin + w3, y);
+    y += lineHeight * 1.8;
+
+    // Nom et prénom du salarié
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nom et prénom du salarié : ', margin, y);
+    const wLabel1 = doc.getTextWidth('Nom et prénom du salarié : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${employee.prenom} ${employee.nom}`, margin + wLabel1, y);
+    y += lineHeight;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Fonction : ', margin, y);
+    const wLabel2 = doc.getTextWidth('Fonction : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(employee.poste || 'Agent de valorisation', margin + wLabel2, y);
+    y += lineHeight * 1.8;
+
+    // "à quitter son poste..."
+    doc.setFont('helvetica', 'normal');
+    doc.text('à quitter son poste de travail le :', margin, y);
+    y += lineHeight * 1.5;
+
+    // Date et Heures dans un encadré léger
+    doc.setFillColor(255, 247, 237);
+    doc.setDrawColor(249, 115, 22);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y - 4, contentWidth, 24, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Date : ', margin + 5, y + 2);
+    const wDate = doc.getTextWidth('Date : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(dateFormatted, margin + 5 + wDate, y + 2);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Heure de sortie : ', margin + 5, y + 10);
+    const wHeure = doc.getTextWidth('Heure de sortie : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(autorisation.heureDebut || '', margin + 5 + wHeure, y + 10);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Heure de retour : ', pageWidth / 2, y + 10);
+    const wRetour = doc.getTextWidth('Heure de retour : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(autorisation.heureFin || '', pageWidth / 2 + wRetour, y + 10);
+
+    y += lineHeight + 18;
+
+    // Motif
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cette autorisation est accordée pour le motif légitime suivant :', margin, y);
+    y += lineHeight;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(249, 115, 22);
+    doc.text(motifTexte, margin, y);
+    y += lineHeight;
+
+    doc.setTextColor(40, 40, 40);
+    doc.setFont('helvetica', 'normal');
+    doc.text('ne lui permettant pas de poursuivre son activité professionnelle.', margin, y);
+    y += lineHeight * 1.8;
+
+    // Paragraphe justificatif médical
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const textJustif = 'Ce départ anticipé ne vaut pas arrêt de travail et devra, si nécessaire, être régularisé par la transmission d\'un justificatif médical.';
+    const justifLines = doc.splitTextToSize(textJustif, contentWidth);
+    doc.text(justifLines, margin, y);
+    y += justifLines.length * 5 + 4;
+
+    // Paragraphe rattrapage heures
+    const textRattrapage = 'Les heures non travaillées feront l\'objet d\'un rattrapage ultérieur conformément à l\'organisation du temps de travail en vigueur.';
+    const rattrapageLines = doc.splitTextToSize(textRattrapage, contentWidth);
+    doc.text(rattrapageLines, margin, y);
+    y += rattrapageLines.length * 5 + 10;
+
+    // ===== FAIT À... =====
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Fait à : ${org?.villeSiege || 'Douai'}`, margin, y);
+    doc.text(`Le : ${dateFormatted}`, pageWidth / 2, y);
+    y += 14;
+
+    // ===== DOUBLE ZONE SIGNATURE =====
+    const sigBoxWidth = (contentWidth - 10) / 2;
+
+    // Signature employeur (gauche)
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, sigBoxWidth, 55, 2, 2, 'S');
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(60, 60, 60);
+    doc.text('Signature de l\'employeur / représentant :', margin + 4, y + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Nom, prénom : ${representant}`, margin + 4, y + 14);
+    doc.text(`Fonction : ${fonction}`, margin + 4, y + 20);
+
+    // Ajouter la signature du supérieur si disponible
+    if (autorisation.superieurSignature) {
+      try {
+        const supSigW = sigBoxWidth - 12;
+        const supSigH = supSigW / 4.5;
+        doc.addImage(autorisation.superieurSignature, 'PNG', margin + 6, y + 22, supSigW, supSigH);
+      } catch (e) {
+        console.error('Erreur ajout signature supérieur PDF:', e);
+      }
+    }
+
+    // Signature salarié (droite)
+    const sigRightX = margin + sigBoxWidth + 10;
+    doc.setDrawColor(200, 200, 200);
+    doc.roundedRect(sigRightX, y, sigBoxWidth, 55, 2, 2, 'S');
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(60, 60, 60);
+    doc.text('Signature du salarié :', sigRightX + 4, y + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Nom, prénom : ${employee.prenom} ${employee.nom}`, sigRightX + 4, y + 14);
+
+    // Ajouter la signature si disponible - respecter les proportions
+    if (autorisation.signature) {
+      try {
+        const sigImgWidth = sigBoxWidth - 12;
+        const sigImgHeight = sigImgWidth / 4.5; // Ratio naturel du canvas signature
+        doc.addImage(autorisation.signature, 'PNG', sigRightX + 6, y + 22, sigImgWidth, sigImgHeight);
+      } catch (e) {
+        console.error('Erreur ajout signature PDF:', e);
+      }
+    }
+
+    y += 62;
+
+    // ===== MENTION DOUBLE EXEMPLAIRE =====
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Un exemplaire est remis au salarié et un autre est conservé par la structure pour archivage.', pageWidth / 2, y, { align: 'center' });
+
+    // ===== BANDEAU INFÉRIEUR =====
+    doc.setFillColor(249, 115, 22);
+    doc.rect(0, pageHeight - 4, pageWidth, 2, 'F');
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
+
+    // Télécharger
+    doc.save(`Autorisation_Sortie_${employee.nom}_${employee.prenom}_${autorisation.date?.split('T')[0] || new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const filteredEmployees = employees.filter(emp => {
@@ -3818,33 +4241,57 @@ export default function RHInsertionApp() {
     };
 
     // Sauvegarder TOUS les pointages d'un employé (appelé quand on clique sur la disquette)
-    const saveAllPointagesForEmployee = async (employeeId: string, pointageMensuelId: string) => {
+    const saveAllPointagesForEmployee = async (employeeId: string, pointageMensuelId: string): Promise<boolean> => {
       const empPointages = pointageValues[employeeId];
-      if (!empPointages) return;
+      if (!empPointages) {
+        console.log('Pas de pointages trouvés pour employé:', employeeId);
+        return false;
+      }
 
-      // Collecter tous les pointages non-vides
+      // Collecter tous les pointages non-vides (y compris 0 pour permettre la réinitialisation)
       const pointagesToSave = Object.entries(empPointages)
-        .filter(([_, heures]) => heures !== undefined && heures !== '')
+        .filter(([_, heures]) => heures !== undefined && heures !== null)
         .map(([date, heures]) => ({
           date,
-          heures: parseFloat(String(heures)) || 0
+          heures: typeof heures === 'number' ? heures : (parseFloat(String(heures)) || 0)
         }));
 
-      if (pointagesToSave.length === 0) return;
+      console.log('Pointages à sauvegarder:', pointagesToSave);
+
+      if (pointagesToSave.length === 0) {
+        console.log('Aucun pointage à sauvegarder');
+        return false;
+      }
 
       try {
-        await authFetch(`${POINTAGE_API}/journalier/batch`, {
+        const response = await authFetch(`${POINTAGE_API}/journalier/batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pointageMensuelId,
-            pointages: pointagesToSave
+            pointages: pointagesToSave,
+            forceUpdate: true // Permet de modifier même les heures signées en mode admin
           })
         });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Erreur API sauvegarde pointages:', response.status, errorData);
+          setNotification({ type: 'error', message: 'Erreur lors de la sauvegarde des pointages' });
+          return false;
+        }
+
+        const result = await response.json();
+        console.log('Sauvegarde réussie:', result);
+
         // Recharger pour mettre à jour les totaux
-        loadPointages();
+        await loadPointages();
+        setNotification({ type: 'success', message: 'Pointages sauvegardés' });
+        return true;
       } catch (error) {
         console.error('Erreur sauvegarde pointages:', error);
+        setNotification({ type: 'error', message: 'Erreur lors de la sauvegarde' });
+        return false;
       }
     };
 
@@ -4308,7 +4755,8 @@ export default function RHInsertionApp() {
                                     tabIndex={tabIdx}
                                     value={heures || ''}
                                     onChange={(e) => {
-                                      const val = e.target.value;
+                                      // Permettre virgule ou point comme séparateur décimal
+                                      let val = e.target.value.replace(',', '.');
                                       if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
                                         handlePointageChange(emp.id, j.date, val);
                                       }
@@ -4395,9 +4843,9 @@ export default function RHInsertionApp() {
                             <div className="flex items-center justify-center gap-1">
                               {isEditing ? (
                                 <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     // Sauvegarder tous les pointages de cet employé avant de quitter le mode édition
-                                    saveAllPointagesForEmployee(emp.id, pointage.id);
+                                    await saveAllPointagesForEmployee(emp.id, pointage.id);
                                     setEditingPointage(null);
                                   }}
                                   className="p-1 text-blue-500 hover:bg-blue-500/20 rounded"
@@ -4415,6 +4863,13 @@ export default function RHInsertionApp() {
                                     title="Modifier"
                                   >
                                     <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => generateMobileLink(emp.id, `${emp.prenom} ${emp.nom}`)}
+                                    className="p-1 text-green-500 hover:bg-green-500/20 rounded"
+                                    title="Lien mobile de signature"
+                                  >
+                                    <Smartphone className="w-4 h-4" />
                                   </button>
                                   {pointage.heuresPointees > 0 && (
                                     <button
@@ -5490,6 +5945,71 @@ export default function RHInsertionApp() {
             <p className={`text-sm text-green-400 text-center py-8`}>Aucune procédure disciplinaire</p>
           )}
         </Section>
+
+        {/* Autorisations de sortie */}
+        <Section title="Autorisations de sortie" icon={LogOut}
+          action={<button onClick={() => {
+            setAutorisationSortieForm({
+              date: new Date().toISOString().split('T')[0],
+              heureDebut: '',
+              heureFin: '',
+              motifCategorie: '',
+              motif: ''
+            });
+            setShowAutorisationSortieModal(true);
+          }} className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700">
+            <Plus className="w-4 h-4" /> Nouvelle autorisation
+          </button>}>
+          {autorisationsSortieLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
+            </div>
+          ) : autorisationsSortie.length > 0 ? (
+            <div className="space-y-3">
+              {autorisationsSortie.map((auto: any) => {
+                const dateStr = new Date(auto.date).toLocaleDateString('fr-FR');
+                const dureeH = Math.floor((auto.dureeMinutes || 0) / 60);
+                const dureeM = (auto.dureeMinutes || 0) % 60;
+                const dureeLabel = `${dureeH}h${dureeM > 0 ? dureeM.toString().padStart(2, '0') : ''}`;
+                return (
+                  <div key={auto.id} className={`p-4 rounded-lg ${bg('bg-slate-700/50', 'bg-orange-50')} border ${bg('border-slate-600', 'border-orange-200')}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className={`font-medium ${text('text-white', 'text-gray-900')}`}>{dateStr}</span>
+                          <span className="px-2 py-0.5 rounded text-xs bg-orange-500/20 text-orange-400 font-medium">{auto.heureDebut} - {auto.heureFin}</span>
+                          <span className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>({dureeLabel})</span>
+                        </div>
+                        {auto.motifCategorie && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400 mr-2">{getMotifCategorieLabel(auto.motifCategorie)}</span>
+                        )}
+                        {auto.motif && <p className={`text-sm mt-1 ${text('text-slate-400', 'text-gray-600')}`}>{auto.motif}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 ml-3">
+                        <button
+                          onClick={() => generateAutorisationSortiePDF(emp, auto)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                          title="Générer le PDF"
+                        >
+                          <Printer className="w-4 h-4" /> PDF
+                        </button>
+                        <button
+                          onClick={() => deleteAutorisationSortie(auto.id)}
+                          className="p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={`text-sm ${text('text-slate-400', 'text-gray-500')} text-center py-8`}>Aucune autorisation de sortie enregistrée</p>
+          )}
+        </Section>
       </div>
     );
   };
@@ -5828,26 +6348,6 @@ export default function RHInsertionApp() {
             </div>
           </div>
         )}
-      </div>
-    );
-  };
-
-  // Modals
-  const Modal = ({ show, onClose, title, children, onSave, saving }: any) => {
-    if (!show) return null;
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`}>
-          <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-            <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{title}</h2>
-            <button onClick={onClose}><X className="w-5 h-5" /></button>
-          </div>
-          <div className="p-4">{children}</div>
-          <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
-            <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
-            <button onClick={onSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
-          </div>
-        </div>
       </div>
     );
   };
@@ -6427,6 +6927,125 @@ export default function RHInsertionApp() {
         </div>
       </Modal>
 
+      {/* Modal Autorisation de sortie */}
+      {showAutorisationSortieModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`}>
+            <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+              <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Nouvelle autorisation de sortie</h2>
+              <button onClick={() => setShowAutorisationSortieModal(false)}><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <Input label="Date de sortie" name="date" type="date" value={autorisationSortieForm.date} onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})} required />
+                <Input label="Heure de sortie" name="heureDebut" type="time" value={autorisationSortieForm.heureDebut} onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})} required />
+                <Input label="Heure de retour" name="heureFin" type="time" value={autorisationSortieForm.heureFin} onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})} required />
+              </div>
+              {autorisationSortieForm.heureDebut && autorisationSortieForm.heureFin && (() => {
+                const [hD, mD] = autorisationSortieForm.heureDebut.split(':').map(Number);
+                const [hF, mF] = autorisationSortieForm.heureFin.split(':').map(Number);
+                const mins = (hF * 60 + mF) - (hD * 60 + mD);
+                if (mins <= 0) return <p className="text-red-400 text-sm">L'heure de retour doit être après l'heure de sortie</p>;
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                return <p className={`text-sm font-medium ${text('text-orange-400', 'text-orange-600')}`}>Durée d'absence : {h}h{m > 0 ? m.toString().padStart(2, '0') : '00'}</p>;
+              })()}
+              <Input
+                label="Catégorie du motif"
+                name="motifCategorie"
+                type="select"
+                value={autorisationSortieForm.motifCategorie}
+                onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})}
+                options={MOTIF_CATEGORIES}
+                required
+              />
+              <Input
+                label={autorisationSortieForm.motifCategorie === 'autre' ? 'Précisez le motif' : 'Précisions (optionnel)'}
+                name="motif"
+                type="textarea"
+                value={autorisationSortieForm.motif}
+                onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})}
+                placeholder="Détails supplémentaires..."
+                required={autorisationSortieForm.motifCategorie === 'autre'}
+              />
+
+              {/* Supérieur hiérarchique */}
+              <Input
+                label="Supérieur hiérarchique (Nom Prénom)"
+                name="superieurNom"
+                value={autorisationSortieForm.superieurNom || ''}
+                onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})}
+                placeholder="Nom et prénom du responsable..."
+              />
+
+              {/* Zone signature supérieur */}
+              <div>
+                <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>
+                  Signature du supérieur hiérarchique
+                </label>
+                <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
+                  <SignatureCanvas
+                    ref={superieurSignatureRef}
+                    canvasProps={{
+                      width: 560,
+                      height: 120,
+                      className: 'w-full cursor-crosshair',
+                      style: { width: '100%', height: '120px' }
+                    }}
+                    penColor={darkMode ? '#ffffff' : '#000000'}
+                    backgroundColor={darkMode ? '#334155' : '#f9fafb'}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => superieurSignatureRef.current?.clear()}
+                  className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}
+                >
+                  Effacer la signature
+                </button>
+              </div>
+
+              {/* Zone signature salarié */}
+              <div>
+                <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>
+                  Signature du salarié
+                </label>
+                <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
+                  <SignatureCanvas
+                    ref={autorisationSignatureRef}
+                    canvasProps={{
+                      width: 560,
+                      height: 120,
+                      className: 'w-full cursor-crosshair',
+                      style: { width: '100%', height: '120px' }
+                    }}
+                    penColor={darkMode ? '#ffffff' : '#000000'}
+                    backgroundColor={darkMode ? '#334155' : '#f9fafb'}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => autorisationSignatureRef.current?.clear()}
+                  className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}
+                >
+                  Effacer la signature
+                </button>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+              <button onClick={() => setShowAutorisationSortieModal(false)} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+              <button
+                onClick={saveAutorisationSortie}
+                disabled={saving || !autorisationSortieForm.date || !autorisationSortieForm.heureDebut || !autorisationSortieForm.heureFin}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {saving ? 'Enregistrement...' : <><Printer className="w-4 h-4" /> Enregistrer et générer PDF</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Modal show={showObjectifModal} onClose={() => { setShowObjectifModal(false); setObjectifForm({}); setEditingObjectifId(null); }} title={editingObjectifId ? "Modifier l'objectif" : "Nouvel objectif"} onSave={saveObjectifIndividuel} saving={saving}>
         <div className="space-y-4">
           <Input label="Titre de l'objectif" name="titre" value={objectifForm.titre || ''} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} required placeholder="Ex: Obtenir le permis B" />
@@ -6486,6 +7105,69 @@ export default function RHInsertionApp() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal lien mobile de pointage */}
+      {mobileLinkModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMobileLinkModal(null)}>
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-2xl p-6 max-w-lg w-full shadow-2xl`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-green-500" />
+                </div>
+                <div>
+                  <h3 className={`font-bold text-lg ${text('text-white', 'text-gray-900')}`}>Lien Mobile</h3>
+                  <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{mobileLinkModal.employeeName}</p>
+                </div>
+              </div>
+              <button onClick={() => setMobileLinkModal(null)} className={`p-2 rounded-lg ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {mobileLinkModal.loading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+              </div>
+            ) : mobileLinkModal.token ? (
+              <div className="space-y-4">
+                <p className={`text-sm ${text('text-slate-400', 'text-gray-600')}`}>
+                  Ce lien permet au salarié de signer ses pointages (matin et après-midi) depuis son téléphone, sans avoir besoin de se connecter.
+                </p>
+
+                <div className={`${bg('bg-slate-900', 'bg-gray-100')} rounded-xl p-4`}>
+                  <p className={`text-xs font-mono break-all ${text('text-slate-300', 'text-gray-700')}`}>
+                    {mobileLinkModal.token}
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => copyMobileLink(mobileLinkModal.token!)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    <Copy className="w-5 h-5" />
+                    Copier le lien
+                  </button>
+                  <a
+                    href={mobileLinkModal.token}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 py-3 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors"
+                  >
+                    <Eye className="w-5 h-5" />
+                    Tester
+                  </a>
+                </div>
+
+                <p className={`text-xs ${text('text-slate-500', 'text-gray-500')} text-center`}>
+                  Envoyez ce lien au salarié par SMS ou email. Le lien reste valide jusqu'à ce qu'un nouveau soit généré.
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
