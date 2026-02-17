@@ -209,6 +209,551 @@ const Modal = ({ show, onClose, title, children, onSave, saving }: any) => {
   );
 };
 
+// === MODAL WRAPPER COMPONENTS (gèrent leur propre état de formulaire pour éviter les re-renders du parent) ===
+
+const ObjectifModalContent = ({ show, onClose, onSave, saving, initialData, isEditing }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title={isEditing ? "Modifier l'objectif" : "Nouvel objectif"} onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <Input label="Titre de l'objectif" name="titre" value={form.titre || ''} onChange={handleChange} required placeholder="Ex: Obtenir le permis B" />
+        <Input label="Description" name="description" type="textarea" value={form.description || ''} onChange={handleChange} placeholder="Détails de l'objectif..." />
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Catégorie" name="categorie" type="select" value={form.categorie || 'emploi'} onChange={handleChange} options={[{value:'emploi',label:'Emploi'},{value:'formation',label:'Formation'},{value:'administratif',label:'Administratif'},{value:'social',label:'Social'},{value:'personnel',label:'Personnel'}]} />
+          <Input label="Priorité" name="priorite" type="select" value={form.priorite || 'normale'} onChange={handleChange} options={[{value:'basse',label:'Basse'},{value:'normale',label:'Normale'},{value:'haute',label:'Haute'},{value:'critique',label:'Critique'}]} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Échéance" name="dateEcheance" type="date" value={form.dateEcheance?.split('T')[0] || ''} onChange={handleChange} />
+          <Input label="Points attribués" name="pointsAttribues" type="number" value={form.pointsAttribues || 5} onChange={(e: any) => setForm((prev: any) => ({...prev, pointsAttribues: parseInt(e.target.value) || 0}))} />
+        </div>
+        {isEditing && (
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Statut" name="statut" type="select" value={form.statut || 'en_cours'} onChange={handleChange} options={[{value:'en_cours',label:'En cours'},{value:'atteint',label:'Atteint'},{value:'abandonne',label:'Abandonné'},{value:'reporte',label:'Reporté'}]} />
+            <Input label="Progression (%)" name="progression" type="number" value={form.progression || 0} onChange={(e: any) => setForm((prev: any) => ({...prev, progression: parseInt(e.target.value) || 0}))} />
+          </div>
+        )}
+        <Input label="Notes" name="notes" type="textarea" value={form.notes || ''} onChange={handleChange} placeholder="Notes additionnelles..." />
+      </div>
+    </Modal>
+  );
+};
+
+const SuiviModalContent = ({ show, onClose, onSave, saving, initialData }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title="Nouvel entretien" onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Date" name="dateEntretien" type="date" value={form.dateEntretien} onChange={handleChange} required />
+          <Input label="Type" name="typeEntretien" type="select" value={form.typeEntretien} onChange={handleChange} options={[{value:'Hebdomadaire',label:'Hebdomadaire'},{value:'Mensuel',label:'Mensuel'},{value:'Bilan',label:'Bilan'},{value:'Urgent',label:'Urgent'}]} />
+          <Input label="Durée (min)" name="duree" type="number" value={form.duree} onChange={handleChange} />
+          <Input label="Conseiller" name="conseillerNom" value={form.conseillerNom} onChange={handleChange} />
+        </div>
+        <Input label="Objet" name="objetEntretien" type="textarea" value={form.objetEntretien} onChange={handleChange} required />
+        <Input label="Points abordés" name="pointsAbordes" type="textarea" value={form.pointsAbordes} onChange={handleChange} />
+        <Input label="Actions décidées" name="actionsDecidees" type="textarea" value={form.actionsDecidees} onChange={handleChange} />
+        <Input label="Prochain RDV" name="dateProchainRdv" type="date" value={form.dateProchainRdv} onChange={handleChange} />
+      </div>
+    </Modal>
+  );
+};
+
+const PMSMPModalContent = ({ show, onClose, onSave, saving, initialData }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title="Nouvelle PMSMP" onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <Input label="Entreprise" name="entrepriseNom" value={form.entrepriseNom} onChange={handleChange} required />
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="SIRET" name="entrepriseSiret" value={form.entrepriseSiret} onChange={handleChange} />
+          <Input label="Adresse" name="entrepriseAdresse" value={form.entrepriseAdresse} onChange={handleChange} />
+          <Input label="Tuteur" name="tuteurNom" value={form.tuteurNom} onChange={handleChange} />
+          <Input label="Fonction tuteur" name="tuteurFonction" value={form.tuteurFonction} onChange={handleChange} />
+          <Input label="Date début" name="dateDebut" type="date" value={form.dateDebut} onChange={handleChange} required />
+          <Input label="Date fin" name="dateFin" type="date" value={form.dateFin} onChange={handleChange} required />
+        </div>
+        <Input label="Objectif" name="objectifDecouverte" type="textarea" value={form.objectifDecouverte} onChange={handleChange} />
+      </div>
+    </Modal>
+  );
+};
+
+const FormationModalContent = ({ show, onClose, onSave, saving, initialData }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title="Nouvelle formation" onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <Input label="Intitulé" name="intitule" value={form.intitule} onChange={handleChange} required />
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Organisme" name="organisme" value={form.organisme} onChange={handleChange} />
+          <Input label="Type" name="type" type="select" value={form.type} onChange={handleChange} options={[{value:'Interne',label:'Interne'},{value:'Externe',label:'Externe'},{value:'E-learning',label:'E-learning'}]} />
+          <Input label="Date début" name="dateDebut" type="date" value={form.dateDebut} onChange={handleChange} required />
+          <Input label="Date fin" name="dateFin" type="date" value={form.dateFin} onChange={handleChange} />
+          <Input label="Durée (h)" name="dureeHeures" type="number" value={form.dureeHeures} onChange={handleChange} />
+        </div>
+        <Input label="Objectifs" name="objectifs" type="textarea" value={form.objectifs} onChange={handleChange} />
+      </div>
+    </Modal>
+  );
+};
+
+const ContratModalContent = ({ show, onClose, onSave, saving, initialData }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title="Nouveau contrat" onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Type" name="typeContrat" type="select" value={form.typeContrat} onChange={handleChange} options={[{value:'CDDI',label:'CDDI'},{value:'CDD',label:'CDD'}]} required />
+          <Input label="Motif" name="motif" type="select" value={form.motif} onChange={handleChange} options={[{value:'Initial',label:'Initial'},{value:'Renouvellement',label:'Renouvellement'}]} />
+          <Input label="Date début" name="dateDebut" type="date" value={form.dateDebut} onChange={handleChange} required />
+          <Input label="Date fin" name="dateFin" type="date" value={form.dateFin} onChange={handleChange} required />
+          <Input label="Heures/semaine" name="dureeHeures" type="number" value={form.dureeHeures} onChange={handleChange} />
+          <Input label="N° DPAE" name="dpaeNumero" value={form.dpaeNumero} onChange={handleChange} />
+          <Input label="Date DPAE" name="dpaeDate" type="date" value={form.dpaeDate} onChange={handleChange} />
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const AvertissementModalContent = ({ show, onClose, onSave, saving, initialData }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title="Nouvel avertissement" onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Date" name="dateAvertissement" type="date" value={form.dateAvertissement} onChange={handleChange} required />
+          <Input label="Type" name="type" type="select" value={form.type} onChange={handleChange} options={[{value:'Verbal',label:'Verbal'},{value:'Écrit',label:'Écrit'},{value:'Mise à pied',label:'Mise à pied'}]} required />
+        </div>
+        <Input label="Motif" name="motif" type="textarea" value={form.motif} onChange={handleChange} required />
+        <Input label="Description" name="description" type="textarea" value={form.description} onChange={handleChange} />
+      </div>
+    </Modal>
+  );
+};
+
+const NewEmployeeModalContent = ({ show, onClose, onSave, saving, initialData }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  return (
+    <Modal show={show} onClose={onClose} title="Nouveau salarié" onSave={() => onSave(form)} saving={saving}>
+      <div className="grid grid-cols-2 gap-4">
+        <Input label="Civilité" name="civilite" type="select" value={form.civilite} onChange={handleChange} options={[{value:'M.',label:'M.'},{value:'Mme',label:'Mme'}]} required />
+        <Input label="Nom" name="nom" value={form.nom} onChange={handleChange} required />
+        <Input label="Prénom" name="prenom" value={form.prenom} onChange={handleChange} required />
+        <Input label="Date naissance" name="dateNaissance" type="date" value={form.dateNaissance} onChange={handleChange} required />
+        <Input label="Adresse" name="adresse" value={form.adresse} onChange={handleChange} className="col-span-2" required />
+        <Input label="Code postal" name="codePostal" value={form.codePostal} onChange={handleChange} required />
+        <Input label="Ville" name="ville" value={form.ville} onChange={handleChange} required />
+        <Input label="Téléphone" name="telephone" value={form.telephone} onChange={handleChange} required />
+        <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} />
+        <Input label="Date entrée" name="dateEntree" type="date" value={form.dateEntree} onChange={handleChange} required />
+        <Input label="Poste" name="poste" value={form.poste} onChange={handleChange} />
+      </div>
+    </Modal>
+  );
+};
+
+const DocumentModalContent = ({ show, onClose, onSave, saving, initialData, darkMode, formatDate: formatDateFn }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+  return (
+    <Modal show={show} onClose={onClose} title="Ajouter un document" onSave={() => onSave(form)} saving={saving}>
+      <div className="space-y-4">
+        <Input label="Type" name="typeDocument" type="select" value={form.typeDocument} onChange={handleChange} required
+          options={[
+            {value:'CNI',label:'Carte d\'identité'},{value:'CARTE_VITALE',label:'Carte Vitale'},{value:'JUSTIF_DOMICILE',label:'Justificatif domicile'},
+            {value:'ATTESTATION_SECU',label:'Attestation sécu'},{value:'RIB',label:'RIB'},{value:'PERMIS',label:'Permis'},
+            {value:'PASS_INCLUSION',label:'Pass Inclusion'},{value:'DPAE',label:'DPAE'},{value:'FICHE_EMBAUCHE',label:'Fiche d\'embauche'},
+            {value:'CONTRAT',label:'Contrat de travail'},{value:'AVENANT',label:'Avenant au contrat'},{value:'RENOUVELLEMENT',label:'Renouvellement + DPAE'},
+            {value:'SOLDE_TOUT_COMPTE',label:'Solde de tout compte'},{value:'CERTIFICAT_TRAVAIL',label:'Certificat de travail'},
+            {value:'ATTESTATION_FT',label:'Attestation France Travail'},{value:'ATTESTATION_CAF',label:'Attestation CAF'}
+          ]} />
+        <Input label="Nom du fichier" name="nomDocument" value={form.nomDocument} onChange={handleChange} />
+        {form.typeDocument === 'AVENANT' && (
+          <div className={`p-4 rounded-lg ${bg('bg-amber-500/10', 'bg-amber-50')} border ${bg('border-amber-500/30', 'border-amber-200')}`}>
+            <p className={`text-xs font-medium mb-2 ${text('text-amber-400', 'text-amber-700')}`}>
+              <CalendarDays className="w-4 h-4 inline mr-1" />
+              Nouvelle date de fin de contrat (sera ajoutée à l'agenda)
+            </p>
+            <Input label="Date de fin de contrat" name="dateExpiration" type="date" value={form.dateExpiration} onChange={handleChange} required />
+          </div>
+        )}
+        {form.typeDocument !== 'AVENANT' && (
+          <Input label="Date d'expiration (optionnel)" name="dateExpiration" type="date" value={form.dateExpiration} onChange={handleChange} />
+        )}
+        <div
+          className={`p-8 border-2 border-dashed ${form.file ? 'border-green-500 bg-green-500/10' : 'border-slate-500'} rounded-lg text-center cursor-pointer hover:border-blue-500 transition-colors`}
+          onClick={() => document.getElementById('document-file-input')?.click()}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            const file = e.dataTransfer.files[0];
+            if (file) setForm((prev: any) => ({...prev, file, nomDocument: prev.nomDocument || file.name}));
+          }}
+        >
+          <input id="document-file-input" type="file" className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) setForm((prev: any) => ({...prev, file, nomDocument: prev.nomDocument || file.name}));
+            }}
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+          />
+          <Upload className={`w-8 h-8 mx-auto mb-2 ${form.file ? 'text-green-500' : 'text-slate-400'}`} />
+          {form.file ? (
+            <p className="text-sm text-green-500 font-medium">{form.file.name}</p>
+          ) : (
+            <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Glisser-déposer ou cliquer pour sélectionner</p>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const AtelierModalContent = ({ show, onClose, onSave, saving, initialData, isEditing, darkMode }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+  if (!show) return null;
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-lg w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
+            {isEditing ? 'Modifier l\'atelier' : 'Nouvel atelier'}
+          </h2>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Nom de l'atelier</label>
+            <input type="text" value={form.nom || ''} onChange={(e) => setForm((prev: any) => ({...prev, nom: e.target.value}))}
+              className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Secteur d'activité</label>
+              <input type="text" value={form.secteurActivite || ''} onChange={(e) => setForm((prev: any) => ({...prev, secteurActivite: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} placeholder="Recyclage, Espaces verts..." />
+            </div>
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Code ROME</label>
+              <input type="text" value={form.codeROME || ''} onChange={(e) => setForm((prev: any) => ({...prev, codeROME: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Effectif ETP</label>
+              <input type="number" step="0.01" value={form.effectifETP || ''} onChange={(e) => setForm((prev: any) => ({...prev, effectifETP: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Nb encadrants</label>
+              <input type="number" value={form.effectifEncadrants || ''} onChange={(e) => setForm((prev: any) => ({...prev, effectifEncadrants: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+          </div>
+          <div>
+            <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Description</label>
+            <textarea value={form.description || ''} onChange={(e) => setForm((prev: any) => ({...prev, description: e.target.value}))}
+              rows={2} className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+          </div>
+        </div>
+        <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+          <button onClick={() => onSave(form)} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const SuiviObjectifModalContent = ({ show, onClose, onSave, saving, initialData, darkMode, moisNoms, currentYear }: any) => {
+  const [form, setForm] = useState<any>({});
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+  if (!show) return null;
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Suivi mensuel des objectifs</h2>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Mois</label>
+              <select value={form.mois || ''} onChange={(e) => setForm((prev: any) => ({...prev, mois: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`}>
+                {moisNoms.slice(1).map((m: string, i: number) => <option key={i+1} value={i+1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Année</label>
+              <input type="number" value={form.annee || currentYear} onChange={(e) => setForm((prev: any) => ({...prev, annee: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Entrées du mois</label>
+              <input type="number" value={form.effectifEntree || ''} onChange={(e) => setForm((prev: any) => ({...prev, effectifEntree: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Sorties du mois</label>
+              <input type="number" value={form.effectifSortie || ''} onChange={(e) => setForm((prev: any) => ({...prev, effectifSortie: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+            <div>
+              <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Effectif présent</label>
+              <input type="number" value={form.effectifPresent || ''} onChange={(e) => setForm((prev: any) => ({...prev, effectifPresent: e.target.value}))}
+                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+            </div>
+          </div>
+          <div className={`border-t ${bg('border-slate-700', 'border-gray-200')} pt-4`}>
+            <h4 className={`text-sm font-medium ${text('text-white', 'text-gray-900')} mb-3`}>Détail des sorties (cumulées depuis début d'année)</h4>
+            <div className="grid grid-cols-5 gap-4">
+              <div>
+                <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Emploi durable</label>
+                <input type="number" value={form.sortiesEmploiDurable || ''} onChange={(e) => setForm((prev: any) => ({...prev, sortiesEmploiDurable: e.target.value}))}
+                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+              </div>
+              <div>
+                <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Emploi transition</label>
+                <input type="number" value={form.sortiesEmploiTransition || ''} onChange={(e) => setForm((prev: any) => ({...prev, sortiesEmploiTransition: e.target.value}))}
+                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+              </div>
+              <div>
+                <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Formation</label>
+                <input type="number" value={form.sortiesFormation || ''} onChange={(e) => setForm((prev: any) => ({...prev, sortiesFormation: e.target.value}))}
+                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+              </div>
+              <div>
+                <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Autres positives</label>
+                <input type="number" value={form.sortiesAutresPositives || ''} onChange={(e) => setForm((prev: any) => ({...prev, sortiesAutresPositives: e.target.value}))}
+                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+              </div>
+              <div>
+                <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Négatives</label>
+                <input type="number" value={form.sortiesNegatives || ''} onChange={(e) => setForm((prev: any) => ({...prev, sortiesNegatives: e.target.value}))}
+                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Commentaire</label>
+            <textarea value={form.commentaire || ''} onChange={(e) => setForm((prev: any) => ({...prev, commentaire: e.target.value}))}
+              rows={2} className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
+          </div>
+        </div>
+        <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+          <button onClick={() => onSave(form)} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const FichePaieModalContent = ({ show, onClose, onSave, saving, initialData, darkMode, moisNoms, fichesByMois, anneesDisponibles }: any) => {
+  const [form, setForm] = useState<any>({});
+  const [file, setFile] = useState<File | null>(null);
+  useEffect(() => { if (show) { setForm(initialData || {}); setFile(null); } }, [show]);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+  if (!show) return null;
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-md w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
+            {fichesByMois?.[form.mois] ? 'Remplacer la fiche de paie' : 'Ajouter une fiche de paie'}
+          </h2>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Mois</label>
+              <select value={form.mois} onChange={(e) => setForm((prev: any) => ({...prev, mois: parseInt(e.target.value)}))}
+                className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}>
+                {moisNoms?.map((nom: string, idx: number) => (
+                  <option key={idx} value={idx + 1}>{nom}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Année</label>
+              <select value={form.annee} onChange={(e) => setForm((prev: any) => ({...prev, annee: parseInt(e.target.value)}))}
+                className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}>
+                {anneesDisponibles?.map((a: number) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Fichier PDF <span className="text-red-500">*</span></label>
+            <div
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                file ? 'border-green-500/50 bg-green-500/10' : `${bg('border-slate-600 hover:border-slate-500', 'border-gray-300 hover:border-gray-400')}`
+              }`}
+              onClick={() => document.getElementById('fichePaieInputWrapped')?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f && f.type === 'application/pdf') setFile(f); }}
+            >
+              <input id="fichePaieInputWrapped" type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+              {file ? (
+                <div className="flex items-center justify-center gap-2 text-green-500">
+                  <CheckCircle className="w-6 h-6" />
+                  <span className="text-sm font-medium">{file.name}</span>
+                </div>
+              ) : (
+                <>
+                  <Upload className={`w-8 h-8 mx-auto mb-2 ${text('text-slate-500', 'text-gray-400')}`} />
+                  <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Cliquez ou glissez un fichier PDF</p>
+                </>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Notes (optionnel)</label>
+            <textarea value={form.notes || ''} onChange={(e) => setForm((prev: any) => ({...prev, notes: e.target.value}))}
+              rows={2} className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`} placeholder="Notes éventuelles..." />
+          </div>
+        </div>
+        <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+          <button onClick={() => onSave(form, file)} disabled={saving || !file} className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const AutorisationSortieModalContent = ({ show, onClose, onSave, saving, initialData, darkMode, MOTIF_CATEGORIES }: any) => {
+  const [form, setForm] = useState<any>({});
+  const autorisationSigRef = useRef<SignatureCanvas>(null);
+  const superieurSigRef = useRef<SignatureCanvas>(null);
+  useEffect(() => { if (show) setForm(initialData || {}); }, [show]);
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+  if (!show) return null;
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`} onMouseDown={(e: any) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Nouvelle autorisation de sortie</h2>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Date de sortie" name="date" type="date" value={form.date} onChange={handleChange} required />
+            <Input label="Heure de sortie" name="heureDebut" type="time" value={form.heureDebut} onChange={handleChange} required />
+            <Input label="Heure de retour" name="heureFin" type="time" value={form.heureFin} onChange={handleChange} required />
+          </div>
+          {form.heureDebut && form.heureFin && (() => {
+            const [hD, mD] = form.heureDebut.split(':').map(Number);
+            const [hF, mF] = form.heureFin.split(':').map(Number);
+            const mins = (hF * 60 + mF) - (hD * 60 + mD);
+            if (mins <= 0) return <p className="text-red-400 text-sm">L'heure de retour doit être après l'heure de sortie</p>;
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return <p className={`text-sm font-medium ${text('text-orange-400', 'text-orange-600')}`}>Durée d'absence : {h}h{m > 0 ? m.toString().padStart(2, '0') : '00'}</p>;
+          })()}
+          <Input label="Catégorie du motif" name="motifCategorie" type="select" value={form.motifCategorie} onChange={handleChange} options={MOTIF_CATEGORIES} required />
+          <Input label={form.motifCategorie === 'autre' ? 'Précisez le motif' : 'Précisions (optionnel)'} name="motif" type="textarea" value={form.motif} onChange={handleChange} placeholder="Détails supplémentaires..." required={form.motifCategorie === 'autre'} />
+          <Input label="Supérieur hiérarchique (Nom Prénom)" name="superieurNom" value={form.superieurNom || ''} onChange={handleChange} placeholder="Nom et prénom du responsable..." />
+          <div>
+            <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Signature du supérieur hiérarchique</label>
+            <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
+              <SignatureCanvas ref={superieurSigRef} canvasProps={{ width: 560, height: 120, className: 'w-full cursor-crosshair', style: { width: '100%', height: '120px' } }} penColor={darkMode ? '#ffffff' : '#000000'} backgroundColor={darkMode ? '#334155' : '#f9fafb'} />
+            </div>
+            <button type="button" onClick={() => superieurSigRef.current?.clear()} className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}>Effacer la signature</button>
+          </div>
+          <div>
+            <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Signature du salarié</label>
+            <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
+              <SignatureCanvas ref={autorisationSigRef} canvasProps={{ width: 560, height: 120, className: 'w-full cursor-crosshair', style: { width: '100%', height: '120px' } }} penColor={darkMode ? '#ffffff' : '#000000'} backgroundColor={darkMode ? '#334155' : '#f9fafb'} />
+            </div>
+            <button type="button" onClick={() => autorisationSigRef.current?.clear()} className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}>Effacer la signature</button>
+          </div>
+        </div>
+        <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+          <button
+            onClick={() => onSave(form, superieurSigRef.current, autorisationSigRef.current)}
+            disabled={saving || !form.date || !form.heureDebut || !form.heureFin}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {saving ? 'Enregistrement...' : <><Printer className="w-4 h-4" /> Enregistrer et générer PDF</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 export default function RHInsertionApp() {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -518,7 +1063,7 @@ export default function RHInsertionApp() {
     }
   }, []);
 
-  const saveObjectifIndividuel = async () => {
+  const saveObjectifIndividuel = async (formData: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
@@ -530,14 +1075,14 @@ export default function RHInsertionApp() {
       const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(objectifForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowObjectifModal(false);
         setObjectifForm({});
         setEditingObjectifId(null);
         loadObjectifsIndividuels(selectedEmployee.id);
-        setParcoursData(null); // Recharger le parcours
+        setParcoursData(null);
       }
     } catch (error) {
       console.error('Erreur sauvegarde objectif:', error);
@@ -658,7 +1203,7 @@ export default function RHInsertionApp() {
     }
   };
 
-  const saveSuiviObjectif = async () => {
+  const saveSuiviObjectif = async (formData: any) => {
     const objectifNegocie = organismeData?.conventions?.[0]?.objectifsNegocies?.[0];
     if (!objectifNegocie?.id) return;
     setSaving(true);
@@ -666,7 +1211,7 @@ export default function RHInsertionApp() {
       const res = await authFetch(`${ORGANISME_API}/objectifs/${objectifNegocie.id}/suivis`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(suiviObjectifForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowSuiviObjectifModal(false);
@@ -681,7 +1226,7 @@ export default function RHInsertionApp() {
     }
   };
 
-  const saveAtelier = async () => {
+  const saveAtelier = async (formData: any) => {
     if (!organismeData?.id) return;
     setSaving(true);
     try {
@@ -693,7 +1238,7 @@ export default function RHInsertionApp() {
       const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...atelierForm, organismeId: organismeData.id })
+        body: JSON.stringify({ ...formData, organismeId: organismeData.id })
       });
       if (res.ok) {
         setShowAtelierModal(false);
@@ -893,7 +1438,8 @@ export default function RHInsertionApp() {
   }, [activeView, loadAgenda]);
 
   // CRUD Employee
-  const saveEmployee = async () => {
+  const saveEmployee = async (newFormData?: any) => {
+    const dataToSave = newFormData || formData;
     setSaving(true);
     setNotification(null);
     try {
@@ -902,7 +1448,7 @@ export default function RHInsertionApp() {
       const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(dataToSave)
       });
       if (res.ok) {
         const data = await res.json();
@@ -948,14 +1494,14 @@ export default function RHInsertionApp() {
   };
 
   // CRUD Suivi
-  const saveSuivi = async () => {
+  const saveSuivi = async (formData: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
       const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/suivis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(suiviForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowSuiviModal(false);
@@ -980,14 +1526,14 @@ export default function RHInsertionApp() {
   };
 
   // CRUD PMSMP
-  const savePMSMP = async () => {
+  const savePMSMP = async (formData: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
       const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/pmsmp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pmsmpForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowPMSMPModal(false);
@@ -1002,14 +1548,14 @@ export default function RHInsertionApp() {
   };
 
   // CRUD Formation
-  const saveFormation = async () => {
+  const saveFormation = async (formData: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
       const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/formations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formationForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowFormationModal(false);
@@ -1024,42 +1570,40 @@ export default function RHInsertionApp() {
   };
 
   // CRUD Document
-  const saveDocument = async () => {
+  const saveDocument = async (docFormData: any) => {
     if (!selectedEmployee) return;
 
-    // Validation spécifique pour les avenants
-    if (documentForm.typeDocument === 'AVENANT' && !documentForm.dateExpiration) {
+    if (docFormData.typeDocument === 'AVENANT' && !docFormData.dateExpiration) {
       setNotification({ type: 'error', message: 'La date de fin de contrat est obligatoire pour les avenants' });
       return;
     }
 
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('typeDocument', documentForm.typeDocument || '');
-      formData.append('nomDocument', documentForm.nomDocument || '');
-      formData.append('categorie', documentForm.categorie || 'ADMIN');
-      if (documentForm.dateExpiration) {
-        formData.append('dateExpiration', documentForm.dateExpiration);
+      const fd = new FormData();
+      fd.append('typeDocument', docFormData.typeDocument || '');
+      fd.append('nomDocument', docFormData.nomDocument || '');
+      fd.append('categorie', docFormData.categorie || 'ADMIN');
+      if (docFormData.dateExpiration) {
+        fd.append('dateExpiration', docFormData.dateExpiration);
       }
-      if (documentForm.file) {
-        formData.append('file', documentForm.file);
+      if (docFormData.file) {
+        fd.append('file', docFormData.file);
       }
 
       const token = getAuthToken();
       const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/documents`, {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData
+        body: fd
       });
       if (res.ok) {
         setShowDocumentModal(false);
         setDocumentForm({});
         loadEmployeeDetails(selectedEmployee.id);
 
-        // Notification spécifique pour les avenants
-        if (documentForm.typeDocument === 'AVENANT') {
-          setNotification({ type: 'success', message: `Avenant enregistré. La date de fin (${formatDate(documentForm.dateExpiration)}) a été ajoutée à l'agenda.` });
+        if (docFormData.typeDocument === 'AVENANT') {
+          setNotification({ type: 'success', message: `Avenant enregistré. La date de fin (${formatDate(docFormData.dateExpiration)}) a été ajoutée à l'agenda.` });
         } else {
           setNotification({ type: 'success', message: 'Document enregistré' });
         }
@@ -1102,14 +1646,14 @@ export default function RHInsertionApp() {
   };
 
   // CRUD Contrat
-  const saveContrat = async () => {
+  const saveContrat = async (formData: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
       const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/contrats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(contratForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowContratModal(false);
@@ -1124,14 +1668,14 @@ export default function RHInsertionApp() {
   };
 
   // CRUD Avertissement
-  const saveAvertissement = async () => {
+  const saveAvertissement = async (formData: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
       const res = await authFetch(`${API_URL}/employees/${selectedEmployee.id}/avertissements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(avertissementForm)
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowAvertissementModal(false);
@@ -1194,27 +1738,27 @@ export default function RHInsertionApp() {
     }
   }, [activeTab, selectedEmployee?.id, loadAutorisationsSortie]);
 
-  const saveAutorisationSortie = async () => {
+  const saveAutorisationSortie = async (formData: any, superieurSigCanvas: any, autorisationSigCanvas: any) => {
     if (!selectedEmployee) return;
     setSaving(true);
     try {
-      const signatureData = autorisationSignatureRef.current && !autorisationSignatureRef.current.isEmpty()
-        ? autorisationSignatureRef.current.toDataURL('image/png')
+      const signatureData = autorisationSigCanvas && !autorisationSigCanvas.isEmpty()
+        ? autorisationSigCanvas.toDataURL('image/png')
         : null;
 
-      const superieurSigData = superieurSignatureRef.current && !superieurSignatureRef.current.isEmpty()
-        ? superieurSignatureRef.current.toDataURL('image/png')
+      const superieurSigData = superieurSigCanvas && !superieurSigCanvas.isEmpty()
+        ? superieurSigCanvas.toDataURL('image/png')
         : null;
 
       const payload = {
         employeeId: selectedEmployee.id,
-        date: autorisationSortieForm.date,
-        heureDebut: autorisationSortieForm.heureDebut,
-        heureFin: autorisationSortieForm.heureFin,
-        motifCategorie: autorisationSortieForm.motifCategorie || null,
-        motif: autorisationSortieForm.motif || null,
+        date: formData.date,
+        heureDebut: formData.heureDebut,
+        heureFin: formData.heureFin,
+        motifCategorie: formData.motifCategorie || null,
+        motif: formData.motif || null,
         signature: signatureData,
-        superieurNom: autorisationSortieForm.superieurNom || null,
+        superieurNom: formData.superieurNom || null,
         superieurSignature: superieurSigData
       };
 
@@ -4068,145 +4612,11 @@ export default function RHInsertionApp() {
           </div>
         </div>
 
-        {/* Modal Atelier */}
-        {showAtelierModal && createPortal(
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-lg w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
-              <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-                <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
-                  {editingAtelierId ? 'Modifier l\'atelier' : 'Nouvel atelier'}
-                </h2>
-                <button onClick={() => setShowAtelierModal(false)}><X className="w-5 h-5" /></button>
-              </div>
-              <div className="p-4 space-y-4">
-                <div>
-                  <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Nom de l'atelier</label>
-                  <input type="text" value={atelierForm.nom || ''} onChange={(e) => setAtelierForm({...atelierForm, nom: e.target.value})}
-                    className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Secteur d'activité</label>
-                    <input type="text" value={atelierForm.secteurActivite || ''} onChange={(e) => setAtelierForm({...atelierForm, secteurActivite: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} placeholder="Recyclage, Espaces verts..." />
-                  </div>
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Code ROME</label>
-                    <input type="text" value={atelierForm.codeROME || ''} onChange={(e) => setAtelierForm({...atelierForm, codeROME: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Effectif ETP</label>
-                    <input type="number" step="0.01" value={atelierForm.effectifETP || ''} onChange={(e) => setAtelierForm({...atelierForm, effectifETP: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Nb encadrants</label>
-                    <input type="number" value={atelierForm.effectifEncadrants || ''} onChange={(e) => setAtelierForm({...atelierForm, effectifEncadrants: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                </div>
-                <div>
-                  <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Description</label>
-                  <textarea value={atelierForm.description || ''} onChange={(e) => setAtelierForm({...atelierForm, description: e.target.value})}
-                    rows={2} className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                </div>
-              </div>
-              <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
-                <button onClick={() => setShowAtelierModal(false)} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
-                <button onClick={saveAtelier} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+        {/* Modal Atelier - composant autonome */}
+        <AtelierModalContent show={showAtelierModal} onClose={() => setShowAtelierModal(false)} onSave={saveAtelier} saving={saving} initialData={atelierForm} isEditing={!!editingAtelierId} darkMode={darkMode} />
 
-        {/* Modal Suivi Objectif */}
-        {showSuiviObjectifModal && createPortal(
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
-              <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-                <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Suivi mensuel des objectifs</h2>
-                <button onClick={() => setShowSuiviObjectifModal(false)}><X className="w-5 h-5" /></button>
-              </div>
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Mois</label>
-                    <select value={suiviObjectifForm.mois || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, mois: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`}>
-                      {moisNoms.slice(1).map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Année</label>
-                    <input type="number" value={suiviObjectifForm.annee || currentYear} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, annee: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Entrées du mois</label>
-                    <input type="number" value={suiviObjectifForm.effectifEntree || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, effectifEntree: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Sorties du mois</label>
-                    <input type="number" value={suiviObjectifForm.effectifSortie || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, effectifSortie: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                  <div>
-                    <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Effectif présent</label>
-                    <input type="number" value={suiviObjectifForm.effectifPresent || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, effectifPresent: e.target.value})}
-                      className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                  </div>
-                </div>
-                <div className={`border-t ${bg('border-slate-700', 'border-gray-200')} pt-4`}>
-                  <h4 className={`text-sm font-medium ${text('text-white', 'text-gray-900')} mb-3`}>Détail des sorties (cumulées depuis début d'année)</h4>
-                  <div className="grid grid-cols-5 gap-4">
-                    <div>
-                      <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Emploi durable</label>
-                      <input type="number" value={suiviObjectifForm.sortiesEmploiDurable || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, sortiesEmploiDurable: e.target.value})}
-                        className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                    </div>
-                    <div>
-                      <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Emploi transition</label>
-                      <input type="number" value={suiviObjectifForm.sortiesEmploiTransition || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, sortiesEmploiTransition: e.target.value})}
-                        className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                    </div>
-                    <div>
-                      <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Formation</label>
-                      <input type="number" value={suiviObjectifForm.sortiesFormation || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, sortiesFormation: e.target.value})}
-                        className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                    </div>
-                    <div>
-                      <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Autres positives</label>
-                      <input type="number" value={suiviObjectifForm.sortiesAutresPositives || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, sortiesAutresPositives: e.target.value})}
-                        className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                    </div>
-                    <div>
-                      <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Négatives</label>
-                      <input type="number" value={suiviObjectifForm.sortiesNegatives || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, sortiesNegatives: e.target.value})}
-                        className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label className={`block text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Commentaire</label>
-                  <textarea value={suiviObjectifForm.commentaire || ''} onChange={(e) => setSuiviObjectifForm({...suiviObjectifForm, commentaire: e.target.value})}
-                    rows={2} className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-700 text-white', 'bg-gray-100')}`} />
-                </div>
-              </div>
-              <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
-                <button onClick={() => setShowSuiviObjectifModal(false)} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
-                <button onClick={saveSuiviObjectif} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+        {/* Modal Suivi Objectif - composant autonome */}
+        <SuiviObjectifModalContent show={showSuiviObjectifModal} onClose={() => setShowSuiviObjectifModal(false)} onSave={saveSuiviObjectif} saving={saving} initialData={suiviObjectifForm} darkMode={darkMode} moisNoms={moisNoms} currentYear={currentYear} />
       </div>
     );
   };
@@ -6043,20 +6453,20 @@ export default function RHInsertionApp() {
     }
   }, [activeTab, selectedEmployee?.id, fichesPaieAnnee, loadFichesPaie]);
 
-  const uploadFichePaie = async () => {
-    if (!selectedEmployee || !fichePaieFile) return;
+  const uploadFichePaie = async (paieFormData: any, file: File | null) => {
+    if (!selectedEmployee || !file) return;
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('file', fichePaieFile);
-      formData.append('mois', fichePaieForm.mois.toString());
-      formData.append('annee', fichePaieForm.annee.toString());
-      if (fichePaieForm.notes) formData.append('notes', fichePaieForm.notes);
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('mois', paieFormData.mois.toString());
+      fd.append('annee', paieFormData.annee.toString());
+      if (paieFormData.notes) fd.append('notes', paieFormData.notes);
 
       const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/fiches-paie`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getAuthToken()}` },
-        body: formData
+        body: fd
       });
 
       if (res.ok) {
@@ -6240,119 +6650,8 @@ export default function RHInsertionApp() {
           </div>
         </Section>
 
-        {/* Modal d'upload */}
-        {showFichePaieModal && createPortal(
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-md w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
-              <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-                <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
-                  {fichesByMois[fichePaieForm.mois] ? 'Remplacer la fiche de paie' : 'Ajouter une fiche de paie'}
-                </h2>
-                <button onClick={() => setShowFichePaieModal(false)}><X className="w-5 h-5" /></button>
-              </div>
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Mois</label>
-                    <select
-                      value={fichePaieForm.mois}
-                      onChange={(e) => setFichePaieForm({ ...fichePaieForm, mois: parseInt(e.target.value) })}
-                      className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}
-                    >
-                      {moisNoms.map((nom, idx) => (
-                        <option key={idx} value={idx + 1}>{nom}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Année</label>
-                    <select
-                      value={fichePaieForm.annee}
-                      onChange={(e) => setFichePaieForm({ ...fichePaieForm, annee: parseInt(e.target.value) })}
-                      className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}
-                    >
-                      {anneesDisponibles.map(a => (
-                        <option key={a} value={a}>{a}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Fichier PDF <span className="text-red-500">*</span></label>
-                  <div
-                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                      fichePaieFile
-                        ? 'border-green-500/50 bg-green-500/10'
-                        : `${bg('border-slate-600 hover:border-slate-500', 'border-gray-300 hover:border-gray-400')}`
-                    }`}
-                    onClick={() => document.getElementById('fichePaieInput')?.click()}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const file = e.dataTransfer.files[0];
-                      if (file && file.type === 'application/pdf') {
-                        setFichePaieFile(file);
-                      }
-                    }}
-                  >
-                    <input
-                      id="fichePaieInput"
-                      type="file"
-                      accept=".pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) setFichePaieFile(file);
-                      }}
-                    />
-                    {fichePaieFile ? (
-                      <div className="flex items-center justify-center gap-2 text-green-500">
-                        <CheckCircle className="w-6 h-6" />
-                        <span className="text-sm font-medium">{fichePaieFile.name}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className={`w-8 h-8 mx-auto mb-2 ${text('text-slate-500', 'text-gray-400')}`} />
-                        <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>
-                          Cliquez ou glissez un fichier PDF
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Notes (optionnel)</label>
-                  <textarea
-                    value={fichePaieForm.notes || ''}
-                    onChange={(e) => setFichePaieForm({ ...fichePaieForm, notes: e.target.value })}
-                    rows={2}
-                    className={`w-full px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-white text-gray-900 border-gray-300')} border`}
-                    placeholder="Notes éventuelles..."
-                  />
-                </div>
-              </div>
-              <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
-                <button
-                  onClick={() => setShowFichePaieModal(false)}
-                  className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={uploadFichePaie}
-                  disabled={saving || !fichePaieFile}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
-                >
-                  {saving ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+        {/* Modal d'upload - composant autonome */}
+        <FichePaieModalContent show={showFichePaieModal} onClose={() => setShowFichePaieModal(false)} onSave={uploadFichePaie} saving={saving} initialData={fichePaieForm} darkMode={darkMode} moisNoms={moisNoms} fichesByMois={fichesByMois} anneesDisponibles={anneesDisponibles} />
       </div>
     );
   };
@@ -6775,304 +7074,16 @@ export default function RHInsertionApp() {
         )}
       </div>
 
-      {/* Modals */}
-      <Modal show={showNewEmployeeModal} onClose={() => setShowNewEmployeeModal(false)} title="Nouveau salarié" onSave={saveEmployee} saving={saving}>
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Civilité" name="civilite" type="select" value={formData.civilite} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} options={[{value:'M.',label:'M.'},{value:'Mme',label:'Mme'}]} required />
-          <Input label="Nom" name="nom" value={formData.nom} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Prénom" name="prenom" value={formData.prenom} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Date naissance" name="dateNaissance" type="date" value={formData.dateNaissance} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Adresse" name="adresse" value={formData.adresse} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} className="col-span-2" required />
-          <Input label="Code postal" name="codePostal" value={formData.codePostal} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Ville" name="ville" value={formData.ville} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Téléphone" name="telephone" value={formData.telephone} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Email" name="email" type="email" value={formData.email} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} />
-          <Input label="Date entrée" name="dateEntree" type="date" value={formData.dateEntree} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} required />
-          <Input label="Poste" name="poste" value={formData.poste} onChange={(e: any) => setFormData({...formData, [e.target.name]: e.target.value})} />
-        </div>
-      </Modal>
-
-      <Modal show={showSuiviModal} onClose={() => setShowSuiviModal(false)} title="Nouvel entretien" onSave={saveSuivi} saving={saving}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Date" name="dateEntretien" type="date" value={suiviForm.dateEntretien} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} required />
-            <Input label="Type" name="typeEntretien" type="select" value={suiviForm.typeEntretien} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} options={[{value:'Hebdomadaire',label:'Hebdomadaire'},{value:'Mensuel',label:'Mensuel'},{value:'Bilan',label:'Bilan'},{value:'Urgent',label:'Urgent'}]} />
-            <Input label="Durée (min)" name="duree" type="number" value={suiviForm.duree} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} />
-            <Input label="Conseiller" name="conseillerNom" value={suiviForm.conseillerNom} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} />
-          </div>
-          <Input label="Objet" name="objetEntretien" type="textarea" value={suiviForm.objetEntretien} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} required />
-          <Input label="Points abordés" name="pointsAbordes" type="textarea" value={suiviForm.pointsAbordes} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} />
-          <Input label="Actions décidées" name="actionsDecidees" type="textarea" value={suiviForm.actionsDecidees} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} />
-          <Input label="Prochain RDV" name="dateProchainRdv" type="date" value={suiviForm.dateProchainRdv} onChange={(e: any) => setSuiviForm({...suiviForm, [e.target.name]: e.target.value})} />
-        </div>
-      </Modal>
-
-      <Modal show={showPMSMPModal} onClose={() => setShowPMSMPModal(false)} title="Nouvelle PMSMP" onSave={savePMSMP} saving={saving}>
-        <div className="space-y-4">
-          <Input label="Entreprise" name="entrepriseNom" value={pmsmpForm.entrepriseNom} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} required />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="SIRET" name="entrepriseSiret" value={pmsmpForm.entrepriseSiret} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} />
-            <Input label="Adresse" name="entrepriseAdresse" value={pmsmpForm.entrepriseAdresse} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} />
-            <Input label="Tuteur" name="tuteurNom" value={pmsmpForm.tuteurNom} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} />
-            <Input label="Fonction tuteur" name="tuteurFonction" value={pmsmpForm.tuteurFonction} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} />
-            <Input label="Date début" name="dateDebut" type="date" value={pmsmpForm.dateDebut} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} required />
-            <Input label="Date fin" name="dateFin" type="date" value={pmsmpForm.dateFin} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} required />
-          </div>
-          <Input label="Objectif" name="objectifDecouverte" type="textarea" value={pmsmpForm.objectifDecouverte} onChange={(e: any) => setPmsmpForm({...pmsmpForm, [e.target.name]: e.target.value})} />
-        </div>
-      </Modal>
-
-      <Modal show={showFormationModal} onClose={() => setShowFormationModal(false)} title="Nouvelle formation" onSave={saveFormation} saving={saving}>
-        <div className="space-y-4">
-          <Input label="Intitulé" name="intitule" value={formationForm.intitule} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} required />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Organisme" name="organisme" value={formationForm.organisme} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} />
-            <Input label="Type" name="type" type="select" value={formationForm.type} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} options={[{value:'Interne',label:'Interne'},{value:'Externe',label:'Externe'},{value:'E-learning',label:'E-learning'}]} />
-            <Input label="Date début" name="dateDebut" type="date" value={formationForm.dateDebut} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} required />
-            <Input label="Date fin" name="dateFin" type="date" value={formationForm.dateFin} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} />
-            <Input label="Durée (h)" name="dureeHeures" type="number" value={formationForm.dureeHeures} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} />
-          </div>
-          <Input label="Objectifs" name="objectifs" type="textarea" value={formationForm.objectifs} onChange={(e: any) => setFormationForm({...formationForm, [e.target.name]: e.target.value})} />
-        </div>
-      </Modal>
-
-      <Modal show={showDocumentModal} onClose={() => setShowDocumentModal(false)} title="Ajouter un document" onSave={saveDocument} saving={saving}>
-        <div className="space-y-4">
-          <Input label="Type" name="typeDocument" type="select" value={documentForm.typeDocument} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} required
-            options={[
-              {value:'CNI',label:'Carte d\'identité'},{value:'CARTE_VITALE',label:'Carte Vitale'},{value:'JUSTIF_DOMICILE',label:'Justificatif domicile'},
-              {value:'ATTESTATION_SECU',label:'Attestation sécu'},{value:'RIB',label:'RIB'},{value:'PERMIS',label:'Permis'},
-              {value:'PASS_INCLUSION',label:'Pass Inclusion'},{value:'DPAE',label:'DPAE'},{value:'FICHE_EMBAUCHE',label:'Fiche d\'embauche'},
-              {value:'CONTRAT',label:'Contrat de travail'},{value:'AVENANT',label:'Avenant au contrat'},{value:'RENOUVELLEMENT',label:'Renouvellement + DPAE'},
-              {value:'SOLDE_TOUT_COMPTE',label:'Solde de tout compte'},{value:'CERTIFICAT_TRAVAIL',label:'Certificat de travail'},
-              {value:'ATTESTATION_FT',label:'Attestation France Travail'},{value:'ATTESTATION_CAF',label:'Attestation CAF'}
-            ]} />
-          <Input label="Nom du fichier" name="nomDocument" value={documentForm.nomDocument} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
-
-          {/* Champ Date de fin pour les avenants (sera ajouté à l'agenda) */}
-          {documentForm.typeDocument === 'AVENANT' && (
-            <div className={`p-4 rounded-lg ${bg('bg-amber-500/10', 'bg-amber-50')} border ${bg('border-amber-500/30', 'border-amber-200')}`}>
-              <p className={`text-xs font-medium mb-2 ${text('text-amber-400', 'text-amber-700')}`}>
-                <CalendarDays className="w-4 h-4 inline mr-1" />
-                Nouvelle date de fin de contrat (sera ajoutée à l'agenda)
-              </p>
-              <Input
-                label="Date de fin de contrat"
-                name="dateExpiration"
-                type="date"
-                value={documentForm.dateExpiration}
-                onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})}
-                required
-              />
-            </div>
-          )}
-
-          {/* Date d'expiration standard pour les autres documents */}
-          {documentForm.typeDocument !== 'AVENANT' && (
-            <Input label="Date d'expiration (optionnel)" name="dateExpiration" type="date" value={documentForm.dateExpiration} onChange={(e: any) => setDocumentForm({...documentForm, [e.target.name]: e.target.value})} />
-          )}
-
-          <div
-            className={`p-8 border-2 border-dashed ${documentForm.file ? 'border-green-500 bg-green-500/10' : 'border-slate-500'} rounded-lg text-center cursor-pointer hover:border-blue-500 transition-colors`}
-            onClick={() => document.getElementById('document-file-input')?.click()}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const file = e.dataTransfer.files[0];
-              if (file) {
-                setDocumentForm({...documentForm, file, nomDocument: documentForm.nomDocument || file.name});
-              }
-            }}
-          >
-            <input
-              id="document-file-input"
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  setDocumentForm({...documentForm, file, nomDocument: documentForm.nomDocument || file.name});
-                }
-              }}
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-            />
-            <Upload className={`w-8 h-8 mx-auto mb-2 ${documentForm.file ? 'text-green-500' : 'text-slate-400'}`} />
-            {documentForm.file ? (
-              <p className="text-sm text-green-500 font-medium">{documentForm.file.name}</p>
-            ) : (
-              <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Glisser-déposer ou cliquer pour sélectionner</p>
-            )}
-          </div>
-        </div>
-      </Modal>
-
-      <Modal show={showContratModal} onClose={() => setShowContratModal(false)} title="Nouveau contrat" onSave={saveContrat} saving={saving}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Type" name="typeContrat" type="select" value={contratForm.typeContrat} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} options={[{value:'CDDI',label:'CDDI'},{value:'CDD',label:'CDD'}]} required />
-            <Input label="Motif" name="motif" type="select" value={contratForm.motif} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} options={[{value:'Initial',label:'Initial'},{value:'Renouvellement',label:'Renouvellement'}]} />
-            <Input label="Date début" name="dateDebut" type="date" value={contratForm.dateDebut} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} required />
-            <Input label="Date fin" name="dateFin" type="date" value={contratForm.dateFin} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} required />
-            <Input label="Heures/semaine" name="dureeHeures" type="number" value={contratForm.dureeHeures} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} />
-            <Input label="N° DPAE" name="dpaeNumero" value={contratForm.dpaeNumero} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} />
-            <Input label="Date DPAE" name="dpaeDate" type="date" value={contratForm.dpaeDate} onChange={(e: any) => setContratForm({...contratForm, [e.target.name]: e.target.value})} />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal show={showAvertissementModal} onClose={() => setShowAvertissementModal(false)} title="Nouvel avertissement" onSave={saveAvertissement} saving={saving}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Date" name="dateAvertissement" type="date" value={avertissementForm.dateAvertissement} onChange={(e: any) => setAvertissementForm({...avertissementForm, [e.target.name]: e.target.value})} required />
-            <Input label="Type" name="type" type="select" value={avertissementForm.type} onChange={(e: any) => setAvertissementForm({...avertissementForm, [e.target.name]: e.target.value})} options={[{value:'Verbal',label:'Verbal'},{value:'Écrit',label:'Écrit'},{value:'Mise à pied',label:'Mise à pied'}]} required />
-          </div>
-          <Input label="Motif" name="motif" type="textarea" value={avertissementForm.motif} onChange={(e: any) => setAvertissementForm({...avertissementForm, [e.target.name]: e.target.value})} required />
-          <Input label="Description" name="description" type="textarea" value={avertissementForm.description} onChange={(e: any) => setAvertissementForm({...avertissementForm, [e.target.name]: e.target.value})} />
-        </div>
-      </Modal>
-
-      {/* Modal Autorisation de sortie */}
-      {showAutorisationSortieModal && createPortal(
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto`} onMouseDown={(e: any) => e.stopPropagation()}>
-            <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-              <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Nouvelle autorisation de sortie</h2>
-              <button onClick={() => setShowAutorisationSortieModal(false)}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <Input label="Date de sortie" name="date" type="date" value={autorisationSortieForm.date} onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})} required />
-                <Input label="Heure de sortie" name="heureDebut" type="time" value={autorisationSortieForm.heureDebut} onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})} required />
-                <Input label="Heure de retour" name="heureFin" type="time" value={autorisationSortieForm.heureFin} onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})} required />
-              </div>
-              {autorisationSortieForm.heureDebut && autorisationSortieForm.heureFin && (() => {
-                const [hD, mD] = autorisationSortieForm.heureDebut.split(':').map(Number);
-                const [hF, mF] = autorisationSortieForm.heureFin.split(':').map(Number);
-                const mins = (hF * 60 + mF) - (hD * 60 + mD);
-                if (mins <= 0) return <p className="text-red-400 text-sm">L'heure de retour doit être après l'heure de sortie</p>;
-                const h = Math.floor(mins / 60);
-                const m = mins % 60;
-                return <p className={`text-sm font-medium ${text('text-orange-400', 'text-orange-600')}`}>Durée d'absence : {h}h{m > 0 ? m.toString().padStart(2, '0') : '00'}</p>;
-              })()}
-              <Input
-                label="Catégorie du motif"
-                name="motifCategorie"
-                type="select"
-                value={autorisationSortieForm.motifCategorie}
-                onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})}
-                options={MOTIF_CATEGORIES}
-                required
-              />
-              <Input
-                label={autorisationSortieForm.motifCategorie === 'autre' ? 'Précisez le motif' : 'Précisions (optionnel)'}
-                name="motif"
-                type="textarea"
-                value={autorisationSortieForm.motif}
-                onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})}
-                placeholder="Détails supplémentaires..."
-                required={autorisationSortieForm.motifCategorie === 'autre'}
-              />
-
-              {/* Supérieur hiérarchique */}
-              <Input
-                label="Supérieur hiérarchique (Nom Prénom)"
-                name="superieurNom"
-                value={autorisationSortieForm.superieurNom || ''}
-                onChange={(e: any) => setAutorisationSortieForm({...autorisationSortieForm, [e.target.name]: e.target.value})}
-                placeholder="Nom et prénom du responsable..."
-              />
-
-              {/* Zone signature supérieur */}
-              <div>
-                <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>
-                  Signature du supérieur hiérarchique
-                </label>
-                <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
-                  <SignatureCanvas
-                    ref={superieurSignatureRef}
-                    canvasProps={{
-                      width: 560,
-                      height: 120,
-                      className: 'w-full cursor-crosshair',
-                      style: { width: '100%', height: '120px' }
-                    }}
-                    penColor={darkMode ? '#ffffff' : '#000000'}
-                    backgroundColor={darkMode ? '#334155' : '#f9fafb'}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => superieurSignatureRef.current?.clear()}
-                  className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}
-                >
-                  Effacer la signature
-                </button>
-              </div>
-
-              {/* Zone signature salarié */}
-              <div>
-                <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>
-                  Signature du salarié
-                </label>
-                <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
-                  <SignatureCanvas
-                    ref={autorisationSignatureRef}
-                    canvasProps={{
-                      width: 560,
-                      height: 120,
-                      className: 'w-full cursor-crosshair',
-                      style: { width: '100%', height: '120px' }
-                    }}
-                    penColor={darkMode ? '#ffffff' : '#000000'}
-                    backgroundColor={darkMode ? '#334155' : '#f9fafb'}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => autorisationSignatureRef.current?.clear()}
-                  className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}
-                >
-                  Effacer la signature
-                </button>
-              </div>
-            </div>
-            <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
-              <button onClick={() => setShowAutorisationSortieModal(false)} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
-              <button
-                onClick={saveAutorisationSortie}
-                disabled={saving || !autorisationSortieForm.date || !autorisationSortieForm.heureDebut || !autorisationSortieForm.heureFin}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {saving ? 'Enregistrement...' : <><Printer className="w-4 h-4" /> Enregistrer et générer PDF</>}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      <Modal show={showObjectifModal} onClose={() => { setShowObjectifModal(false); setObjectifForm({}); setEditingObjectifId(null); }} title={editingObjectifId ? "Modifier l'objectif" : "Nouvel objectif"} onSave={saveObjectifIndividuel} saving={saving}>
-        <div className="space-y-4">
-          <Input label="Titre de l'objectif" name="titre" value={objectifForm.titre || ''} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} required placeholder="Ex: Obtenir le permis B" />
-          <Input label="Description" name="description" type="textarea" value={objectifForm.description || ''} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} placeholder="Détails de l'objectif..." />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Catégorie" name="categorie" type="select" value={objectifForm.categorie || 'emploi'} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} options={[{value:'emploi',label:'Emploi'},{value:'formation',label:'Formation'},{value:'administratif',label:'Administratif'},{value:'social',label:'Social'},{value:'personnel',label:'Personnel'}]} />
-            <Input label="Priorité" name="priorite" type="select" value={objectifForm.priorite || 'normale'} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} options={[{value:'basse',label:'Basse'},{value:'normale',label:'Normale'},{value:'haute',label:'Haute'},{value:'critique',label:'Critique'}]} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Échéance" name="dateEcheance" type="date" value={objectifForm.dateEcheance?.split('T')[0] || ''} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} />
-            <Input label="Points attribués" name="pointsAttribues" type="number" value={objectifForm.pointsAttribues || 5} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: parseInt(e.target.value) || 0})} />
-          </div>
-          {editingObjectifId && (
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="Statut" name="statut" type="select" value={objectifForm.statut || 'en_cours'} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} options={[{value:'en_cours',label:'En cours'},{value:'atteint',label:'Atteint'},{value:'abandonne',label:'Abandonné'},{value:'reporte',label:'Reporté'}]} />
-              <Input label="Progression (%)" name="progression" type="number" value={objectifForm.progression || 0} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: parseInt(e.target.value) || 0})} />
-            </div>
-          )}
-          <Input label="Notes" name="notes" type="textarea" value={objectifForm.notes || ''} onChange={(e: any) => setObjectifForm({...objectifForm, [e.target.name]: e.target.value})} placeholder="Notes additionnelles..." />
-        </div>
-      </Modal>
+      {/* Modals - Composants autonomes qui gèrent leur propre état de formulaire */}
+      <NewEmployeeModalContent show={showNewEmployeeModal} onClose={() => setShowNewEmployeeModal(false)} onSave={saveEmployee} saving={saving} initialData={formData} />
+      <SuiviModalContent show={showSuiviModal} onClose={() => setShowSuiviModal(false)} onSave={saveSuivi} saving={saving} initialData={suiviForm} />
+      <PMSMPModalContent show={showPMSMPModal} onClose={() => setShowPMSMPModal(false)} onSave={savePMSMP} saving={saving} initialData={pmsmpForm} />
+      <FormationModalContent show={showFormationModal} onClose={() => setShowFormationModal(false)} onSave={saveFormation} saving={saving} initialData={formationForm} />
+      <DocumentModalContent show={showDocumentModal} onClose={() => setShowDocumentModal(false)} onSave={saveDocument} saving={saving} initialData={documentForm} darkMode={darkMode} formatDate={formatDate} />
+      <ContratModalContent show={showContratModal} onClose={() => setShowContratModal(false)} onSave={saveContrat} saving={saving} initialData={contratForm} />
+      <AvertissementModalContent show={showAvertissementModal} onClose={() => setShowAvertissementModal(false)} onSave={saveAvertissement} saving={saving} initialData={avertissementForm} />
+      <AutorisationSortieModalContent show={showAutorisationSortieModal} onClose={() => setShowAutorisationSortieModal(false)} onSave={saveAutorisationSortie} saving={saving} initialData={autorisationSortieForm} darkMode={darkMode} MOTIF_CATEGORIES={MOTIF_CATEGORIES} />
+      <ObjectifModalContent show={showObjectifModal} onClose={() => { setShowObjectifModal(false); setObjectifForm({}); setEditingObjectifId(null); }} onSave={saveObjectifIndividuel} saving={saving} initialData={objectifForm} isEditing={!!editingObjectifId} />
 
       {/* Modal prévisualisation document */}
       {showDocumentPreview && (
