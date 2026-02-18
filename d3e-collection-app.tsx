@@ -5548,7 +5548,7 @@ Catégories disponibles:
                         <div className={`text-xs font-semibold ${headingClasses} mb-1 text-center`}>ENTREPÔT</div>
                         <div className={`text-xs ${subTextClasses} text-center mb-2`}>Stockage</div>
                         <div className={`${bg('bg-slate-900', 'bg-gray-50')} ${cardBorderClasses} border rounded-lg p-3 w-full`}>
-                          <div className={`text-xs font-medium ${headingClasses} mb-1`}>D3E Valotik</div>
+                          <div className={`text-xs font-medium ${headingClasses} mb-1`}>D3E VALO</div>
                           <div className={`text-xs ${text('text-slate-400', 'text-gray-600')} leading-relaxed`}>
                             Zone A - Allée 3<br/>
                             15 Rue de l'Industrie<br/>
