@@ -68,7 +68,9 @@ export const getPointagesMensuels = async (req: Request, res: Response) => {
         civilite: true,
         dureeHebdo: true,
         poste: true,
-        dateEntree: true
+        dateEntree: true,
+        typeContrat: true,
+        numeroSecu: true
       },
       orderBy: { nom: 'asc' }
     });
@@ -468,10 +470,10 @@ export const signerPointage = async (req: Request, res: Response) => {
 };
 
 // Enregistrer plusieurs pointages d'un coup (mode grille)
-// IMPORTANT: Cette API respecte les signatures existantes et ne modifie pas les heures signées
+// IMPORTANT: Cette API respecte les signatures existantes sauf si forceUpdate=true
 export const savePointagesMultiples = async (req: Request, res: Response) => {
   try {
-    const { pointageMensuelId, pointages } = req.body;
+    const { pointageMensuelId, pointages, forceUpdate } = req.body;
 
     // pointages = [{ date, heures, heuresMatin?, heuresApresmidi? }, ...]
     for (const p of pointages) {
@@ -487,10 +489,10 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
         }
       });
 
-      // Si des signatures existent, ne pas écraser les heures signées
+      // Si des signatures existent, ne pas écraser les heures signées (sauf forceUpdate)
       if (existant) {
-        const matinSigne = !!existant.signatureMatin;
-        const apresmidiSigne = !!existant.signatureApresmidi;
+        const matinSigne = !forceUpdate && !!existant.signatureMatin;
+        const apresmidiSigne = !forceUpdate && !!existant.signatureApresmidi;
 
         // Calculer les nouvelles valeurs en respectant les signatures
         let heuresMatin = existant.heuresMatin;
@@ -506,7 +508,7 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
         // Si seulement 'heures' est fourni (ancien format), répartir entre matin et après-midi non signés
         if (p.heures !== undefined && p.heuresMatin === undefined && p.heuresApresmidi === undefined) {
           if (!matinSigne && !apresmidiSigne) {
-            // Aucune signature : on peut tout modifier
+            // Aucune signature (ou forceUpdate) : on peut tout modifier
             // Répartition standard : max 4h matin, reste en après-midi
             heuresMatin = Math.min(p.heures, 4);
             heuresApresmidi = Math.max(0, p.heures - 4);
@@ -517,7 +519,7 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
             // Après-midi signé : on ne peut modifier que le matin
             heuresMatin = Math.max(0, p.heures - heuresApresmidi);
           }
-          // Si les deux sont signés, on ne modifie rien
+          // Si les deux sont signés et pas forceUpdate, on ne modifie rien
         }
 
         const heuresTravaillees = heuresMatin + heuresApresmidi;
@@ -888,7 +890,7 @@ export const getPointageStats = async (req: Request, res: Response) => {
 // Créer une autorisation de sortie
 export const createAutorisationSortie = async (req: Request, res: Response) => {
   try {
-    const { employeeId, date, heureDebut, heureFin, motif, signature } = req.body;
+    const { employeeId, date, heureDebut, heureFin, motifCategorie, motif, signature, superieurNom, superieurSignature } = req.body;
 
     if (!employeeId || !date || !heureDebut || !heureFin) {
       return res.status(400).json({
@@ -917,9 +919,12 @@ export const createAutorisationSortie = async (req: Request, res: Response) => {
         heureDebut,
         heureFin,
         dureeMinutes,
+        motifCategorie: motifCategorie || null,
         motif: motif || null,
         signature: signature || null,
-        signatureAt: signature ? new Date() : null
+        signatureAt: signature ? new Date() : null,
+        superieurNom: superieurNom || null,
+        superieurSignature: superieurSignature || null
       },
       include: {
         employee: {
@@ -927,69 +932,6 @@ export const createAutorisationSortie = async (req: Request, res: Response) => {
         }
       }
     });
-
-    // Mettre à jour le pointage journalier pour déduire les heures
-    const dureeHeures = dureeMinutes / 60;
-    const dateStr = date.split('T')[0];
-
-    // Trouver le pointage mensuel de l'employé
-    const pointageMensuel = await prisma.pointageMensuel.findFirst({
-      where: {
-        employeeId,
-        mois: new Date(date).getMonth() + 1,
-        annee: new Date(date).getFullYear()
-      }
-    });
-
-    if (pointageMensuel) {
-      // Trouver ou créer le pointage journalier
-      let pointageJournalier = await prisma.pointageJournalier.findFirst({
-        where: {
-          pointageMensuelId: pointageMensuel.id,
-          date: new Date(dateStr)
-        }
-      });
-
-      if (pointageJournalier) {
-        // Déduire les heures de l'après-midi (ou du matin selon l'heure)
-        const heureDebutNum = hDebut + mDebut / 60;
-        let newHeuresMatin = pointageJournalier.heuresMatin;
-        let newHeuresApresmidi = pointageJournalier.heuresApresmidi;
-
-        if (heureDebutNum < 12) {
-          // Sortie le matin
-          newHeuresMatin = Math.max(0, newHeuresMatin - dureeHeures);
-        } else {
-          // Sortie l'après-midi
-          newHeuresApresmidi = Math.max(0, newHeuresApresmidi - dureeHeures);
-        }
-
-        const newTotal = newHeuresMatin + newHeuresApresmidi;
-
-        await prisma.pointageJournalier.update({
-          where: { id: pointageJournalier.id },
-          data: {
-            heuresMatin: newHeuresMatin,
-            heuresApresmidi: newHeuresApresmidi,
-            heuresTravaillees: newTotal
-          }
-        });
-
-        // Recalculer le total mensuel
-        const journees = await prisma.pointageJournalier.findMany({
-          where: { pointageMensuelId: pointageMensuel.id }
-        });
-        const totalHeures = journees.reduce((sum, j) => sum + j.heuresTravaillees, 0);
-
-        await prisma.pointageMensuel.update({
-          where: { id: pointageMensuel.id },
-          data: {
-            heuresPointees: totalHeures,
-            pourcentage: Math.round((totalHeures / pointageMensuel.heuresContrat) * 100)
-          }
-        });
-      }
-    }
 
     res.json({ success: true, data: autorisation });
   } catch (error: any) {
@@ -1028,6 +970,399 @@ export const getAutorisationsSortie = async (req: Request, res: Response) => {
     res.json({ success: true, data: autorisations });
   } catch (error: any) {
     console.error('Erreur getAutorisationsSortie:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Supprimer une autorisation de sortie
+export const deleteAutorisationSortie = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.autorisationSortie.delete({
+      where: { id }
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erreur deleteAutorisationSortie:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ============================================
+// POINTAGE MOBILE (liens publics avec token)
+// ============================================
+
+// Générer un token mobile unique
+const generateUniqueToken = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+};
+
+// Générer ou régénérer le token mobile d'un employé
+export const generateMobileToken = async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+
+    // Vérifier que l'employé existe
+    const employee = await prisma.insertionEmployee.findUnique({
+      where: { id: employeeId }
+    });
+
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employé non trouvé' });
+    }
+
+    // Générer un nouveau token unique
+    let token = generateUniqueToken();
+    let attempts = 0;
+
+    // S'assurer que le token est unique
+    while (attempts < 10) {
+      const existing = await prisma.insertionEmployee.findFirst({
+        where: { mobileToken: token }
+      });
+      if (!existing) break;
+      token = generateUniqueToken();
+      attempts++;
+    }
+
+    // Mettre à jour l'employé avec le nouveau token
+    const updated = await prisma.insertionEmployee.update({
+      where: { id: employeeId },
+      data: {
+        mobileToken: token,
+        mobileTokenCreatedAt: new Date()
+      },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        mobileToken: true,
+        mobileTokenCreatedAt: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...updated,
+        mobileUrl: `/pointage-mobile.html?token=${token}`
+      }
+    });
+  } catch (error: any) {
+    console.error('Erreur generateMobileToken:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Récupérer les infos de pointage mobile (public - avec token)
+export const getMobilePointage = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Token requis' });
+    }
+
+    // Trouver l'employé par son token
+    const employee = await prisma.insertionEmployee.findFirst({
+      where: { mobileToken: token },
+      select: {
+        id: true,
+        civilite: true,
+        nom: true,
+        prenom: true,
+        poste: true,
+        dureeHebdo: true,
+        photoUrl: true
+      }
+    });
+
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Lien invalide ou expiré' });
+    }
+
+    // Date du jour
+    const now = new Date();
+    const mois = now.getMonth() + 1;
+    const annee = now.getFullYear();
+    const jourAujourdhui = now.getDate();
+
+    // Récupérer ou créer le pointage mensuel
+    let pointageMensuel = await prisma.pointageMensuel.findUnique({
+      where: {
+        employeeId_mois_annee: {
+          employeeId: employee.id,
+          mois,
+          annee
+        }
+      },
+      include: {
+        journees: {
+          orderBy: { date: 'asc' }
+        }
+      }
+    });
+
+    if (!pointageMensuel) {
+      const heuresContrat = calculerHeuresContratMois(employee.dureeHebdo, mois, annee);
+      pointageMensuel = await prisma.pointageMensuel.create({
+        data: {
+          employeeId: employee.id,
+          mois,
+          annee,
+          heuresContrat,
+          heuresBanqueEntree: 0
+        },
+        include: {
+          journees: {
+            orderBy: { date: 'asc' }
+          }
+        }
+      });
+    }
+
+    // Générer tous les jours du mois avec leur statut
+    const nbJours = new Date(annee, mois, 0).getDate();
+    const nomsJours = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    const joursMois = [];
+
+    for (let d = 1; d <= nbJours; d++) {
+      const dateObj = new Date(annee, mois - 1, d);
+      const jourSemaine = dateObj.getDay();
+      const dateStr = `${annee}-${String(mois).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+      // Trouver le pointage pour ce jour
+      const pointageJour = pointageMensuel.journees?.find(j => {
+        const jDate = new Date(j.date);
+        return jDate.getDate() === d;
+      });
+
+      joursMois.push({
+        jour: d,
+        dateStr,
+        nomJour: nomsJours[jourSemaine],
+        estWeekend: jourSemaine === 0 || jourSemaine === 6,
+        estAujourdhui: d === jourAujourdhui,
+        pointage: pointageJour ? {
+          heuresMatin: pointageJour.heuresMatin,
+          heuresApresmidi: pointageJour.heuresApresmidi,
+          heuresTravaillees: pointageJour.heuresTravaillees,
+          signatureMatin: !!pointageJour.signatureMatin,
+          signatureApresmidi: !!pointageJour.signatureApresmidi
+        } : null
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        employee: {
+          civilite: employee.civilite,
+          nom: employee.nom,
+          prenom: employee.prenom,
+          poste: employee.poste,
+          photoUrl: employee.photoUrl,
+          dureeHebdo: employee.dureeHebdo
+        },
+        mois,
+        annee,
+        jourAujourdhui,
+        joursMois,
+        pointageMensuelId: pointageMensuel.id,
+        totalHeures: pointageMensuel.heuresPointees,
+        heuresContrat: pointageMensuel.heuresContrat
+      }
+    });
+  } catch (error: any) {
+    console.error('Erreur getMobilePointage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Signer un pointage depuis le mobile (public - avec token)
+export const signerMobile = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { periode, signature, heures, date: dateParam } = req.body; // periode: 'matin' ou 'apresmidi', date: 'YYYY-MM-DD' optionnel
+
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Token requis' });
+    }
+
+    if (!periode || !['matin', 'apresmidi'].includes(periode)) {
+      return res.status(400).json({ success: false, error: 'Période invalide (matin ou apresmidi)' });
+    }
+
+    if (!signature) {
+      return res.status(400).json({ success: false, error: 'Signature requise' });
+    }
+
+    // Trouver l'employé par son token
+    const employee = await prisma.insertionEmployee.findFirst({
+      where: { mobileToken: token },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        dureeHebdo: true
+      }
+    });
+
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Lien invalide ou expiré' });
+    }
+
+    // Date : utiliser la date fournie ou la date du jour
+    const now = new Date();
+    let mois: number, annee: number, jour: number, dateStr: string;
+
+    if (dateParam) {
+      // Utiliser la date fournie (format YYYY-MM-DD)
+      const [y, m, d] = dateParam.split('-').map(Number);
+      annee = y;
+      mois = m;
+      jour = d;
+      dateStr = dateParam;
+    } else {
+      // Utiliser la date du jour
+      mois = now.getMonth() + 1;
+      annee = now.getFullYear();
+      jour = now.getDate();
+      dateStr = `${annee}-${String(mois).padStart(2, '0')}-${String(jour).padStart(2, '0')}`;
+    }
+
+    const dateObj = new Date(dateStr);
+
+    // Vérifier que ce n'est pas un weekend
+    const jourSemaine = dateObj.getDay();
+    if (jourSemaine === 0 || jourSemaine === 6) {
+      return res.status(400).json({ success: false, error: 'Impossible de signer un weekend' });
+    }
+
+    // Récupérer ou créer le pointage mensuel
+    let pointageMensuel = await prisma.pointageMensuel.findUnique({
+      where: {
+        employeeId_mois_annee: {
+          employeeId: employee.id,
+          mois,
+          annee
+        }
+      }
+    });
+
+    if (!pointageMensuel) {
+      const heuresContrat = calculerHeuresContratMois(employee.dureeHebdo, mois, annee);
+      pointageMensuel = await prisma.pointageMensuel.create({
+        data: {
+          employeeId: employee.id,
+          mois,
+          annee,
+          heuresContrat,
+          heuresBanqueEntree: 0
+        }
+      });
+    }
+
+    // Récupérer ou créer le pointage journalier
+    let pointageJournalier = await prisma.pointageJournalier.findUnique({
+      where: {
+        pointageMensuelId_date: {
+          pointageMensuelId: pointageMensuel.id,
+          date: dateObj
+        }
+      }
+    });
+
+    // Heures par défaut fixes : 3h le matin, 3.5h l'après-midi
+    const heuresMatinDefaut = 3;
+    const heuresApresmidiDefaut = 3.5;
+
+    // Utiliser les heures fournies ou les défauts selon la période
+    let heuresSignees: number;
+    if (heures !== undefined) {
+      heuresSignees = parseFloat(heures);
+    } else {
+      heuresSignees = periode === 'matin' ? heuresMatinDefaut : heuresApresmidiDefaut;
+    }
+
+    if (pointageJournalier) {
+      // Vérifier si déjà signé
+      if (periode === 'matin' && pointageJournalier.signatureMatin) {
+        return res.status(400).json({ success: false, error: 'Matin déjà signé' });
+      }
+      if (periode === 'apresmidi' && pointageJournalier.signatureApresmidi) {
+        return res.status(400).json({ success: false, error: 'Après-midi déjà signé' });
+      }
+
+      // Mettre à jour avec la signature
+      const updateData: any = {};
+      if (periode === 'matin') {
+        updateData.signatureMatin = signature;
+        updateData.signatureMatinAt = now;
+        updateData.heuresMatin = heuresSignees;
+      } else {
+        updateData.signatureApresmidi = signature;
+        updateData.signatureApresmidiAt = now;
+        updateData.heuresApresmidi = heuresSignees;
+      }
+
+      // Recalculer le total
+      const newHeuresMatin = periode === 'matin' ? heuresSignees : pointageJournalier.heuresMatin;
+      const newHeuresApresmidi = periode === 'apresmidi' ? heuresSignees : pointageJournalier.heuresApresmidi;
+      updateData.heuresTravaillees = newHeuresMatin + newHeuresApresmidi;
+      updateData.typeJournee = 'travail';
+
+      pointageJournalier = await prisma.pointageJournalier.update({
+        where: { id: pointageJournalier.id },
+        data: updateData
+      });
+    } else {
+      // Créer le pointage avec la signature
+      const createData: any = {
+        pointageMensuelId: pointageMensuel.id,
+        date: dateObj,
+        typeJournee: 'travail',
+        heuresMatin: periode === 'matin' ? heuresSignees : 0,
+        heuresApresmidi: periode === 'apresmidi' ? heuresSignees : 0,
+        heuresTravaillees: heuresSignees
+      };
+
+      if (periode === 'matin') {
+        createData.signatureMatin = signature;
+        createData.signatureMatinAt = now;
+      } else {
+        createData.signatureApresmidi = signature;
+        createData.signatureApresmidiAt = now;
+      }
+
+      pointageJournalier = await prisma.pointageJournalier.create({
+        data: createData
+      });
+    }
+
+    // Recalculer le total mensuel
+    await recalculerPointageMensuel(pointageMensuel.id);
+
+    res.json({
+      success: true,
+      message: `Signature ${periode === 'matin' ? 'du matin' : 'de l\'après-midi'} enregistrée`,
+      data: {
+        heuresMatin: pointageJournalier.heuresMatin,
+        heuresApresmidi: pointageJournalier.heuresApresmidi,
+        heuresTravaillees: pointageJournalier.heuresTravaillees,
+        signatureMatin: !!pointageJournalier.signatureMatin,
+        signatureApresmidi: !!pointageJournalier.signatureApresmidi
+      }
+    });
+  } catch (error: any) {
+    console.error('Erreur signerMobile:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

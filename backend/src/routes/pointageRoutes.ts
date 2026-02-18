@@ -36,5 +36,19 @@ router.post('/cloturer', pointageController.cloturerMois);
 // Autorisations de sortie
 router.post('/autorisation-sortie', pointageController.createAutorisationSortie);
 router.get('/autorisation-sortie/:employeeId', pointageController.getAutorisationsSortie);
+router.delete('/autorisation-sortie/:id', pointageController.deleteAutorisationSortie);
+
+// ============================================
+// POINTAGE MOBILE (liens publics avec token)
+// ============================================
+
+// Générer un token mobile pour un employé (authentifié)
+router.post('/generate-token/:employeeId', pointageController.generateMobileToken);
+
+// Récupérer infos employé + pointage du jour (public - avec token)
+router.get('/mobile/:token', pointageController.getMobilePointage);
+
+// Signer un pointage depuis le mobile (public - avec token)
+router.post('/mobile/:token/signer', pointageController.signerMobile);
 
 export default router;

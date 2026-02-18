@@ -222,6 +222,9 @@ export const updateInsertionEmployee = async (req: Request, res: Response) => {
       }
     }
 
+    // Convertir les entiers
+    if (data.nombreEnfants !== undefined) data.nombreEnfants = parseInt(data.nombreEnfants) || 0;
+
     // Convertir les dates
     if (data.dateNaissance) data.dateNaissance = new Date(data.dateNaissance);
     if (data.dateEntree) data.dateEntree = new Date(data.dateEntree);

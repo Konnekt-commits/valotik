@@ -16,6 +16,7 @@ export default defineConfig({
         main: 'index.html',
         'rh-insertion': 'rh-insertion.html',
         'pointage-mobile': 'pointage-mobile.html',
+        'pointage-salarie': 'pointage-salarie.html',
       },
     },
   },

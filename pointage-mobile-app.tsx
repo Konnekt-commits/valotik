@@ -119,9 +119,13 @@ export default function PointageMobileApp() {
   const [autorisationData, setAutorisationData] = useState({
     heureDebut: '',
     heureFin: '',
-    motif: ''
+    motifCategorie: '',
+    motif: '',
+    superieurNom: ''
   });
   const [autorisationSignature, setAutorisationSignature] = useState<string | null>(null);
+  const [superieurSignature, setSuperieurSignature] = useState<string | null>(null);
+  const superieurCanvasRef = useRef<HTMLCanvasElement>(null);
   const [savingAutorisation, setSavingAutorisation] = useState(false);
 
   // Couleurs dynamiques
@@ -152,11 +156,11 @@ export default function PointageMobileApp() {
 
             // Valeurs par défaut selon le jour de la semaine
             const dayOfWeek = selectedDate.getDay();
-            // Lundi (1) à Jeudi (4) : matin 3h, après-midi 3.5h
-            // Vendredi (5) et weekend (0, 6) : 0h
-            const isLundiAJeudi = dayOfWeek >= 1 && dayOfWeek <= 4;
-            const defaultMatin = isLundiAJeudi ? '3' : '';
-            const defaultApresmidi = isLundiAJeudi ? '3.5' : '';
+            // Lundi (1) à Vendredi (5) : matin 3h, après-midi 3.5h
+            // Weekend (0, 6) : 0h
+            const isJourOuvre = dayOfWeek >= 1 && dayOfWeek <= 5;
+            const defaultMatin = isJourOuvre ? '3' : '';
+            const defaultApresmidi = isJourOuvre ? '3.5' : '';
 
             if (journee) {
               // Utiliser les heures matin/après-midi stockées directement
@@ -1058,18 +1062,171 @@ export default function PointageMobileApp() {
 
                             <div>
                               <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} mb-1 block`}>
-                                Motif (optionnel)
+                                Motif de sortie
+                              </label>
+                              <select
+                                value={autorisationData.motifCategorie}
+                                onChange={e => setAutorisationData(prev => ({ ...prev, motifCategorie: e.target.value }))}
+                                className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-600 text-white', 'bg-white text-gray-900')} focus:outline-none focus:ring-2 focus:ring-orange-500`}
+                              >
+                                <option value="">Sélectionner un motif...</option>
+                                <option value="sante">État de santé / Maladie</option>
+                                <option value="rdv_medical">RDV médical</option>
+                                <option value="rdv_administratif">RDV administratif (France Travail, CAF...)</option>
+                                <option value="rdv_formation">RDV formation / insertion</option>
+                                <option value="enfant">Enfant à récupérer (école, crèche...)</option>
+                                <option value="urgence_familiale">Urgence familiale</option>
+                                <option value="convocation_judiciaire">Convocation judiciaire</option>
+                                <option value="autre">Autre motif légitime</option>
+                              </select>
+                            </div>
+
+                            {(autorisationData.motifCategorie === 'autre' || autorisationData.motifCategorie) && (
+                              <div>
+                                <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} mb-1 block`}>
+                                  {autorisationData.motifCategorie === 'autre' ? 'Précisez le motif' : 'Précisions (optionnel)'}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={autorisationData.motif}
+                                  onChange={e => setAutorisationData(prev => ({ ...prev, motif: e.target.value }))}
+                                  placeholder="Détails supplémentaires..."
+                                  className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-600 text-white placeholder-gray-400', 'bg-white text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-orange-500`}
+                                />
+                              </div>
+                            )}
+
+                            {/* Supérieur hiérarchique */}
+                            <div>
+                              <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} mb-1 block`}>
+                                Supérieur hiérarchique (Nom Prénom)
                               </label>
                               <input
                                 type="text"
-                                value={autorisationData.motif}
-                                onChange={e => setAutorisationData(prev => ({ ...prev, motif: e.target.value }))}
-                                placeholder="Ex: RDV médical"
+                                value={autorisationData.superieurNom}
+                                onChange={e => setAutorisationData(prev => ({ ...prev, superieurNom: e.target.value }))}
+                                placeholder="Nom et prénom du responsable..."
                                 className={`w-full px-3 py-2 rounded-lg ${bg('bg-slate-600 text-white placeholder-gray-400', 'bg-white text-gray-900 placeholder-gray-400')} focus:outline-none focus:ring-2 focus:ring-orange-500`}
                               />
                             </div>
 
-                            {/* Zone signature autorisation */}
+                            {/* Zone signature supérieur */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} flex items-center gap-2`}>
+                                  <PenTool size={14} />
+                                  Signature du supérieur hiérarchique
+                                </label>
+                                <button
+                                  onClick={() => {
+                                    setSuperieurSignature(null);
+                                    const canvas = superieurCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (ctx && canvas) {
+                                      const rect = canvas.getBoundingClientRect();
+                                      ctx.clearRect(0, 0, rect.width, rect.height);
+                                    }
+                                  }}
+                                  className={`p-1.5 rounded-lg ${bg('bg-slate-600 hover:bg-slate-500', 'bg-gray-200 hover:bg-gray-300')}`}
+                                >
+                                  <Trash2 size={14} className={text('text-gray-400', 'text-gray-500')} />
+                                </button>
+                              </div>
+                              <div className={`relative rounded-xl overflow-hidden ${bg('bg-slate-600', 'bg-white')} border-2 border-dashed ${superieurSignature ? 'border-orange-500' : bg('border-slate-500', 'border-gray-300')}`}>
+                                <canvas
+                                  ref={superieurCanvasRef}
+                                  className="w-full h-28 touch-none cursor-crosshair"
+                                  onMouseDown={(e) => {
+                                    const canvas = superieurCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx || !canvas) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    if (canvas.width !== rect.width * 2) {
+                                      canvas.width = rect.width * 2;
+                                      canvas.height = rect.height * 2;
+                                      ctx.scale(2, 2);
+                                      ctx.lineCap = 'round';
+                                      ctx.lineJoin = 'round';
+                                      ctx.lineWidth = 2;
+                                      ctx.strokeStyle = '#f97316';
+                                    }
+                                    setIsDrawing(true);
+                                    const x = e.clientX - rect.left;
+                                    const y = e.clientY - rect.top;
+                                    ctx.beginPath();
+                                    ctx.moveTo(x, y);
+                                  }}
+                                  onMouseMove={(e) => {
+                                    if (!isDrawing) return;
+                                    const canvas = superieurCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    const x = e.clientX - rect.left;
+                                    const y = e.clientY - rect.top;
+                                    ctx.lineTo(x, y);
+                                    ctx.stroke();
+                                  }}
+                                  onMouseUp={() => {
+                                    setIsDrawing(false);
+                                    const canvas = superieurCanvasRef.current;
+                                    if (canvas) setSuperieurSignature(canvas.toDataURL('image/png'));
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (isDrawing) {
+                                      setIsDrawing(false);
+                                      const canvas = superieurCanvasRef.current;
+                                      if (canvas) setSuperieurSignature(canvas.toDataURL('image/png'));
+                                    }
+                                  }}
+                                  onTouchStart={(e) => {
+                                    e.preventDefault();
+                                    const canvas = superieurCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx || !canvas) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    if (canvas.width !== rect.width * 2) {
+                                      canvas.width = rect.width * 2;
+                                      canvas.height = rect.height * 2;
+                                      ctx.scale(2, 2);
+                                      ctx.lineCap = 'round';
+                                      ctx.lineJoin = 'round';
+                                      ctx.lineWidth = 2;
+                                      ctx.strokeStyle = '#f97316';
+                                    }
+                                    setIsDrawing(true);
+                                    const x = e.touches[0].clientX - rect.left;
+                                    const y = e.touches[0].clientY - rect.top;
+                                    ctx.beginPath();
+                                    ctx.moveTo(x, y);
+                                  }}
+                                  onTouchMove={(e) => {
+                                    e.preventDefault();
+                                    if (!isDrawing) return;
+                                    const canvas = superieurCanvasRef.current;
+                                    const ctx = canvas?.getContext('2d');
+                                    if (!ctx) return;
+                                    const rect = canvas.getBoundingClientRect();
+                                    const x = e.touches[0].clientX - rect.left;
+                                    const y = e.touches[0].clientY - rect.top;
+                                    ctx.lineTo(x, y);
+                                    ctx.stroke();
+                                  }}
+                                  onTouchEnd={() => {
+                                    setIsDrawing(false);
+                                    const canvas = superieurCanvasRef.current;
+                                    if (canvas) setSuperieurSignature(canvas.toDataURL('image/png'));
+                                  }}
+                                />
+                                {!superieurSignature && (
+                                  <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${text('text-gray-500', 'text-gray-400')}`}>
+                                    <span className="text-xs">Signez ici</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Zone signature salarié */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
                                 <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-600')} flex items-center gap-2`}>
@@ -1208,83 +1365,239 @@ export default function PointageMobileApp() {
                                       date: formatDateISO(selectedDate),
                                       heureDebut: autorisationData.heureDebut,
                                       heureFin: autorisationData.heureFin,
-                                      motif: autorisationData.motif,
-                                      signature: autorisationSignature
+                                      motifCategorie: autorisationData.motifCategorie || null,
+                                      motif: autorisationData.motif || null,
+                                      signature: autorisationSignature,
+                                      superieurNom: autorisationData.superieurNom || null,
+                                      superieurSignature: superieurSignature
                                     })
                                   });
 
                                   if (res.ok) {
                                     const data = await res.json();
 
-                                    // Générer le PDF
+                                    // Générer le PDF - Format officiel DOCX
                                     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
                                     const pageWidth = doc.internal.pageSize.getWidth();
+                                    const pageHeight = doc.internal.pageSize.getHeight();
+                                    const pdfMargin = 25;
+                                    const pdfContentWidth = pageWidth - pdfMargin * 2;
+
+                                    const motifLabels: Record<string, string> = {
+                                      sante: 'État de santé / Maladie',
+                                      rdv_medical: 'RDV médical',
+                                      rdv_administratif: 'RDV administratif',
+                                      rdv_formation: 'RDV formation / insertion',
+                                      enfant: 'Enfant à récupérer',
+                                      urgence_familiale: 'Urgence familiale',
+                                      convocation_judiciaire: 'Convocation judiciaire',
+                                      autre: 'Autre motif légitime'
+                                    };
+                                    const motifCatLabel = autorisationData.motifCategorie ? (motifLabels[autorisationData.motifCategorie] || autorisationData.motifCategorie) : '';
+                                    const motifTexte = autorisationData.motif ? `${motifCatLabel} - ${autorisationData.motif}` : motifCatLabel;
+
+                                    // Bandeau supérieur
+                                    doc.setFillColor(35, 41, 54);
+                                    doc.rect(0, 0, pageWidth, 8, 'F');
+                                    doc.setFillColor(249, 115, 22);
+                                    doc.rect(0, 8, pageWidth, 2, 'F');
+
+                                    let pdfY = 22;
 
                                     // Titre
-                                    doc.setFontSize(20);
-                                    doc.setTextColor(249, 115, 22); // Orange
+                                    doc.setFontSize(18);
+                                    doc.setTextColor(35, 41, 54);
                                     doc.setFont('helvetica', 'bold');
-                                    doc.text('AUTORISATION DE SORTIE', pageWidth / 2, 30, { align: 'center' });
+                                    doc.text('AUTORISATION DE SORTIE DU SALARIÉ', pageWidth / 2, pdfY, { align: 'center' });
+                                    pdfY += 12;
 
-                                    // Cadre infos
-                                    doc.setDrawColor(200, 200, 200);
-                                    doc.setFillColor(250, 250, 250);
-                                    doc.roundedRect(20, 45, pageWidth - 40, 60, 3, 3, 'FD');
-
-                                    doc.setFontSize(12);
-                                    doc.setTextColor(60, 60, 60);
+                                    // Date d'émission
+                                    doc.setFontSize(10);
+                                    doc.setTextColor(100, 100, 100);
                                     doc.setFont('helvetica', 'normal');
+                                    doc.text(`Date d'émission du document : ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, pdfY, { align: 'center' });
+                                    pdfY += 12;
 
-                                    doc.text(`Salarié : ${ep.employee.prenom} ${ep.employee.nom}`, 30, 58);
-                                    doc.text(`Poste : ${ep.employee.poste || 'Agent'}`, 30, 68);
-                                    doc.text(`Date : ${formatDate(selectedDate)}`, 30, 78);
-                                    doc.text(`Heure de sortie : ${autorisationData.heureDebut}`, 30, 88);
-                                    doc.text(`Heure de retour : ${autorisationData.heureFin}`, 30, 98);
-
-                                    // Durée
-                                    const [hD, mD] = autorisationData.heureDebut.split(':').map(Number);
-                                    const [hF, mF] = autorisationData.heureFin.split(':').map(Number);
-                                    const mins = (hF * 60 + mF) - (hD * 60 + mD);
-                                    const h = Math.floor(mins / 60);
-                                    const m = mins % 60;
-                                    const dureeStr = `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
-
+                                    // Infos structure
+                                    doc.setFillColor(248, 250, 252);
+                                    doc.setDrawColor(200, 200, 200);
+                                    doc.setLineWidth(0.3);
+                                    doc.roundedRect(pdfMargin, pdfY, pdfContentWidth, 22, 2, 2, 'FD');
+                                    doc.setFontSize(11);
+                                    doc.setTextColor(35, 41, 54);
                                     doc.setFont('helvetica', 'bold');
-                                    doc.setTextColor(249, 115, 22);
-                                    doc.text(`Durée d'absence : ${dureeStr}`, pageWidth / 2, 115, { align: 'center' });
+                                    doc.text('VALORISATION INCLUSION ÉTHIQUE 59', pageWidth / 2, pdfY + 7, { align: 'center' });
+                                    doc.setFontSize(9);
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.setTextColor(80, 80, 80);
+                                    doc.text('4120 route de Tournai, 59500 DOUAI', pageWidth / 2, pdfY + 13, { align: 'center' });
+                                    doc.text('Siret: 90001343400031', pageWidth / 2, pdfY + 18, { align: 'center' });
+                                    pdfY += 30;
+
+                                    // Ligne séparatrice
+                                    doc.setDrawColor(249, 115, 22);
+                                    doc.setLineWidth(0.5);
+                                    doc.line(pdfMargin, pdfY, pageWidth - pdfMargin, pdfY);
+                                    pdfY += 10;
+
+                                    // Corps du document
+                                    const pdfFontSize = 11;
+                                    const pdfLineH = 7;
+                                    doc.setFontSize(pdfFontSize);
+                                    doc.setTextColor(40, 40, 40);
+
+                                    const supNom = autorisationData.superieurNom || '........................................';
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('Je soussigné(e) ', pdfMargin, pdfY);
+                                    const pdfW0 = doc.getTextWidth('Je soussigné(e) ');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text(supNom, pdfMargin + pdfW0, pdfY);
+                                    const pdfW0b = doc.getTextWidth(supNom);
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text(', agissant en qualité de', pdfMargin + pdfW0 + pdfW0b, pdfY);
+                                    pdfY += pdfLineH;
+                                    doc.text('Responsable de structure, autorise par la présente :', pdfMargin, pdfY);
+                                    pdfY += pdfLineH * 1.8;
+
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('Nom et prénom du salarié : ', pdfMargin, pdfY);
+                                    const pdfW1 = doc.getTextWidth('Nom et prénom du salarié : ');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text(`${ep.employee.prenom} ${ep.employee.nom}`, pdfMargin + pdfW1, pdfY);
+                                    pdfY += pdfLineH;
+
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('Fonction : ', pdfMargin, pdfY);
+                                    const pdfW2 = doc.getTextWidth('Fonction : ');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text(ep.employee.poste || 'Agent de valorisation', pdfMargin + pdfW2, pdfY);
+                                    pdfY += pdfLineH * 1.8;
+
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('à quitter son poste de travail le :', pdfMargin, pdfY);
+                                    pdfY += pdfLineH * 1.5;
+
+                                    // Date et Heures encadré
+                                    doc.setFillColor(255, 247, 237);
+                                    doc.setDrawColor(249, 115, 22);
+                                    doc.setLineWidth(0.3);
+                                    doc.roundedRect(pdfMargin, pdfY - 4, pdfContentWidth, 24, 2, 2, 'FD');
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('Date : ', pdfMargin + 5, pdfY + 2);
+                                    const pdfWd = doc.getTextWidth('Date : ');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text(formatDate(selectedDate), pdfMargin + 5 + pdfWd, pdfY + 2);
+
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('Heure de sortie : ', pdfMargin + 5, pdfY + 10);
+                                    const pdfWh = doc.getTextWidth('Heure de sortie : ');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text(autorisationData.heureDebut, pdfMargin + 5 + pdfWh, pdfY + 10);
+
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('Heure de retour : ', pageWidth / 2, pdfY + 10);
+                                    const pdfWhR = doc.getTextWidth('Heure de retour : ');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.text(autorisationData.heureFin, pageWidth / 2 + pdfWhR, pdfY + 10);
+                                    pdfY += pdfLineH + 18;
 
                                     // Motif
-                                    if (autorisationData.motif) {
-                                      doc.setFont('helvetica', 'normal');
-                                      doc.setTextColor(60, 60, 60);
-                                      doc.text(`Motif : ${autorisationData.motif}`, 30, 130);
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.setTextColor(40, 40, 40);
+                                    doc.text('Cette autorisation est accordée pour le motif légitime suivant :', pdfMargin, pdfY);
+                                    pdfY += pdfLineH;
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.setTextColor(249, 115, 22);
+                                    doc.text(motifTexte || '........................................', pdfMargin, pdfY);
+                                    pdfY += pdfLineH;
+                                    doc.setTextColor(40, 40, 40);
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.text('ne lui permettant pas de poursuivre son activité professionnelle.', pdfMargin, pdfY);
+                                    pdfY += pdfLineH * 1.8;
+
+                                    doc.setFontSize(10);
+                                    const txtJ = doc.splitTextToSize('Ce départ anticipé ne vaut pas arrêt de travail et devra, si nécessaire, être régularisé par la transmission d\'un justificatif médical.', pdfContentWidth);
+                                    doc.text(txtJ, pdfMargin, pdfY);
+                                    pdfY += txtJ.length * 5 + 4;
+                                    const txtR = doc.splitTextToSize('Les heures non travaillées feront l\'objet d\'un rattrapage ultérieur conformément à l\'organisation du temps de travail en vigueur.', pdfContentWidth);
+                                    doc.text(txtR, pdfMargin, pdfY);
+                                    pdfY += txtR.length * 5 + 10;
+
+                                    // Fait à
+                                    doc.setFontSize(11);
+                                    doc.text(`Fait à : Douai`, pdfMargin, pdfY);
+                                    doc.text(`Le : ${formatDate(selectedDate)}`, pageWidth / 2, pdfY);
+                                    pdfY += 14;
+
+                                    // Signatures
+                                    const pdfSigW = (pdfContentWidth - 10) / 2;
+                                    doc.setDrawColor(200, 200, 200);
+                                    doc.setLineWidth(0.3);
+                                    doc.roundedRect(pdfMargin, pdfY, pdfSigW, 55, 2, 2, 'S');
+                                    doc.setFontSize(9);
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.setTextColor(60, 60, 60);
+                                    doc.text('Signature de l\'employeur :', pdfMargin + 4, pdfY + 7);
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.setFontSize(8);
+                                    doc.text(`Nom, prénom : ${supNom}`, pdfMargin + 4, pdfY + 14);
+                                    doc.text('Fonction : Responsable de structure', pdfMargin + 4, pdfY + 20);
+
+                                    if (superieurSignature) {
+                                      try {
+                                        const supSigW = pdfSigW - 12;
+                                        const supSigH = supSigW / 4.5;
+                                        doc.addImage(superieurSignature, 'PNG', pdfMargin + 6, pdfY + 22, supSigW, supSigH);
+                                      } catch (e) {
+                                        console.error('Erreur signature supérieur PDF:', e);
+                                      }
                                     }
 
-                                    // Signature
-                                    doc.setFontSize(11);
-                                    doc.setTextColor(100, 100, 100);
-                                    doc.text('Signature du salarié :', 30, 155);
+                                    const pdfSigRX = pdfMargin + pdfSigW + 10;
+                                    doc.setDrawColor(200, 200, 200);
+                                    doc.roundedRect(pdfSigRX, pdfY, pdfSigW, 55, 2, 2, 'S');
+                                    doc.setFontSize(9);
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.setTextColor(60, 60, 60);
+                                    doc.text('Signature du salarié :', pdfSigRX + 4, pdfY + 7);
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.setFontSize(8);
+                                    doc.text(`Nom, prénom : ${ep.employee.prenom} ${ep.employee.nom}`, pdfSigRX + 4, pdfY + 14);
 
                                     if (autorisationSignature) {
                                       try {
-                                        doc.addImage(autorisationSignature, 'PNG', 30, 160, 60, 30);
+                                        const mSigW = pdfSigW - 12;
+                                        const mSigH = mSigW / 4.5;
+                                        doc.addImage(autorisationSignature, 'PNG', pdfSigRX + 6, pdfY + 22, mSigW, mSigH);
                                       } catch (e) {
                                         console.error('Erreur signature PDF:', e);
                                       }
                                     }
+                                    pdfY += 62;
 
-                                    // Pied de page
+                                    // Mention double exemplaire
+                                    doc.setDrawColor(200, 200, 200);
+                                    doc.setLineWidth(0.2);
+                                    doc.line(pdfMargin, pdfY, pageWidth - pdfMargin, pdfY);
+                                    pdfY += 6;
                                     doc.setFontSize(8);
-                                    doc.setTextColor(150, 150, 150);
-                                    doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, 280, { align: 'center' });
-                                    doc.text('France Recycling - Insertion', pageWidth / 2, 286, { align: 'center' });
+                                    doc.setTextColor(120, 120, 120);
+                                    doc.setFont('helvetica', 'italic');
+                                    doc.text('Un exemplaire est remis au salarié et un autre est conservé par la structure pour archivage.', pageWidth / 2, pdfY, { align: 'center' });
+
+                                    // Bandeau inférieur
+                                    doc.setFillColor(249, 115, 22);
+                                    doc.rect(0, pageHeight - 4, pageWidth, 2, 'F');
+                                    doc.setFillColor(35, 41, 54);
+                                    doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
 
                                     // Télécharger le PDF
                                     doc.save(`Autorisation_Sortie_${ep.employee.nom}_${formatDateISO(selectedDate)}.pdf`);
 
                                     // Reset
-                                    setAutorisationData({ heureDebut: '', heureFin: '', motif: '' });
+                                    setAutorisationData({ heureDebut: '', heureFin: '', motifCategorie: '', motif: '', superieurNom: '' });
                                     setAutorisationSignature(null);
+                                    setSuperieurSignature(null);
                                     setShowAutorisationForm(null);
                                     setSaveSuccess(employeeId);
                                     setTimeout(() => setSaveSuccess(null), 3000);

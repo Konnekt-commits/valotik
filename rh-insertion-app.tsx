@@ -4973,6 +4973,293 @@ export default function RHInsertionApp() {
       setShowDocumentPreview(true);
     };
 
+    // Générer l'export SYLAé (attestation de présence)
+    const genererExportSylae = () => {
+      if (!pointagesData) return;
+
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const org = organismeData;
+      const employees = pointagesData.pointages || [];
+      const headerColor: [number, number, number] = [210, 120, 20];
+      const darkColor: [number, number, number] = [50, 50, 60];
+
+      // Jours ouvrés du mois
+      const dernierJourMois = new Date(pointagesAnnee, pointagesMois, 0).getDate();
+      const joursOuvresMois: { date: Date; dateStr: string; jour: number; dayOfWeek: number }[] = [];
+      for (let d = 1; d <= dernierJourMois; d++) {
+        const jour = new Date(pointagesAnnee, pointagesMois - 1, d);
+        const dayOfWeek = jour.getDay();
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          joursOuvresMois.push({
+            date: jour,
+            dateStr: `${pointagesAnnee}-${String(pointagesMois).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+            jour: d,
+            dayOfWeek
+          });
+        }
+      }
+
+      employees.forEach((p: any, index: number) => {
+        if (index > 0) doc.addPage();
+
+        const emp = p.employee;
+        const pointage = p.pointage;
+        const journees = pointage.journees || [];
+
+        // Map des journées par date
+        const journeesMap: Record<string, any> = {};
+        journees.forEach((j: any) => {
+          const dateStr = new Date(j.date).toISOString().split('T')[0];
+          journeesMap[dateStr] = j;
+        });
+
+        let y = 15;
+
+        // === EN-TÊTE ===
+        doc.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
+        doc.rect(0, 0, pageWidth, 28, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('ATTESTATION DE PRÉSENCE', pageWidth / 2, 12, { align: 'center' });
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Déclaration SYLAé - ${moisNoms[pointagesMois]} ${pointagesAnnee}`, pageWidth / 2, 21, { align: 'center' });
+
+        y = 36;
+
+        // === BLOC EMPLOYEUR ===
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, y, pageWidth - 28, 28, 2, 2, 'F');
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(headerColor[0], headerColor[1], headerColor[2]);
+        doc.text('EMPLOYEUR', 18, y + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        doc.setFontSize(8.5);
+        doc.text(`Raison sociale : ${org?.raisonSociale || 'N/A'}`, 18, y + 13);
+        doc.text(`SIRET : ${org?.siret || 'N/A'}`, 120, y + 13);
+        doc.text(`Adresse : ${org?.adresseSiege || org?.adresse || 'N/A'} ${org?.codePostalSiege || org?.codePostal || ''} ${org?.villeSiege || org?.ville || ''}`, 18, y + 20);
+
+        y += 33;
+
+        // === BLOC SALARIÉ ===
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, y, pageWidth - 28, 28, 2, 2, 'F');
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(headerColor[0], headerColor[1], headerColor[2]);
+        doc.text('SALARIÉ', 18, y + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        doc.setFontSize(8.5);
+        doc.text(`Nom, Prénom : ${emp.nom?.toUpperCase() || ''} ${emp.prenom || ''}`, 18, y + 13);
+        doc.text(`N° Sécurité sociale : ${emp.numeroSecu || 'Non renseigné'}`, 120, y + 13);
+        doc.text(`Contrat : ${emp.typeContrat || 'CDDI'} - ${emp.dureeHebdo || 26}h/semaine`, 18, y + 20);
+        doc.text(`Poste : ${emp.poste || 'Non défini'}`, 120, y + 20);
+
+        y += 33;
+
+        // === RÉCAPITULATIF MENSUEL ===
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.text('RÉCAPITULATIF MENSUEL', 14, y);
+        y += 2;
+
+        const ecart = Math.round((pointage.heuresPointees - pointage.heuresContrat) * 100) / 100;
+        const pourcentage = pointage.heuresContrat > 0
+          ? Math.round(pointage.heuresPointees / pointage.heuresContrat * 100)
+          : 0;
+
+        autoTable(doc, {
+          startY: y,
+          head: [[
+            { content: 'H. Contrat', styles: { halign: 'center' } },
+            { content: 'H. Travaillées', styles: { halign: 'center' } },
+            { content: 'Écart', styles: { halign: 'center' } },
+            { content: '%', styles: { halign: 'center' } }
+          ]],
+          body: [[
+            { content: `${Math.round(pointage.heuresContrat * 100) / 100}h`, styles: { halign: 'center' } },
+            { content: `${Math.round(pointage.heuresPointees * 100) / 100}h`, styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: `${ecart >= 0 ? '+' : ''}${ecart}h`, styles: { halign: 'center', textColor: ecart >= 0 ? [34, 139, 34] : [220, 38, 38] } },
+            { content: `${pourcentage}%`, styles: { halign: 'center', fontStyle: 'bold' } }
+          ]],
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 3 },
+          headStyles: { fillColor: headerColor, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+          margin: { left: 14, right: 14 }
+        });
+
+        y = (doc as any).lastAutoTable?.finalY + 3 || y + 20;
+
+        // Banque d'heures
+        autoTable(doc, {
+          startY: y,
+          head: [[
+            { content: 'Banque entrée', styles: { halign: 'center' } },
+            { content: 'H. Régularisées', styles: { halign: 'center' } },
+            { content: 'Banque sortie', styles: { halign: 'center' } }
+          ]],
+          body: [[
+            { content: `${Math.round((pointage.heuresBanqueEntree || 0) * 100) / 100}h`, styles: { halign: 'center' } },
+            { content: `${Math.round((pointage.heuresRegularisees || 0) * 100) / 100}h`, styles: { halign: 'center' } },
+            { content: `${Math.round((pointage.heuresBanqueSortie || 0) * 100) / 100}h`, styles: { halign: 'center', fontStyle: 'bold' } }
+          ]],
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 3 },
+          headStyles: { fillColor: [120, 120, 130], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+          margin: { left: 14, right: 14 }
+        });
+
+        y = (doc as any).lastAutoTable?.finalY + 5 || y + 20;
+
+        // === ABSENCES DU MOIS ===
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.text('ABSENCES DU MOIS', 14, y);
+        y += 2;
+
+        const heuresParJour = emp.dureeHebdo ? Math.round(emp.dureeHebdo / 5 * 100) / 100 : 5.2;
+        const absenceTypes: Record<string, { label: string; jours: number; heures: number }> = {
+          maladie: { label: 'Maladie', jours: 0, heures: 0 },
+          conge: { label: 'Congé', jours: 0, heures: 0 },
+          absence: { label: 'Absence injustifiée', jours: 0, heures: 0 },
+          formation: { label: 'Formation', jours: 0, heures: 0 },
+          ferie: { label: 'Jour férié', jours: 0, heures: 0 }
+        };
+
+        joursOuvresMois.forEach(j => {
+          const journee = journeesMap[j.dateStr];
+          if (journee && journee.typeJournee && journee.typeJournee !== 'travail') {
+            const type = journee.typeJournee;
+            if (absenceTypes[type]) {
+              absenceTypes[type].jours++;
+              absenceTypes[type].heures += heuresParJour;
+            }
+          }
+        });
+
+        const absenceBody = Object.values(absenceTypes).map(a => [
+          a.label,
+          { content: String(a.jours), styles: { halign: 'center' as const } },
+          { content: `${Math.round(a.heures * 100) / 100}h`, styles: { halign: 'center' as const } }
+        ]);
+        const totalAbsJours = Object.values(absenceTypes).reduce((s, a) => s + a.jours, 0);
+        const totalAbsHeures = Object.values(absenceTypes).reduce((s, a) => s + a.heures, 0);
+        absenceBody.push([
+          { content: 'TOTAL', styles: { fontStyle: 'bold' as const } } as any,
+          { content: String(totalAbsJours), styles: { halign: 'center' as const, fontStyle: 'bold' as const } },
+          { content: `${Math.round(totalAbsHeures * 100) / 100}h`, styles: { halign: 'center' as const, fontStyle: 'bold' as const } }
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Type', { content: 'Jours', styles: { halign: 'center' } }, { content: 'Heures', styles: { halign: 'center' } }]],
+          body: absenceBody,
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 2.5 },
+          headStyles: { fillColor: [180, 60, 60], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+          columnStyles: { 0: { cellWidth: 60 } },
+          margin: { left: 14, right: 14 }
+        });
+
+        y = (doc as any).lastAutoTable?.finalY + 5 || y + 40;
+
+        // === DÉTAIL JOURNALIER ===
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+        doc.text('DÉTAIL JOURNALIER', 14, y);
+        y += 2;
+
+        const joursSemaine = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+        const typeLabels: Record<string, string> = {
+          travail: 'Travail',
+          absence: 'Absence',
+          conge: 'Congé',
+          maladie: 'Maladie',
+          formation: 'Formation',
+          ferie: 'Férié'
+        };
+
+        let totalMatin = 0;
+        let totalAprem = 0;
+        let totalJour = 0;
+
+        const detailBody = joursOuvresMois.map(j => {
+          const journee = journeesMap[j.dateStr];
+          const typeJ = journee?.typeJournee || 'travail';
+          const hMatin = journee?.heuresMatin || 0;
+          const hAprem = journee?.heuresApresmidi || 0;
+          const hTotal = journee?.heuresTravaillees || (pointageValues[emp.id]?.[j.dateStr] || 0);
+
+          totalMatin += hMatin;
+          totalAprem += hAprem;
+          totalJour += hTotal;
+
+          const isAbsence = ['absence', 'conge', 'maladie', 'ferie', 'formation'].includes(typeJ);
+          const rowStyles = isAbsence ? { fillColor: [254, 240, 240] as [number, number, number] } : {};
+
+          return [
+            { content: `${joursSemaine[j.dayOfWeek]} ${String(j.jour).padStart(2, '0')}/${String(pointagesMois).padStart(2, '0')}`, styles: { ...rowStyles } },
+            { content: typeLabels[typeJ] || typeJ, styles: { ...rowStyles, textColor: isAbsence ? [200, 50, 50] as [number, number, number] : [60, 60, 60] as [number, number, number] } },
+            { content: isAbsence ? '-' : `${hMatin}h`, styles: { halign: 'center' as const, ...rowStyles } },
+            { content: isAbsence ? '-' : `${hAprem}h`, styles: { halign: 'center' as const, ...rowStyles } },
+            { content: `${Math.round(hTotal * 100) / 100}h`, styles: { halign: 'center' as const, fontStyle: 'bold' as const, ...rowStyles } }
+          ];
+        });
+
+        // Ligne total
+        detailBody.push([
+          { content: 'TOTAL', styles: { fontStyle: 'bold' as const } },
+          { content: '', styles: {} },
+          { content: `${Math.round(totalMatin * 100) / 100}h`, styles: { halign: 'center' as const, fontStyle: 'bold' as const } },
+          { content: `${Math.round(totalAprem * 100) / 100}h`, styles: { halign: 'center' as const, fontStyle: 'bold' as const } },
+          { content: `${Math.round(totalJour * 100) / 100}h`, styles: { halign: 'center' as const, fontStyle: 'bold' as const } }
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [[
+            { content: 'Date', styles: { halign: 'center' } },
+            { content: 'Type', styles: { halign: 'center' } },
+            { content: 'Matin', styles: { halign: 'center' } },
+            { content: 'Après-midi', styles: { halign: 'center' } },
+            { content: 'Total', styles: { halign: 'center' } }
+          ]],
+          body: detailBody,
+          theme: 'grid',
+          styles: { fontSize: 7, cellPadding: 1.8 },
+          headStyles: { fillColor: headerColor, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+          columnStyles: {
+            0: { cellWidth: 28 },
+            1: { cellWidth: 35 }
+          },
+          margin: { left: 14, right: 14 }
+        });
+
+        // Pied de page
+        const finalY = (doc as any).lastAutoTable?.finalY || 270;
+        doc.setFontSize(7);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, finalY + 6);
+        doc.text(`Page ${index + 1} / ${employees.length}`, pageWidth - 14, finalY + 6, { align: 'right' });
+      });
+
+      // Afficher le PDF dans le viewer
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      setPreviewUrl(pdfUrl);
+      setPreviewType('application/pdf');
+      setPreviewName(`Export_SYLAe_${moisNoms[pointagesMois]}_${pointagesAnnee}.pdf`);
+      setShowDocumentPreview(true);
+    };
+
     // Calculer le nombre de semaines dans le mois (basé sur les jours ouvrés)
     const getNombreSemaines = () => {
       // Compter les jours ouvrés du mois
@@ -5028,6 +5315,13 @@ export default function RHInsertionApp() {
                 >
                   <FileSignature className="w-4 h-4" />
                   Feuille d'émargement
+                </button>
+                <button
+                  onClick={() => genererExportSylae()}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Export SYLAé
                 </button>
               </div>
             )}

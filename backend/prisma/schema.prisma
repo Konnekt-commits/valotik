@@ -549,6 +549,10 @@ model InsertionEmployee {
   // Photo
   photoUrl            String?  @db.VarChar(500)
 
+  // Token mobile pour signature hors connexion
+  mobileToken         String?  @unique @db.VarChar(64)
+  mobileTokenCreatedAt DateTime?
+
   // Métadonnées
   notes               String?  @db.Text
   createdAt           DateTime @default(now())
@@ -603,9 +607,12 @@ model AutorisationSortie {
   heureDebut      String   @db.VarChar(5)  // Format HH:MM
   heureFin        String   @db.VarChar(5)  // Format HH:MM
   dureeMinutes    Int                       // Durée en minutes
+  motifCategorie  String?  @db.VarChar(100) // Catégorie du motif (dropdown)
   motif           String?  @db.Text
-  signature       String?  @db.Text        // Signature base64
+  signature       String?  @db.Text        // Signature salarié base64
   signatureAt     DateTime?
+  superieurNom    String?  @db.VarChar(200) // Nom prénom du supérieur hiérarchique
+  superieurSignature String? @db.Text      // Signature supérieur base64
   pdfUrl          String?  @db.VarChar(500)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
