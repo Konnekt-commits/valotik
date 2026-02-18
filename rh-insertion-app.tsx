@@ -5659,7 +5659,7 @@ export default function RHInsertionApp() {
               <button onClick={() => setEditingEmployee(false)} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>
                 Annuler
               </button>
-              <button onClick={saveEmployee} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+              <button onClick={() => saveEmployee()} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
                 <Save className="w-4 h-4" /> {saving ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </>
