@@ -776,7 +776,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
       const newStart = new Date(currentEnd);
       newStart.setDate(newStart.getDate() + 1);
       const newEnd = new Date(newStart);
-      newEnd.setMonth(newEnd.getMonth() + 6);
+      newEnd.setMonth(newEnd.getMonth() + 4);
       setForm({
         dateDebut: newStart.toISOString().split('T')[0],
         dateFin: newEnd.toISOString().split('T')[0],
