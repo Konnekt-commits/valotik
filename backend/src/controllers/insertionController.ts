@@ -153,10 +153,10 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       // Date de sortie = date de fin du contrat le plus récent (dernier avenant ou contrat)
       const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : null;
 
-      // Congés payés depuis la dernière fiche de paie
+      // Congés payés depuis la dernière fiche de paie (Solde uniquement, pas d'addition)
       const derniereFiche = emp.fichesPaie.length > 0 ? emp.fichesPaie[0] : null;
       const congesPayes = derniereFiche
-        ? (derniereFiche.congesN1Solde || 0) + (derniereFiche.congesNSolde || 0)
+        ? (derniereFiche.congesN1Solde ?? derniereFiche.congesNSolde ?? null)
         : null;
 
       return {
