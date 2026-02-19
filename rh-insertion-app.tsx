@@ -6423,8 +6423,9 @@ export default function RHInsertionApp() {
           <div className="space-y-3">
             {docsAdmin.map(doc => {
               const docPresent = emp.documents?.find((d: any) => d.typeDocument === doc.type);
-              const isExpired = docPresent?.dateExpiration && new Date(docPresent.dateExpiration) < new Date();
-              const expireSoon = docPresent?.dateExpiration && new Date(docPresent.dateExpiration) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+              const ignoreExpiration = doc.type === 'JUSTIF_DOMICILE';
+              const isExpired = !ignoreExpiration && docPresent?.dateExpiration && new Date(docPresent.dateExpiration) < new Date();
+              const expireSoon = !ignoreExpiration && docPresent?.dateExpiration && new Date(docPresent.dateExpiration) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
               return (
                 <div key={doc.type} className={`flex items-center justify-between p-4 rounded-lg border ${
@@ -7055,7 +7056,7 @@ export default function RHInsertionApp() {
         <div className="p-4 border-b border-slate-700/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center"><Users className="w-6 h-6 text-white" /></div>
-            {sidebarOpen && <div><h1 className={`font-bold ${text('text-white', 'text-gray-900')}`}>RH Insertion</h1><p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>VALO</p></div>}
+            {sidebarOpen && <div><h1 className={`font-bold ${text('text-white', 'text-gray-900')}`}>RH Insertion</h1><p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>NOVA</p></div>}
           </div>
         </div>
         <nav className="p-3 space-y-1">

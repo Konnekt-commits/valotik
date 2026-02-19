@@ -5548,7 +5548,7 @@ Catégories disponibles:
                         <div className={`text-xs font-semibold ${headingClasses} mb-1 text-center`}>ENTREPÔT</div>
                         <div className={`text-xs ${subTextClasses} text-center mb-2`}>Stockage</div>
                         <div className={`${bg('bg-slate-900', 'bg-gray-50')} ${cardBorderClasses} border rounded-lg p-3 w-full`}>
-                          <div className={`text-xs font-medium ${headingClasses} mb-1`}>D3E VALO</div>
+                          <div className={`text-xs font-medium ${headingClasses} mb-1`}>D3E NOVA</div>
                           <div className={`text-xs ${text('text-slate-400', 'text-gray-600')} leading-relaxed`}>
                             Zone A - Allée 3<br/>
                             15 Rue de l'Industrie<br/>
@@ -7490,7 +7490,7 @@ Catégories disponibles:
           <div className={`w-[72px] ${bg('bg-slate-900', 'bg-white')} ${border('border-slate-800', 'border-gray-200')} border-r h-screen flex flex-col items-center py-4 gap-2`}>
             {/* Logo/Icône app */}
             <div className={`w-12 h-12 rounded-xl ${bg('bg-blue-600', 'bg-blue-600')} flex items-center justify-center mb-4`}>
-              <span className="text-white font-bold text-lg">D3E</span>
+              <span className="text-white font-bold text-lg">V</span>
             </div>
 
             {/* Séparateur */}
@@ -7590,7 +7590,7 @@ Catégories disponibles:
             }}
           >
           <div className={`p-4 ${border('border-slate-800', 'border-gray-200')} border-b`}>
-            <h1 className={`text-xl font-bold ${text('text-white', 'text-gray-900')} mb-4`}>D3E Collection</h1>
+            <h1 className={`text-xl font-bold ${text('text-white', 'text-gray-900')} mb-4`}>NOVA</h1>
             <div className="relative">
               <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${text('text-slate-500', 'text-gray-400')}`} />
               <input

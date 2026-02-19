@@ -78,14 +78,14 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       const docsObligatoires = ['CNI', 'CARTE_VITALE', 'JUSTIF_DOMICILE', 'ATTESTATION_SECU', 'RIB', 'PASS_INCLUSION', 'DPAE', 'CONTRAT'];
       const docsPresents = emp.documents.map(d => d.typeDocument);
       const docsManquants = docsObligatoires.filter(d => !docsPresents.includes(d));
-      const docsExpires = emp.documents.filter(d => d.dateExpiration && new Date(d.dateExpiration) < new Date());
+      const docsExpires = emp.documents.filter(d => d.typeDocument !== 'JUSTIF_DOMICILE' && d.dateExpiration && new Date(d.dateExpiration) < new Date());
 
       return {
         ...emp,
         stats: {
           documentsManquants: docsManquants.length,
           documentsExpires: docsExpires.length,
-          dossierComplet: docsManquants.length === 0 && docsExpires.length === 0
+          dossierComplet: docsManquants.length === 0
         }
       };
     });
