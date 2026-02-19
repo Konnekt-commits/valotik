@@ -4834,20 +4834,12 @@ export default function RHInsertionApp() {
           const typesAbsence = ['absence', 'conge', 'maladie', 'ferie'];
           const isAbsent = typesAbsence.includes(typeJournee);
 
-          if (isAbsent) {
-            // Marqué comme ABSENT dans la page pointage
-            row.push({
-              content: 'ABSENT',
-              styles: {
-                minCellHeight: 18,
-                fillColor: [254, 226, 226],
-                textColor: [220, 38, 38],
-                halign: 'center',
-                valign: 'middle',
-                fontStyle: 'bold',
-                fontSize: 7
-              }
-            });
+          // Vérifier chaque demi-journée individuellement
+          const hasSignatureMatin = journee?.matin && journee.matin.startsWith('data:image');
+          const hasSignatureApresmidi = journee?.apresmidi && journee.apresmidi.startsWith('data:image');
+
+          // Cellule MATIN : ABSENT seulement si pas de signature matin et journée absence
+          if (isAbsent && !hasSignatureMatin) {
             row.push({
               content: 'ABSENT',
               styles: {
@@ -4861,7 +4853,6 @@ export default function RHInsertionApp() {
               }
             });
           } else {
-            // Journée de travail - cellules pour signatures (vides, seront remplies par didDrawCell si signature existe)
             row.push({
               content: '',
               styles: {
@@ -4870,6 +4861,23 @@ export default function RHInsertionApp() {
                 valign: 'middle'
               }
             });
+          }
+
+          // Cellule APRÈS-MIDI : ABSENT seulement si pas de signature apresmidi et journée absence
+          if (isAbsent && !hasSignatureApresmidi) {
+            row.push({
+              content: 'ABSENT',
+              styles: {
+                minCellHeight: 18,
+                fillColor: [254, 226, 226],
+                textColor: [220, 38, 38],
+                halign: 'center',
+                valign: 'middle',
+                fontStyle: 'bold',
+                fontSize: 7
+              }
+            });
+          } else {
             row.push({
               content: '',
               styles: {
