@@ -16,6 +16,7 @@ import objectifRoutes from './objectifRoutes';
 import organismeRoutes from './organismeRoutes';
 import authRoutes from './authRoutes';
 import { requireAuth } from '../middlewares/authMiddleware';
+import * as insertionController from '../controllers/insertionController';
 
 const router = Router();
 
@@ -37,6 +38,10 @@ router.use('/', documentRoutes);
 
 // Routes Pointage (non protégées - utilisées par app mobile employés)
 router.use('/pointage', pointageRoutes);
+
+// Routes Signature Avenant (PUBLIC - sans auth, utilisées par les salariés)
+router.get('/signing/:token', insertionController.getSigningData);
+router.post('/signing/:token/sign', insertionController.submitEmployeeSignature);
 
 // Routes RH Insertion (PROTÉGÉES par authentification)
 router.use('/insertion', requireAuth, insertionRoutes);

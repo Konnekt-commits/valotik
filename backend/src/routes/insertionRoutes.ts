@@ -87,6 +87,8 @@ router.delete('/documents/:id', insertionController.deleteDocument);
 router.get('/employees/:employeeId/contrats', insertionController.getContrats);
 router.post('/employees/:employeeId/contrats', insertionController.createContrat);
 router.put('/contrats/:id', insertionController.updateContrat);
+router.get('/contrats/:id', insertionController.getContrat);
+router.post('/contrats/:id/generate-signing-link', insertionController.generateSigningLink);
 
 // ============================================
 // AVERTISSEMENTS

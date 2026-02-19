@@ -767,7 +767,9 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
   const [form, setForm] = useState<any>({});
   const [pdfBlob, setPdfBlob] = useState<string | null>(null);
   const signatureRef = useRef<SignatureCanvas>(null);
-  const [step, setStep] = useState<'form' | 'preview'>('form');
+  const [step, setStep] = useState<'form' | 'preview' | 'link'>('form');
+  const [signingLink, setSigningLink] = useState<string>('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (show && employee) {
@@ -794,6 +796,8 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
       });
       setPdfBlob(null);
       setStep('form');
+      setSigningLink('');
+      setLinkCopied(false);
       signatureRef.current?.clear();
     }
   }, [show, employee]);
@@ -1132,6 +1136,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
   const handleSave = async () => {
     setSaving(true);
     try {
+      // 1. Créer le contrat
       const res = await authFetch(`${API_URL}/employees/${employee.id}/contrats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1146,17 +1151,50 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
         })
       });
       if (res.ok) {
-        // Also download the PDF
-        const doc = generatePDF();
-        doc.save(`Avenant_${employee.nom}_${employee.prenom}_${form.dateDebut}.pdf`);
-        onClose();
-        onSaved();
+        const contratData = await res.json();
+        const contratId = contratData.data?.id;
+
+        // 2. Générer le lien de signature avec la signature employeur
+        const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
+
+        if (contratId && sigData) {
+          const linkRes = await authFetch(`${API_URL}/contrats/${contratId}/generate-signing-link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              signatureEmployeur: sigData,
+              formData: form
+            })
+          });
+          if (linkRes.ok) {
+            const linkData = await linkRes.json();
+            const baseUrl = window.location.origin;
+            setSigningLink(`${baseUrl}${linkData.data.signingUrl}`);
+            setStep('link');
+            onSaved();
+          }
+        } else {
+          // Pas de signature employeur → télécharger le PDF directement
+          const doc = generatePDF();
+          doc.save(`Avenant_${employee.nom}_${employee.prenom}_${form.dateDebut}.pdf`);
+          onClose();
+          onSaved();
+        }
       }
     } catch (error) {
       console.error('Erreur sauvegarde avenant:', error);
     } finally {
       setSaving(false);
     }
+  };
+
+  const generateFinalPDF = (sigEmployeur: string, sigSalarie: string) => {
+    const doc = generatePDF();
+    // The generatePDF already adds employer signature from signatureRef
+    // We need to add the employee signature to the right box
+    // The right signature box is at: sigRightX = margin + contentWidth/2, y ~ after "lu et approuvé"
+    // We'll re-generate from scratch with both signatures
+    return doc;
   };
 
   if (!show || !employee) return null;
@@ -1210,7 +1248,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
               <button type="button" onClick={() => signatureRef.current?.clear()} className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}>Effacer la signature</button>
             </div>
           </div>
-        ) : (
+        ) : step === 'preview' ? (
           <div className="p-4 space-y-4">
             <div className={`p-3 rounded-lg ${bg('bg-blue-500/10 border border-blue-500/20', 'bg-blue-50 border border-blue-200')}`}>
               <p className={`text-sm font-medium ${text('text-blue-400', 'text-blue-700')}`}>Prévisualisation de l'avenant - Vérifiez le document avant validation</p>
@@ -1218,6 +1256,28 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
             {pdfBlob && (
               <iframe src={pdfBlob} className="w-full h-[60vh] rounded-lg border border-slate-600" title="Prévisualisation avenant" />
             )}
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            <div className={`p-4 rounded-lg ${bg('bg-green-500/10 border border-green-500/20', 'bg-green-50 border border-green-200')}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className={`w-5 h-5 ${text('text-green-400', 'text-green-600')}`} />
+                <p className={`text-sm font-bold ${text('text-green-400', 'text-green-700')}`}>Avenant créé avec succès !</p>
+              </div>
+              <p className={`text-sm ${text('text-green-300', 'text-green-600')}`}>Envoyez le lien ci-dessous au salarié pour qu'il signe l'avenant. Le lien expire dans 7 jours.</p>
+            </div>
+            <div>
+              <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Lien de signature pour le salarié</label>
+              <div className="flex gap-2">
+                <input type="text" readOnly value={signingLink} className={`flex-1 px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-gray-100 text-gray-900 border-gray-300')} border`} />
+                <button
+                  onClick={() => { navigator.clipboard.writeText(signingLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }}
+                  className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium ${linkCopied ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                >
+                  {linkCopied ? <><CheckCircle className="w-4 h-4" /> Copié !</> : <><Copy className="w-4 h-4" /> Copier</>}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1229,7 +1289,11 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
           )}
           <div className="flex-1" />
           <div className="flex gap-3">
-            <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+            {step === 'link' ? (
+              <button onClick={onClose} className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700">Fermer</button>
+            ) : (
+              <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+            )}
             {step === 'form' ? (
               <button
                 onClick={handleGenerate}
@@ -1238,15 +1302,15 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
               >
                 <Eye className="w-4 h-4" /> Prévisualiser l'avenant
               </button>
-            ) : (
+            ) : step === 'preview' ? (
               <button
                 onClick={handleSave}
                 disabled={saving}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
               >
-                {saving ? 'Enregistrement...' : <><CheckCircle className="w-4 h-4" /> Signer et Valider</>}
+                {saving ? 'Enregistrement...' : <><CheckCircle className="w-4 h-4" /> Signer et Générer le lien</>}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -7145,12 +7209,169 @@ export default function RHInsertionApp() {
                         <span className={`px-2 py-1 rounded text-xs ${contrat.statut === 'actif' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
                           {contrat.statut}
                         </span>
+                        {contrat.signatureStatus === 'en_attente' && (
+                          <span className="px-2 py-1 rounded text-xs bg-orange-500/20 text-orange-400">En attente de signature</span>
+                        )}
+                        {contrat.signatureStatus === 'signe' && (
+                          <span className="px-2 py-1 rounded text-xs bg-emerald-500/20 text-emerald-400">Signé</span>
+                        )}
                       </div>
                       <p className={`text-sm mt-1 ${text('text-slate-300', 'text-gray-700')}`}>
                         Du {formatDate(contrat.dateDebut)} au {formatDate(contrat.dateFin)} - {contrat.dureeHeures}h/semaine
                       </p>
                       {contrat.dpaeNumero && <p className={`text-xs mt-1 ${text('text-slate-400', 'text-gray-500')}`}>DPAE : {contrat.dpaeNumero} du {formatDate(contrat.dpaeDate)}</p>}
                     </div>
+                    {contrat.signatureStatus === 'signe' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await authFetch(`${API_URL}/contrats/${contrat.id}`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              const c = data.data;
+                              if (c.avenantFormData && c.signatureEmployeur && c.signatureSalarie) {
+                                // Generate PDF with both signatures using stored form data
+                                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
+                                const pageWidth = doc.internal.pageSize.getWidth();
+                                const pageHeight = doc.internal.pageSize.getHeight();
+                                const margin = 20;
+                                const contentWidth = pageWidth - margin * 2;
+                                const org = organismeData;
+                                const fontSize = 9;
+                                const lineH = 4.5;
+                                const fd = c.avenantFormData;
+                                const empData = c.employee;
+
+                                const writeMixed = (segments: {text: string; bold?: boolean; italic?: boolean}[], x: number, yPos: number, maxW: number): number => {
+                                  const fullText = segments.map((s: any) => s.text).join('');
+                                  const lines = doc.splitTextToSize(fullText, maxW);
+                                  if (lines.length <= 1) {
+                                    let cx = x;
+                                    for (const seg of segments) {
+                                      doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
+                                      doc.text(seg.text, cx, yPos);
+                                      cx += doc.getTextWidth(seg.text);
+                                    }
+                                    return yPos + lineH;
+                                  }
+                                  let charIndex = 0;
+                                  let currentY = yPos;
+                                  for (const line of lines) {
+                                    let cx = x;
+                                    let lineCharsLeft = line.length;
+                                    let segIdx = 0;
+                                    let segCharOffset = 0;
+                                    let totalChars = 0;
+                                    for (let si = 0; si < segments.length; si++) {
+                                      if (totalChars + segments[si].text.length > charIndex) { segIdx = si; segCharOffset = charIndex - totalChars; break; }
+                                      totalChars += segments[si].text.length;
+                                    }
+                                    while (lineCharsLeft > 0 && segIdx < segments.length) {
+                                      const seg = segments[segIdx];
+                                      const available = seg.text.length - segCharOffset;
+                                      const take = Math.min(available, lineCharsLeft);
+                                      const chunk = seg.text.substring(segCharOffset, segCharOffset + take);
+                                      doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
+                                      doc.text(chunk, cx, currentY);
+                                      cx += doc.getTextWidth(chunk);
+                                      lineCharsLeft -= take;
+                                      charIndex += take;
+                                      segCharOffset += take;
+                                      if (segCharOffset >= seg.text.length) { segIdx++; segCharOffset = 0; }
+                                    }
+                                    currentY += lineH;
+                                  }
+                                  return currentY;
+                                };
+
+                                const moisFR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+                                const fmtDateLong = (d: string) => { if (!d) return '_______________'; const dt = new Date(d); return `${dt.getDate()} ${moisFR[dt.getMonth()]} ${dt.getFullYear()}`; };
+                                const fmtDateShort = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '___/___/______';
+
+                                const raisonSociale = org?.raisonSociale || 'VIE 59';
+                                const adresseOrg = org?.adresseSiege || '4120 Route de Tournai';
+                                const cpOrg = org?.codePostalSiege || '59500';
+                                const villeOrg = org?.villeSiege || 'DOUAI';
+                                const siretOrg = org?.siret || '90001343400031';
+                                const numUrssaf = fd.numUrssaf || '3170000010240641546';
+                                const representantNom = org?.representantPrenom && org?.representantNom ? `${org.representantNom.toUpperCase()} ${org.representantPrenom}` : 'FELOUKI Sofiane';
+                                const fonction = org?.representantFonction || 'président';
+                                const civRepresentant = fonction?.toLowerCase().includes('présidente') || fonction?.toLowerCase().includes('directrice') ? 'Mme' : 'Mr';
+                                const civSalarie = empData.civilite || 'Mr';
+                                const nomSalarie = (empData.nom || '').toUpperCase();
+                                const prenomSalarie = empData.prenom || '';
+                                const adresseSalarie = empData.adresse || '';
+                                const cpSalarie = empData.codePostal || '';
+                                const villeSalarie = (empData.ville || '').toUpperCase();
+                                const nationalite = empData.nationalite || '';
+                                const dateNaissance = fmtDateShort(empData.dateNaissance);
+                                const lieuNaissance = empData.lieuNaissance || '';
+
+                                doc.setFillColor(35, 41, 54); doc.rect(0, 0, pageWidth, 7, 'F');
+                                doc.setFillColor(249, 115, 22); doc.rect(0, 7, pageWidth, 1.5, 'F');
+                                let y = 20;
+                                doc.setFontSize(14); doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold');
+                                doc.text('Cddi : avenant de renouvellement', pageWidth / 2, y, { align: 'center' }); y += 12;
+                                doc.setFontSize(fontSize); doc.setTextColor(30, 30, 30);
+                                const indentX = margin + 15;
+                                doc.setFont('helvetica', 'bold'); doc.text('Entre les soussignés :', margin + 12, y); y += 8;
+                                doc.setFont('helvetica', 'normal');
+                                doc.text(`L'ASSOCIATION ${raisonSociale.toUpperCase()}`, indentX, y); y += lineH + 1;
+                                doc.text(`Dont le siège social est au ${adresseOrg}, ${cpOrg} ${villeOrg}`, indentX, y); y += lineH + 1;
+                                doc.text(`Siret : ${siretOrg} ; N° URSSAF : ${numUrssaf}`, indentX, y); y += lineH + 1;
+                                y = writeMixed([{ text: `Représentée par ${civRepresentant} ` }, { text: representantNom }, { text: `, agissant en qualité de ${fonction}.` }], indentX, y, contentWidth - 15); y += 8;
+                                doc.setFont('helvetica', 'bold'); doc.text('D\'une part,', pageWidth / 2 + 15, y, { align: 'center' }); y += 8;
+                                doc.setFont('helvetica', 'bold'); doc.text('Et', margin, y); y += lineH + 2;
+                                doc.setFont('helvetica', 'bold'); doc.text(`${civSalarie} ${nomSalarie} ${prenomSalarie}`, margin, y); y += lineH + 1;
+                                doc.setFont('helvetica', 'normal'); doc.text('Demeurant au : ', margin, y);
+                                let dwW = doc.getTextWidth('Demeurant au : '); doc.setFont('helvetica', 'bold'); doc.text(adresseSalarie, margin + dwW, y); y += lineH + 1;
+                                doc.setFont('helvetica', 'bold'); doc.text(`${cpSalarie} ${villeSalarie}`, margin, y); y += lineH + 1;
+                                doc.setFont('helvetica', 'normal'); doc.text('De nationalité ', margin, y);
+                                let natW = doc.getTextWidth('De nationalité '); doc.setFont('helvetica', 'bold'); doc.text(nationalite, margin + natW, y); y += lineH + 1;
+                                doc.setFont('helvetica', 'normal'); let nx = margin;
+                                doc.text('Né(e) le ', nx, y); nx += doc.getTextWidth('Né(e) le '); doc.setFont('helvetica', 'bold'); doc.text(dateNaissance, nx, y); nx += doc.getTextWidth(dateNaissance);
+                                doc.setFont('helvetica', 'normal'); doc.text(' à ', nx, y); nx += doc.getTextWidth(' à '); doc.setFont('helvetica', 'bold'); doc.text(lieuNaissance, nx, y); y += 8;
+                                doc.setFont('helvetica', 'bold'); doc.text('D\'autre part,', pageWidth / 2 + 15, y, { align: 'center' }); y += 10;
+                                doc.setFont('helvetica', 'normal'); doc.text('Il a été convenu et arrêté ce qui suit :', margin, y); y += 8;
+                                const qualif = fd.qualification || 'ouvrier polyvalent N1P1';
+                                y = writeMixed([{ text: `${civSalarie} `, bold: true }, { text: `${nomSalarie} ${prenomSalarie}`, bold: true }, { text: ` a été engagé(e) par ${civRepresentant} ${representantNom} dans le cadre d'un contrat unique d'insertion dans sa version d'${qualif}.` }], margin, y, contentWidth); y += 3;
+                                y = writeMixed([{ text: 'Le contrat, qui a pris effet le ' }, { text: fmtDateLong(fd.dateDebutInitial), bold: true }, { text: ' et qui devait arriver à son terme le ' }, { text: fmtDateLong(fd.dateFinInitial), bold: true }, { text: ' est renouvelé le ' }, { text: fmtDateLong(fd.dateDebut), bold: true }, { text: ' pour une durée de ' }, { text: `${fd.dureeMois || '4'} MOIS`, bold: true }, { text: ', soit jusqu\'au ' }, { text: fmtDateLong(fd.dateFin), bold: true }, { text: ', conformément à l\'article L. 5134-25-1 du code du travail.' }], margin, y, contentWidth); y += 3;
+                                doc.setFont('helvetica', 'normal');
+                                const p3Lines = doc.splitTextToSize('Durant la période de renouvellement, les conditions d\'exécution et de cessation du contrat demeureront identiques à celles initialement prévues.', contentWidth);
+                                doc.text(p3Lines, margin, y); y += p3Lines.length * lineH + 12;
+                                doc.setFont('helvetica', 'bold'); doc.text('Fait en deux exemplaires', pageWidth / 2 + 15, y, { align: 'center' }); y += lineH + 3;
+                                doc.setFont('helvetica', 'bold'); doc.text('A ', margin, y);
+                                let ax = margin + doc.getTextWidth('A '); doc.setFont('helvetica', 'normal'); doc.text(fd.lieuSignature || 'DOUAI', ax, y); ax += doc.getTextWidth(fd.lieuSignature || 'DOUAI');
+                                doc.text(', le ', ax, y); ax += doc.getTextWidth(', le '); doc.setFont('helvetica', 'bold');
+                                doc.text(fmtDateLong(c.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]), ax, y); y += 12;
+                                const sigColWidth = contentWidth / 2;
+                                const sigLeftX = margin;
+                                const sigRightX = margin + sigColWidth;
+                                doc.setFontSize(fontSize); doc.setFont('helvetica', 'bold');
+                                doc.text('Signature de l\'employeur', sigLeftX, y); doc.text('Signature du salarié', sigRightX, y); y += lineH + 1;
+                                doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
+                                doc.text('Faire précéder la signature de la mention', sigLeftX, y); doc.text('Faire précéder la signature de la mention', sigRightX, y); y += 3.5;
+                                doc.text('« lu et approuvé »', sigLeftX, y); doc.text('« lu et approuvé »', sigRightX, y); y += 5;
+                                doc.setFont('helvetica', 'normal'); doc.setFontSize(fontSize);
+                                doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.2);
+                                const boxH = 40;
+                                doc.rect(sigLeftX, y, sigColWidth - 5, boxH, 'S'); doc.rect(sigRightX, y, sigColWidth - 5, boxH, 'S');
+                                // Add employer signature
+                                try { const supSigW = sigColWidth - 15; const supSigH = supSigW / 4.5; doc.addImage(c.signatureEmployeur, 'PNG', sigLeftX + 3, y + 3, supSigW, supSigH); } catch (e) {}
+                                // Add employee signature
+                                try { const empSigW = sigColWidth - 15; const empSigH = empSigW / 4.5; doc.addImage(c.signatureSalarie, 'PNG', sigRightX + 3, y + 3, empSigW, empSigH); } catch (e) {}
+                                doc.setFillColor(249, 115, 22); doc.rect(0, pageHeight - 3.5, pageWidth, 1.5, 'F');
+                                doc.setFillColor(35, 41, 54); doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
+                                doc.save(`Avenant_Signe_${empData.nom}_${empData.prenom}.pdf`);
+                              }
+                            }
+                          } catch (e) { console.error('Erreur PDF signé:', e); }
+                        }}
+                        className="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" /> PDF signé
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

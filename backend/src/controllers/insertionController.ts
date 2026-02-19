@@ -2355,3 +2355,203 @@ export const deleteFichePaie = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 };
+
+// ============================================
+// SIGNATURE AVENANT — Lien public pour salarié
+// ============================================
+
+// Générer un token unique pour la signature d'avenant
+const generateSignatureToken = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+};
+
+// POST /api/insertion/contrats/:id/generate-signing-link (protégé)
+export const generateSigningLink = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { signatureEmployeur, formData } = req.body;
+
+    const contrat = await prisma.contratInsertion.findUnique({ where: { id } });
+    if (!contrat) {
+      return res.status(404).json({ success: false, error: 'Contrat non trouvé' });
+    }
+
+    // Générer un token unique
+    let token = generateSignatureToken();
+    let attempts = 0;
+    while (attempts < 10) {
+      const existing = await prisma.contratInsertion.findFirst({
+        where: { signatureToken: token }
+      });
+      if (!existing) break;
+      token = generateSignatureToken();
+      attempts++;
+    }
+
+    // Expiration dans 7 jours
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const updated = await prisma.contratInsertion.update({
+      where: { id },
+      data: {
+        signatureToken: token,
+        signatureTokenExpiresAt: expiresAt,
+        signatureEmployeur,
+        signatureStatus: 'en_attente',
+        avenantFormData: formData
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        signingUrl: `/signature-avenant.html?token=${token}`,
+        token,
+        expiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Erreur generateSigningLink:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// GET /api/signing/:token (PUBLIC)
+export const getSigningData = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Token manquant' });
+    }
+
+    const contrat = await prisma.contratInsertion.findFirst({
+      where: { signatureToken: token },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            civilite: true,
+            nom: true,
+            prenom: true,
+            adresse: true,
+            codePostal: true,
+            ville: true,
+            nationalite: true,
+            dateNaissance: true,
+            lieuNaissance: true,
+            dateEntree: true,
+            poste: true
+          }
+        }
+      }
+    });
+
+    if (!contrat) {
+      return res.status(404).json({ success: false, error: 'Lien invalide' });
+    }
+
+    if (contrat.signatureTokenExpiresAt && new Date() > contrat.signatureTokenExpiresAt) {
+      return res.status(410).json({ success: false, error: 'Lien expiré' });
+    }
+
+    if (contrat.signatureStatus === 'signe') {
+      return res.status(409).json({ success: false, error: 'Avenant déjà signé' });
+    }
+
+    // Récupérer les données de l'organisme
+    const organisme = await prisma.organisme.findFirst();
+
+    res.json({
+      success: true,
+      data: {
+        employee: contrat.employee,
+        formData: contrat.avenantFormData,
+        signatureEmployeur: contrat.signatureEmployeur,
+        organisme,
+        contrat: {
+          id: contrat.id,
+          dateDebut: contrat.dateDebut,
+          dateFin: contrat.dateFin,
+          dureeHeures: contrat.dureeHeures,
+          motif: contrat.motif,
+          typeContrat: contrat.typeContrat
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erreur getSigningData:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// POST /api/signing/:token/sign (PUBLIC)
+export const submitEmployeeSignature = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { signature } = req.body;
+
+    if (!token || !signature) {
+      return res.status(400).json({ success: false, error: 'Token et signature requis' });
+    }
+
+    const contrat = await prisma.contratInsertion.findFirst({
+      where: { signatureToken: token }
+    });
+
+    if (!contrat) {
+      return res.status(404).json({ success: false, error: 'Lien invalide' });
+    }
+
+    if (contrat.signatureTokenExpiresAt && new Date() > contrat.signatureTokenExpiresAt) {
+      return res.status(410).json({ success: false, error: 'Lien expiré' });
+    }
+
+    if (contrat.signatureStatus === 'signe') {
+      return res.status(409).json({ success: false, error: 'Avenant déjà signé' });
+    }
+
+    await prisma.contratInsertion.update({
+      where: { id: contrat.id },
+      data: {
+        signatureSalarie: signature,
+        signatureStatus: 'signe',
+        signatureSalarieDateAt: new Date()
+      }
+    });
+
+    res.json({ success: true, message: 'Signature enregistrée avec succès' });
+  } catch (error) {
+    console.error('Erreur submitEmployeeSignature:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// GET /api/insertion/contrats/:id (protégé)
+export const getContrat = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const contrat = await prisma.contratInsertion.findUnique({
+      where: { id },
+      include: {
+        employee: true
+      }
+    });
+
+    if (!contrat) {
+      return res.status(404).json({ success: false, error: 'Contrat non trouvé' });
+    }
+
+    res.json({ success: true, data: contrat });
+  } catch (error) {
+    console.error('Erreur getContrat:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};

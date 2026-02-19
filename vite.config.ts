@@ -17,6 +17,7 @@ export default defineConfig({
         'rh-insertion': 'rh-insertion.html',
         'pointage-mobile': 'pointage-mobile.html',
         'pointage-salarie': 'pointage-salarie.html',
+        'signature-avenant': 'signature-avenant.html',
       },
     },
   },

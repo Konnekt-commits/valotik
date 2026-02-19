@@ -599,7 +599,6 @@ model FichePaie {
 
   employee        InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  @@unique([employeeId, mois, annee]) // Une seule fiche par mois/année
   @@map("fiches_paie")
 }
 
@@ -815,6 +814,15 @@ model ContratInsertion {
   certificatTravailUrl String? @db.VarChar(500)
 
   statut              String   @db.VarChar(20) @default("actif") // actif, termine, rompu
+
+  // Signature électronique avenant
+  signatureToken          String?   @unique @db.VarChar(64)
+  signatureTokenExpiresAt DateTime?
+  signatureEmployeur      String?   @db.LongText
+  signatureSalarie        String?   @db.LongText
+  signatureStatus         String?   @db.VarChar(20)  // 'en_attente' | 'signe'
+  signatureSalarieDateAt  DateTime?
+  avenantFormData         Json?
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
