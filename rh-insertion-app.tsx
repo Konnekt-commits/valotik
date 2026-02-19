@@ -609,10 +609,15 @@ const SuiviObjectifModalContent = ({ show, onClose, onSave, saving, initialData,
 
 const FichePaieModalContent = ({ show, onClose, onSave, saving, initialData, darkMode, moisNoms, fichesByMois, anneesDisponibles }: any) => {
   const [form, setForm] = useState<any>({});
-  const [file, setFile] = useState<File | null>(null);
-  useEffect(() => { if (show) { setForm(initialData || {}); setFile(null); } }, [show]);
+  const [files, setFiles] = useState<File[]>([]);
+  useEffect(() => { if (show) { setForm(initialData || {}); setFiles([]); } }, [show]);
   const bg = (dark: string, light: string) => darkMode ? dark : light;
   const text = (dark: string, light: string) => darkMode ? dark : light;
+  const addFiles = (newFiles: FileList | File[]) => {
+    const pdfFiles = Array.from(newFiles).filter(f => f.type === 'application/pdf');
+    setFiles(prev => [...prev, ...pdfFiles].slice(0, 2));
+  };
+  const removeFile = (index: number) => setFiles(prev => prev.filter((_, i) => i !== index));
   if (!show) return null;
   return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -645,28 +650,32 @@ const FichePaieModalContent = ({ show, onClose, onSave, saving, initialData, dar
             </div>
           </div>
           <div>
-            <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Fichier PDF <span className="text-red-500">*</span></label>
-            <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                file ? 'border-green-500/50 bg-green-500/10' : `${bg('border-slate-600 hover:border-slate-500', 'border-gray-300 hover:border-gray-400')}`
-              }`}
-              onClick={() => document.getElementById('fichePaieInputWrapped')?.click()}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f && f.type === 'application/pdf') setFile(f); }}
-            >
-              <input id="fichePaieInputWrapped" type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
-              {file ? (
-                <div className="flex items-center justify-center gap-2 text-green-500">
-                  <CheckCircle className="w-6 h-6" />
-                  <span className="text-sm font-medium">{file.name}</span>
-                </div>
-              ) : (
-                <>
-                  <Upload className={`w-8 h-8 mx-auto mb-2 ${text('text-slate-500', 'text-gray-400')}`} />
-                  <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Cliquez ou glissez un fichier PDF</p>
-                </>
-              )}
-            </div>
+            <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Fichiers PDF (max 2) <span className="text-red-500">*</span></label>
+            {files.length < 2 && (
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${bg('border-slate-600 hover:border-slate-500', 'border-gray-300 hover:border-gray-400')}`}
+                onClick={() => document.getElementById('fichePaieInputWrapped')?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files); }}
+              >
+                <input id="fichePaieInputWrapped" type="file" accept=".pdf" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
+                <Upload className={`w-8 h-8 mx-auto mb-2 ${text('text-slate-500', 'text-gray-400')}`} />
+                <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Cliquez ou glissez un fichier PDF</p>
+              </div>
+            )}
+            {files.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="flex items-center gap-2 text-green-500 min-w-0">
+                      <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{f.name}</span>
+                    </div>
+                    <button onClick={() => removeFile(i)} className="text-red-400 hover:text-red-300 flex-shrink-0"><X className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className={`block text-xs font-medium mb-1 ${text('text-slate-400', 'text-gray-600')}`}>Notes (optionnel)</label>
@@ -676,7 +685,7 @@ const FichePaieModalContent = ({ show, onClose, onSave, saving, initialData, dar
         </div>
         <div className="p-4 border-t border-slate-700/50 flex justify-end gap-3">
           <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
-          <button onClick={() => onSave(form, file)} disabled={saving || !file} className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">
+          <button onClick={() => onSave(form, files)} disabled={saving || files.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">
             {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
@@ -6756,32 +6765,35 @@ export default function RHInsertionApp() {
     }
   }, [activeTab, selectedEmployee?.id, fichesPaieAnnee, loadFichesPaie]);
 
-  const uploadFichePaie = async (paieFormData: any, file: File | null) => {
-    if (!selectedEmployee || !file) return;
+  const uploadFichePaie = async (paieFormData: any, files: File[]) => {
+    if (!selectedEmployee || !files || files.length === 0) return;
     setSaving(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('mois', paieFormData.mois.toString());
-      fd.append('annee', paieFormData.annee.toString());
-      if (paieFormData.notes) fd.append('notes', paieFormData.notes);
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('mois', paieFormData.mois.toString());
+        fd.append('annee', paieFormData.annee.toString());
+        if (paieFormData.notes) fd.append('notes', paieFormData.notes);
 
-      const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/fiches-paie`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` },
-        body: fd
-      });
+        const res = await fetch(`${API_URL}/employees/${selectedEmployee.id}/fiches-paie`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+          body: fd
+        });
 
-      if (res.ok) {
-        setShowFichePaieModal(false);
-        setFichePaieFile(null);
-        setFichePaieForm({ mois: new Date().getMonth() + 1, annee: new Date().getFullYear() });
-        loadFichesPaie(selectedEmployee.id, fichesPaieAnnee);
-        setNotification({ type: 'success', message: 'Fiche de paie enregistrée' });
-      } else {
-        const data = await res.json();
-        setNotification({ type: 'error', message: data.error || 'Erreur lors de l\'upload' });
+        if (!res.ok) {
+          const data = await res.json();
+          setNotification({ type: 'error', message: data.error || `Erreur lors de l'upload de ${file.name}` });
+          return;
+        }
       }
+
+      setShowFichePaieModal(false);
+      setFichePaieFile(null);
+      setFichePaieForm({ mois: new Date().getMonth() + 1, annee: new Date().getFullYear() });
+      loadFichesPaie(selectedEmployee.id, fichesPaieAnnee);
+      setNotification({ type: 'success', message: `${files.length} fiche${files.length > 1 ? 's' : ''} de paie enregistrée${files.length > 1 ? 's' : ''}` });
     } catch (error) {
       console.error('Erreur upload fiche de paie:', error);
       setNotification({ type: 'error', message: 'Erreur lors de l\'upload' });
