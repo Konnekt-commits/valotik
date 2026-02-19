@@ -1146,8 +1146,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
           dureeHeures: parseFloat(form.dureeHeures),
           motif: 'Renouvellement',
           typeContrat: 'CDDI',
-          statut: 'actif',
-          poste: form.poste
+          statut: 'actif'
         })
       });
       if (res.ok) {
