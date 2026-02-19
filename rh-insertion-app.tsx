@@ -6995,6 +6995,21 @@ export default function RHInsertionApp() {
                                   </span>
                                 )}
                               </p>
+                              {(doc.type === 'AVENANT' || doc.type === 'RENOUVELLEMENT') && emp.contrats && emp.contrats.length > 1 && (() => {
+                                const contrat = emp.contrats.find((c: any) => {
+                                  if (docPresent.dateExpiration) {
+                                    const docExp = new Date(docPresent.dateExpiration).toISOString().split('T')[0];
+                                    const cFin = new Date(c.dateFin).toISOString().split('T')[0];
+                                    return docExp === cFin;
+                                  }
+                                  return false;
+                                }) || emp.contrats[emp.contrats.length - 1];
+                                return contrat ? (
+                                  <p className={`text-xs font-medium ${text('text-blue-400', 'text-blue-600')}`}>
+                                    Contrat du {formatDate(contrat.dateDebut)} au {formatDate(contrat.dateFin)} — {contrat.dureeHeures}h/sem
+                                  </p>
+                                ) : null;
+                              })()}
                             </div>
                           </div>
                           <div className="flex gap-2">
