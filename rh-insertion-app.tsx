@@ -2045,7 +2045,7 @@ export default function RHInsertionApp() {
       `${emp.nom} ${emp.prenom}`.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatut = filterStatut === '' || emp.statut === filterStatut;
     return matchSearch && matchStatut;
-  });
+  }).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 
   const formatDate = (date: string | undefined) => {
     if (!date) return '-';
@@ -7200,7 +7200,7 @@ export default function RHInsertionApp() {
                         const couleur = diffJours < 0 ? 'text-red-500' : diffJours <= 30 ? 'text-orange-500' : 'text-green-500';
                         return <div><p className="text-sm">{formatDate(ds)}</p><p className={`text-xs font-medium ${couleur}`}>{diffJours < 0 ? `${Math.abs(diffJours)}j dépassé` : `${diffJours}j`}</p></div>;
                       })()}</td>
-                      <td className="px-4 py-3">{emp.stats?.congesPayes != null ? <span className={`text-sm font-medium ${emp.stats.congesPayes > 0 ? 'text-blue-400' : text('text-slate-500', 'text-gray-400')}`}>{emp.stats.congesPayes}</span> : <span className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>-</span>}</td>
+                      <td className="px-4 py-3">{emp.stats?.congesPayes != null ? <div><span className={`text-sm font-medium ${emp.stats.congesPayes > 0 ? 'text-blue-400' : text('text-slate-500', 'text-gray-400')}`}>{emp.stats.congesPayes}</span>{emp.stats.congesPris != null && emp.stats.congesPris > 0 && <p className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>pris: {emp.stats.congesPris}</p>}</div> : <span className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>-</span>}</td>
                       <td className="px-4 py-3">{emp.stats?.dossierComplet ? <CheckCircle className="w-5 h-5 text-green-500" /> : <div className="flex items-center gap-1"><AlertCircle className="w-5 h-5 text-orange-500" /><span className="text-xs text-orange-500">{emp.stats?.documentsManquants}</span></div>}</td>
                       <td className="px-4 py-3"><Eye className="w-4 h-4 text-blue-500" /></td>
                     </tr>

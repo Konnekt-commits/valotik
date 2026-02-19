@@ -6,8 +6,9 @@ import { PDFParse } from 'pdf-parse';
 const prisma = new PrismaClient();
 
 // Extraire les congés payés depuis le texte d'un bulletin de salaire PDF
-// Structure du PDF : les valeurs congés sont les 2 derniers nombres avant "Net payé : X euros"
-// Premier = Congés N (Acquis), Deuxième = Congés N-1 (Solde)
+// Les valeurs congés sont les derniers nombres avant "Net payé : X euros"
+// Section congés : Acquis / Pris / Solde pour N-1 et N (jusqu'à 6 valeurs)
+// Le Solde est toujours la DERNIÈRE valeur de la section
 function extractCongesFromPDF(text: string): { congesN1Solde: number | null; congesNSolde: number | null } {
   try {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
@@ -15,7 +16,7 @@ function extractCongesFromPDF(text: string): { congesN1Solde: number | null; con
     // Trouver la ligne "Net payé : XXX euros" qui marque la fin
     let netPayeLineIdx = -1;
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (/Net payé\s*:\s*[\d.,]+\s*euros/i.test(lines[i])) {
+      if (/Net payé\s*:\s*[\d., ]+euros/i.test(lines[i])) {
         netPayeLineIdx = i;
         break;
       }
@@ -25,26 +26,36 @@ function extractCongesFromPDF(text: string): { congesN1Solde: number | null; con
       return { congesN1Solde: null, congesNSolde: null };
     }
 
-    // Remonter depuis "Net payé : X euros" pour trouver les 2 derniers nombres
-    // qui sont les valeurs de congés (juste avant cette ligne)
+    // Remonter depuis "Net payé : X euros" pour collecter TOUTES les valeurs congés
+    // Ce sont des nombres seuls sur une ligne (avec ou sans décimales)
     const congesValues: number[] = [];
-    for (let i = netPayeLineIdx - 1; i >= 0 && congesValues.length < 2; i--) {
-      const num = lines[i].match(/^([\d]+[.,][\d]+)$/);
+    for (let i = netPayeLineIdx - 1; i >= 0; i--) {
+      const line = lines[i];
+      // Matcher un nombre seul (avec ou sans décimales, avec possible espace pour milliers)
+      const num = line.match(/^([\d ]+[.,][\d]+)$/);
+      const numInt = line.match(/^([\d]+)$/);
       if (num) {
-        congesValues.unshift(parseFloat(num[1].replace(',', '.')));
-      } else if (lines[i] && !/^[\d.,\s-]+$/.test(lines[i])) {
-        // Si on tombe sur du texte non numérique, on arrête
+        congesValues.unshift(parseFloat(num[1].replace(/\s/g, '').replace(',', '.')));
+      } else if (numInt) {
+        congesValues.unshift(parseFloat(numInt[1]));
+      } else if (line && !/^[\d.,\s-]+$/.test(line)) {
+        // Ligne de texte non numérique = on a quitté la section récap
         break;
       }
     }
 
-    // Les 2 valeurs sont : [Acquis Congés N, Solde Congés N-1]
-    // Acquis Congés N = congesNSolde (si pas de pris, acquis = solde)
-    // Solde Congés N-1
-    if (congesValues.length >= 2) {
-      return { congesN1Solde: congesValues[1], congesNSolde: congesValues[0] };
-    } else if (congesValues.length === 1) {
-      return { congesN1Solde: congesValues[0], congesNSolde: null };
+    // Les valeurs congés sont les dernières du tableau récap (après les colonnes Heures, Brut, etc.)
+    // Structure : les congés sont par groupes de 3 (Acquis, Pris, Solde) ou moins
+    // Le Solde est TOUJOURS la dernière valeur
+    // Pour HADOUIRI (peu de congés) : [0.83, 0.83] = [Acquis N, Solde N-1]
+    // Pour MOHEBI (congés N-1) : [..., 16.67, 16.00, 0.67] = [Acquis, Pris, Solde]
+
+    if (congesValues.length >= 1) {
+      // La dernière valeur = Solde, l'avant-dernière = Pris (si existe)
+      const solde = congesValues[congesValues.length - 1];
+      const pris = congesValues.length >= 2 ? congesValues[congesValues.length - 2] : null;
+      // congesN1Solde = Solde CP, congesNSolde = CP Pris
+      return { congesN1Solde: solde, congesNSolde: pris };
     }
 
     return { congesN1Solde: null, congesNSolde: null };
@@ -153,11 +164,10 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       // Date de sortie = date de fin du contrat le plus récent (dernier avenant ou contrat)
       const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : null;
 
-      // Congés payés depuis la dernière fiche de paie (Solde uniquement, pas d'addition)
+      // Congés payés depuis la dernière fiche de paie
       const derniereFiche = emp.fichesPaie.length > 0 ? emp.fichesPaie[0] : null;
-      const congesPayes = derniereFiche
-        ? (derniereFiche.congesN1Solde ?? derniereFiche.congesNSolde ?? null)
-        : null;
+      const congesPayes = derniereFiche?.congesN1Solde ?? null;
+      const congesPris = derniereFiche?.congesNSolde ?? null;
 
       return {
         ...emp,
@@ -166,7 +176,8 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
           documentsExpires: docsExpires.length,
           dossierComplet: docsManquants.length === 0,
           dateSortie,
-          congesPayes
+          congesPayes,
+          congesPris
         }
       };
     });
