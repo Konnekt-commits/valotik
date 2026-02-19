@@ -624,7 +624,7 @@ const FichePaieModalContent = ({ show, onClose, onSave, saving, initialData, dar
       <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-md w-full`} onMouseDown={(e: any) => e.stopPropagation()}>
         <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
           <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
-            {fichesByMois?.[form.mois] ? 'Remplacer la fiche de paie' : 'Ajouter une fiche de paie'}
+            {fichesByMois?.[form.mois]?.length > 0 ? 'Ajouter une fiche de paie supplémentaire' : 'Ajouter une fiche de paie'}
           </h2>
           <button onClick={onClose}><X className="w-5 h-5" /></button>
         </div>
@@ -763,6 +763,398 @@ const AutorisationSortieModalContent = ({ show, onClose, onSave, saving, initial
   );
 };
 
+const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode, onSaved, saving, setSaving }: any) => {
+  const [form, setForm] = useState<any>({});
+  const [pdfBlob, setPdfBlob] = useState<string | null>(null);
+  const signatureRef = useRef<SignatureCanvas>(null);
+  const [step, setStep] = useState<'form' | 'preview'>('form');
+
+  useEffect(() => {
+    if (show && employee) {
+      const dateSortie = employee.stats?.dateSortie || employee.dateSortie;
+      const currentEnd = dateSortie ? new Date(dateSortie) : new Date();
+      const newStart = new Date(currentEnd);
+      newStart.setDate(newStart.getDate() + 1);
+      const newEnd = new Date(newStart);
+      newEnd.setMonth(newEnd.getMonth() + 6);
+      setForm({
+        dateDebut: newStart.toISOString().split('T')[0],
+        dateFin: newEnd.toISOString().split('T')[0],
+        dureeHeures: employee.dureeHebdo || 26,
+        motif: 'Renouvellement',
+        typeContrat: 'CDDI',
+        poste: employee.poste || 'Agent de valorisation'
+      });
+      setPdfBlob(null);
+      setStep('form');
+      signatureRef.current?.clear();
+    }
+  }, [show, employee]);
+
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+
+  const generatePDF = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 25;
+    const contentWidth = pageWidth - margin * 2;
+    const org = organismeData;
+    const dateEmission = new Date().toLocaleDateString('fr-FR');
+
+    // ===== BANDEAU SUPÉRIEUR =====
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, 0, pageWidth, 8, 'F');
+    doc.setFillColor(249, 115, 22);
+    doc.rect(0, 8, pageWidth, 2, 'F');
+
+    let y = 22;
+
+    // ===== TITRE =====
+    doc.setFontSize(18);
+    doc.setTextColor(35, 41, 54);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AVENANT AU CONTRAT DE TRAVAIL', pageWidth / 2, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(12);
+    doc.setTextColor(249, 115, 22);
+    doc.text('Renouvellement CDDI', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+
+    // ===== DATE D'ÉMISSION =====
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date d'émission : ${dateEmission}`, pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    // ===== INFOS STRUCTURE (encadré) =====
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'FD');
+
+    doc.setFontSize(11);
+    doc.setTextColor(35, 41, 54);
+    doc.setFont('helvetica', 'bold');
+    doc.text(org?.raisonSociale?.toUpperCase() || 'VALORISATION INCLUSION ÉTHIQUE 59', pageWidth / 2, y + 7, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    const adresseStr = org ? `${org.adresseSiege || ''}, ${org.codePostalSiege || ''} ${org.villeSiege || ''}` : '4120 route de Tournai, 59500 DOUAI';
+    doc.text(adresseStr, pageWidth / 2, y + 13, { align: 'center' });
+    doc.text(`Siret: ${org?.siret || '90001343400031'}`, pageWidth / 2, y + 18, { align: 'center' });
+    y += 30;
+
+    // ===== LIGNE SÉPARATRICE =====
+    doc.setDrawColor(249, 115, 22);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    const lineHeight = 7;
+
+    // ===== SECTION ENTRE =====
+    doc.setFontSize(12);
+    doc.setTextColor(35, 41, 54);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ENTRE LES SOUSSIGNÉS :', margin, y);
+    y += lineHeight * 1.5;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+    const raisonSociale = org?.raisonSociale || 'Valorisation Inclusion Éthique 59';
+    const representant = org?.representantPrenom && org?.representantNom ? `${org.representantPrenom} ${org.representantNom}` : 'Le représentant légal';
+    const fonction = org?.representantFonction || 'Directeur';
+
+    const entreText1 = `La structure ${raisonSociale}, représentée par ${representant}, en qualité de ${fonction}, ci-après dénommée "l'employeur",`;
+    const entreLines1 = doc.splitTextToSize(entreText1, contentWidth);
+    doc.text(entreLines1, margin, y);
+    y += entreLines1.length * 5 + 4;
+
+    doc.text('D\'une part,', margin, y);
+    y += lineHeight * 1.2;
+
+    doc.text('Et', margin, y);
+    y += lineHeight * 1.2;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom}`, margin, y);
+    doc.setFont('helvetica', 'normal');
+    y += 5;
+    doc.text(`Demeurant : ${employee.adresse || ''}, ${employee.codePostal || ''} ${employee.ville || ''}`, margin, y);
+    y += 5;
+    doc.text(`N° de sécurité sociale : ${employee.numeroSecu || '_______________'}`, margin, y);
+    y += 5;
+    doc.text('Ci-après dénommé(e) "le salarié",', margin, y);
+    y += lineHeight * 1.2;
+
+    doc.text('D\'autre part,', margin, y);
+    y += lineHeight * 1.8;
+
+    // ===== SECTION OBJET =====
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 41, 54);
+    doc.text('ARTICLE 1 - OBJET', margin, y);
+    y += lineHeight;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+    const objetText = `Le présent avenant a pour objet le renouvellement du contrat à durée déterminée d'insertion (CDDI) du salarié, conformément aux dispositions de l'article L.5132-15-1 du Code du travail.`;
+    const objetLines = doc.splitTextToSize(objetText, contentWidth);
+    doc.text(objetLines, margin, y);
+    y += objetLines.length * 5 + 6;
+
+    // ===== SECTION DURÉE =====
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 41, 54);
+    doc.text('ARTICLE 2 - DURÉE', margin, y);
+    y += lineHeight;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+
+    const dateDebutFormatted = new Date(form.dateDebut).toLocaleDateString('fr-FR');
+    const dateFinFormatted = new Date(form.dateFin).toLocaleDateString('fr-FR');
+
+    // Encadré dates
+    doc.setFillColor(255, 247, 237);
+    doc.setDrawColor(249, 115, 22);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y - 3, contentWidth, 20, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nouvelle date de début :', margin + 5, y + 3);
+    doc.setFont('helvetica', 'bold');
+    doc.text(dateDebutFormatted, margin + 55, y + 3);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nouvelle date de fin :', margin + 5, y + 11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(dateFinFormatted, margin + 50, y + 11);
+    y += 24;
+
+    // ===== SECTION CONDITIONS =====
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 41, 54);
+    doc.text('ARTICLE 3 - CONDITIONS', margin, y);
+    y += lineHeight;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+    const condText = `Le salarié conserve son poste de ${form.poste}. La durée hebdomadaire de travail reste fixée à ${form.dureeHeures} heures. L'ensemble des autres clauses du contrat initial demeurent inchangées.`;
+    const condLines = doc.splitTextToSize(condText, contentWidth);
+    doc.text(condLines, margin, y);
+    y += condLines.length * 5 + 8;
+
+    // ===== FAIT À... =====
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Fait à ${org?.villeSiege || 'Douai'}, le ${dateEmission}`, margin, y);
+    doc.text('En deux exemplaires originaux', pageWidth - margin, y, { align: 'right' });
+    y += 14;
+
+    // ===== DOUBLE ZONE SIGNATURE =====
+    const sigBoxWidth = (contentWidth - 10) / 2;
+
+    // Signature employeur (gauche)
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, sigBoxWidth, 55, 2, 2, 'S');
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(60, 60, 60);
+    doc.text('Pour l\'employeur :', margin + 4, y + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Nom : ${representant}`, margin + 4, y + 14);
+    doc.text(`Fonction : ${fonction}`, margin + 4, y + 20);
+
+    // Ajouter la signature de la direction si disponible
+    const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
+    if (sigData) {
+      try {
+        const supSigW = sigBoxWidth - 12;
+        const supSigH = supSigW / 4.5;
+        doc.addImage(sigData, 'PNG', margin + 6, y + 22, supSigW, supSigH);
+      } catch (e) {
+        console.error('Erreur ajout signature PDF:', e);
+      }
+    }
+
+    // Signature salarié (droite)
+    const sigRightX = margin + sigBoxWidth + 10;
+    doc.setDrawColor(200, 200, 200);
+    doc.roundedRect(sigRightX, y, sigBoxWidth, 55, 2, 2, 'S');
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(60, 60, 60);
+    doc.text('Le salarié :', sigRightX + 4, y + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Nom : ${employee.prenom} ${employee.nom}`, sigRightX + 4, y + 14);
+    doc.text('Signature précédée de "Lu et approuvé"', sigRightX + 4, y + 20);
+
+    y += 62;
+
+    // ===== MENTION =====
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Un exemplaire est remis au salarié et un autre est conservé par la structure.', pageWidth / 2, y, { align: 'center' });
+
+    // ===== BANDEAU INFÉRIEUR =====
+    doc.setFillColor(249, 115, 22);
+    doc.rect(0, pageHeight - 4, pageWidth, 2, 'F');
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
+
+    return doc;
+  };
+
+  const handleGenerate = () => {
+    const doc = generatePDF();
+    const blob = doc.output('bloburl');
+    setPdfBlob(blob as string);
+    setStep('preview');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await authFetch(`${API_URL}/employees/${employee.id}/contrats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dateDebut: form.dateDebut,
+          dateFin: form.dateFin,
+          dureeHeures: parseFloat(form.dureeHeures),
+          motif: 'Renouvellement',
+          typeContrat: 'CDDI',
+          statut: 'actif',
+          poste: form.poste
+        })
+      });
+      if (res.ok) {
+        // Also download the PDF
+        const doc = generatePDF();
+        doc.save(`Avenant_${employee.nom}_${employee.prenom}_${form.dateDebut}.pdf`);
+        onClose();
+        onSaved();
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde avenant:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!show || !employee) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto`} onMouseDown={(e: any) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <RefreshCw className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Renouvellement de contrat</h2>
+              <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{employee.prenom} {employee.nom}</p>
+            </div>
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+
+        {step === 'form' ? (
+          <div className="p-4 space-y-4">
+            <div className={`p-3 rounded-lg ${bg('bg-green-500/10 border border-green-500/20', 'bg-green-50 border border-green-200')}`}>
+              <p className={`text-sm font-medium ${text('text-green-400', 'text-green-700')}`}>Avenant de renouvellement CDDI pour {employee.civilite} {employee.prenom} {employee.nom}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Nouvelle date de début" name="dateDebut" type="date" value={form.dateDebut} onChange={handleChange} required />
+              <Input label="Nouvelle date de fin" name="dateFin" type="date" value={form.dateFin} onChange={handleChange} required />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Durée hebdomadaire (heures)" name="dureeHeures" type="number" value={form.dureeHeures} onChange={handleChange} required />
+              <Input label="Poste" name="poste" value={form.poste} onChange={handleChange} />
+            </div>
+            <Input label="Type de contrat" name="typeContrat" value={form.typeContrat} onChange={handleChange} disabled />
+
+            <div>
+              <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Signature de la direction</label>
+              <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
+                <SignatureCanvas ref={signatureRef} canvasProps={{ width: 700, height: 120, className: 'w-full cursor-crosshair', style: { width: '100%', height: '120px' } }} penColor={darkMode ? '#ffffff' : '#000000'} backgroundColor={darkMode ? '#334155' : '#f9fafb'} />
+              </div>
+              <button type="button" onClick={() => signatureRef.current?.clear()} className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}>Effacer la signature</button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            <div className={`p-3 rounded-lg ${bg('bg-blue-500/10 border border-blue-500/20', 'bg-blue-50 border border-blue-200')}`}>
+              <p className={`text-sm font-medium ${text('text-blue-400', 'text-blue-700')}`}>Prévisualisation de l'avenant - Vérifiez le document avant validation</p>
+            </div>
+            {pdfBlob && (
+              <iframe src={pdfBlob} className="w-full h-[60vh] rounded-lg border border-slate-600" title="Prévisualisation avenant" />
+            )}
+          </div>
+        )}
+
+        <div className="p-4 border-t border-slate-700/50 flex justify-between">
+          {step === 'preview' && (
+            <button onClick={() => setStep('form')} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-200 hover:bg-gray-300')} flex items-center gap-2`}>
+              <ChevronLeft className="w-4 h-4" /> Modifier
+            </button>
+          )}
+          <div className="flex-1" />
+          <div className="flex gap-3">
+            <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+            {step === 'form' ? (
+              <button
+                onClick={handleGenerate}
+                disabled={!form.dateDebut || !form.dateFin}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Eye className="w-4 h-4" /> Prévisualiser l'avenant
+              </button>
+            ) : (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {saving ? 'Enregistrement...' : <><CheckCircle className="w-4 h-4" /> Signer et Valider</>}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 export default function RHInsertionApp() {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -850,6 +1242,10 @@ export default function RHInsertionApp() {
   const [autorisationSortieForm, setAutorisationSortieForm] = useState<any>({});
   const autorisationSignatureRef = useRef<SignatureCanvas>(null);
   const superieurSignatureRef = useRef<SignatureCanvas>(null);
+
+  // Avenant (renouvellement) states
+  const [showAvenantModal, setShowAvenantModal] = useState(false);
+  const [avenantEmployee, setAvenantEmployee] = useState<any>(null);
 
   // Objectifs states
   const [objectifConfig, setObjectifConfig] = useState<any>(null);
@@ -6838,11 +7234,12 @@ export default function RHInsertionApp() {
     const anneeActuelle = new Date().getFullYear();
     const anneesDisponibles = [anneeActuelle, anneeActuelle - 1, anneeActuelle - 2];
 
-    // Créer un map des fiches par mois pour l'année sélectionnée
-    const fichesByMois: Record<number, any> = {};
+    // Créer un map des fiches par mois pour l'année sélectionnée (plusieurs fichiers possibles par mois)
+    const fichesByMois: Record<number, any[]> = {};
     fichesPaie.forEach(f => {
       if (f.annee === fichesPaieAnnee) {
-        fichesByMois[f.mois] = f;
+        if (!fichesByMois[f.mois]) fichesByMois[f.mois] = [];
+        fichesByMois[f.mois].push(f);
       }
     });
 
@@ -6892,26 +7289,27 @@ export default function RHInsertionApp() {
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {moisNoms.map((nom, index) => {
                 const mois = index + 1;
-                const fiche = fichesByMois[mois];
+                const fiches = fichesByMois[mois] || [];
+                const hasFiches = fiches.length > 0;
                 const isFuture = fichesPaieAnnee === anneeActuelle && mois > new Date().getMonth() + 1;
 
                 return (
                   <div
                     key={mois}
                     className={`relative p-4 rounded-xl border-2 transition-all ${
-                      fiche
-                        ? 'bg-green-500/10 border-green-500/50 cursor-pointer hover:bg-green-500/20'
+                      hasFiches
+                        ? 'bg-green-500/10 border-green-500/50'
                         : isFuture
                           ? `${bg('bg-slate-800/50', 'bg-gray-50')} border-dashed ${bg('border-slate-700', 'border-gray-300')} opacity-50`
                           : `${bg('bg-slate-800/50 hover:bg-slate-700/50', 'bg-gray-50 hover:bg-gray-100')} ${bg('border-slate-700', 'border-gray-200')} cursor-pointer`
                     }`}
                     onClick={() => {
-                      if (fiche) {
-                        viewFichePaie(fiche.id, fiche.nomFichier);
-                      } else if (!isFuture) {
+                      if (!hasFiches && !isFuture) {
                         setFichePaieForm({ mois, annee: fichesPaieAnnee });
                         setFichePaieFile(null);
                         setShowFichePaieModal(true);
+                      } else if (fiches.length === 1) {
+                        viewFichePaie(fiches[0].id, fiches[0].nomFichier);
                       }
                     }}
                   >
@@ -6919,7 +7317,7 @@ export default function RHInsertionApp() {
                       <p className={`text-sm font-medium ${text('text-white', 'text-gray-900')}`}>{nom}</p>
                       <p className={`text-xs mt-1 ${text('text-slate-400', 'text-gray-500')}`}>{fichesPaieAnnee}</p>
                       <div className="mt-3">
-                        {fiche ? (
+                        {hasFiches ? (
                           <CheckCircle className="w-8 h-8 text-green-500 mx-auto" />
                         ) : isFuture ? (
                           <Clock className="w-8 h-8 text-slate-600 mx-auto" />
@@ -6930,14 +7328,33 @@ export default function RHInsertionApp() {
                         )}
                       </div>
                     </div>
-                    {fiche && (
+                    {/* Liste des fichiers quand il y en a plusieurs */}
+                    {fiches.length > 1 && (
+                      <div className="mt-2 space-y-1">
+                        {fiches.map((f: any, i: number) => (
+                          <button
+                            key={f.id}
+                            onClick={(e) => { e.stopPropagation(); viewFichePaie(f.id, f.nomFichier); }}
+                            className={`w-full text-left px-2 py-1 rounded text-xs truncate cursor-pointer hover:bg-green-500/20 ${text('text-green-400', 'text-green-700')}`}
+                            title={f.nomFichier}
+                          >
+                            {i + 1}. {f.nomFichier}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {hasFiches && (
                       <div className="absolute top-2 right-2 flex gap-1">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); deleteFichePaie(fiche.id); }}
-                          className="p-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        {fiches.map((f: any) => (
+                          <button
+                            key={f.id}
+                            onClick={(e) => { e.stopPropagation(); deleteFichePaie(f.id); }}
+                            className="p-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
+                            title={`Supprimer ${f.nomFichier}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -7197,12 +7614,20 @@ export default function RHInsertionApp() {
                         const sortie = new Date(ds);
                         const now = new Date();
                         const diffJours = Math.ceil((sortie.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                        const couleur = diffJours < 0 ? 'text-red-500' : diffJours <= 30 ? 'text-orange-500' : 'text-green-500';
-                        return <div><p className="text-sm">{formatDate(ds)}</p><p className={`text-xs font-medium ${couleur}`}>{diffJours < 0 ? `${Math.abs(diffJours)}j dépassé` : `${diffJours}j`}</p></div>;
+                        const couleur = diffJours < 0 ? 'text-red-500' : diffJours <= 30 ? 'text-red-500' : diffJours <= 60 ? 'text-orange-500' : 'text-green-500';
+                        return <div><p className="text-sm">{formatDate(ds)}</p><div className="flex items-center gap-1"><p className={`text-xs font-medium ${couleur}`}>{diffJours < 0 ? `${Math.abs(diffJours)}j dépassé` : `${diffJours}j`}</p>{diffJours >= 0 && diffJours <= 30 && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full text-xs font-bold animate-pulse">Urgent</span>}</div></div>;
                       })()}</td>
                       <td className="px-4 py-3">{emp.stats?.congesPayes != null ? <div><span className={`text-sm font-medium ${emp.stats.congesPayes > 0 ? 'text-blue-400' : text('text-slate-500', 'text-gray-400')}`}>{emp.stats.congesPayes}</span>{emp.stats.congesPris != null && emp.stats.congesPris > 0 && <p className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>pris: {emp.stats.congesPris}</p>}</div> : <span className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>-</span>}</td>
                       <td className="px-4 py-3">{emp.stats?.dossierComplet ? <CheckCircle className="w-5 h-5 text-green-500" /> : <div className="flex items-center gap-1"><AlertCircle className="w-5 h-5 text-orange-500" /><span className="text-xs text-orange-500">{emp.stats?.documentsManquants}</span></div>}</td>
-                      <td className="px-4 py-3"><Eye className="w-4 h-4 text-blue-500" /></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Eye className="w-4 h-4 text-blue-500" />{(() => {
+                        const ds = emp.stats?.dateSortie;
+                        if (!ds) return null;
+                        const sortie = new Date(ds);
+                        const now = new Date();
+                        const diff = Math.ceil((sortie.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        if (diff > 30 || diff < -30) return null;
+                        return <button onClick={(e) => { e.stopPropagation(); setAvenantEmployee(emp); setShowAvenantModal(true); }} className="px-2 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 font-medium flex items-center gap-1"><RefreshCw className="w-3 h-3" />Renouveler</button>;
+                      })()}</div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -7409,6 +7834,7 @@ export default function RHInsertionApp() {
       <AvertissementModalContent show={showAvertissementModal} onClose={() => setShowAvertissementModal(false)} onSave={saveAvertissement} saving={saving} initialData={avertissementForm} />
       <AutorisationSortieModalContent show={showAutorisationSortieModal} onClose={() => setShowAutorisationSortieModal(false)} onSave={saveAutorisationSortie} saving={saving} initialData={autorisationSortieForm} darkMode={darkMode} MOTIF_CATEGORIES={MOTIF_CATEGORIES} />
       <ObjectifModalContent show={showObjectifModal} onClose={() => { setShowObjectifModal(false); setObjectifForm({}); setEditingObjectifId(null); }} onSave={saveObjectifIndividuel} saving={saving} initialData={objectifForm} isEditing={!!editingObjectifId} />
+      <AvenantModalContent show={showAvenantModal} onClose={() => { setShowAvenantModal(false); setAvenantEmployee(null); }} employee={avenantEmployee} organismeData={organismeData} darkMode={darkMode} onSaved={loadData} saving={saving} setSaving={setSaving} />
 
       {/* Modal prévisualisation document */}
       {showDocumentPreview && (
