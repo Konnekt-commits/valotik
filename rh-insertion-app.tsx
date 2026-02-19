@@ -7617,7 +7617,7 @@ export default function RHInsertionApp() {
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${emp.statut === 'actif' ? 'bg-green-500/20' : 'bg-gray-500/20'}`}>
                             <span className={`text-sm font-medium ${emp.statut === 'actif' ? 'text-green-500' : 'text-gray-400'}`}>{emp.prenom[0]}{emp.nom[0]}</span>
                           </div>
-                          <div><p className={`font-medium ${text('text-white', 'text-gray-900')}`}>{emp.civilite} {emp.prenom} {emp.nom}</p><p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>{emp.poste || '-'}</p></div>
+                          <div><p className={`font-medium ${text('text-white', 'text-gray-900')}`}>{emp.nom.toUpperCase()} {emp.prenom}</p><p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>{emp.poste || '-'}</p></div>
                         </div>
                       </td>
                       <td className="px-4 py-3"><p className="text-sm">{emp.telephone}</p><p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>{emp.email || '-'}</p></td>
