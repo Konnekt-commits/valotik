@@ -775,15 +775,21 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
       const currentEnd = dateSortie ? new Date(dateSortie) : new Date();
       const newStart = new Date(currentEnd);
       newStart.setDate(newStart.getDate() + 1);
+      const dureeMois = 4;
       const newEnd = new Date(newStart);
-      newEnd.setMonth(newEnd.getMonth() + 4);
+      newEnd.setMonth(newEnd.getMonth() + dureeMois);
       setForm({
         dateDebut: newStart.toISOString().split('T')[0],
         dateFin: newEnd.toISOString().split('T')[0],
         dureeHeures: employee.dureeHebdo || 26,
         motif: 'Renouvellement',
         typeContrat: 'CDDI',
-        poste: employee.poste || 'Agent de valorisation'
+        poste: employee.poste || 'Agent de valorisation',
+        qualification: employee.poste || 'ouvrier polyvalent N1P1',
+        dateDebutInitial: employee.dateEntree || '',
+        dateFinInitial: dateSortie ? currentEnd.toISOString().split('T')[0] : '',
+        dureeMois: String(dureeMois),
+        lieuSignature: organismeData?.villeSiege || 'DOUAI'
       });
       setPdfBlob(null);
       setStep('form');
@@ -793,7 +799,20 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
 
   const handleChange = useCallback((e: any) => {
     const { name, value } = e.target;
-    setForm((prev: any) => ({ ...prev, [name]: value }));
+    setForm((prev: any) => {
+      const updated = { ...prev, [name]: value };
+      // Recalculate dateFin when dureeMois or dateDebut changes
+      if (name === 'dureeMois' || name === 'dateDebut') {
+        const debut = new Date(name === 'dateDebut' ? value : prev.dateDebut);
+        const mois = parseInt(name === 'dureeMois' ? value : prev.dureeMois, 10);
+        if (!isNaN(debut.getTime()) && !isNaN(mois) && mois > 0) {
+          const fin = new Date(debut);
+          fin.setMonth(fin.getMonth() + mois);
+          updated.dateFin = fin.toISOString().split('T')[0];
+        }
+      }
+      return updated;
+    });
   }, []);
 
   const bg = (dark: string, light: string) => darkMode ? dark : light;
@@ -806,7 +825,44 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
     const margin = 25;
     const contentWidth = pageWidth - margin * 2;
     const org = organismeData;
-    const dateEmission = new Date().toLocaleDateString('fr-FR');
+    const dateSignature = new Date().toLocaleDateString('fr-FR');
+
+    // Helper: write wrapped text block at y, return new y
+    const writeBlock = (txt: string, x: number, maxW: number, yPos: number, lineH = 5.5): number => {
+      const lines = doc.splitTextToSize(txt, maxW);
+      doc.text(lines, x, yPos);
+      return yPos + lines.length * lineH;
+    };
+
+    // Format dates
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '___/___/______';
+    const dateDebutFormatted = fmtDate(form.dateDebut);
+    const dateFinFormatted = fmtDate(form.dateFin);
+    const dateDebutInitialFormatted = fmtDate(form.dateDebutInitial);
+    const dateFinInitialFormatted = fmtDate(form.dateFinInitial);
+
+    // Org data
+    const raisonSociale = org?.raisonSociale || 'Valorisation Inclusion Éthique 59';
+    const adresseOrg = org?.adresseSiege || '4120 route de Tournai';
+    const cpOrg = org?.codePostalSiege || '59500';
+    const villeOrg = org?.villeSiege || 'DOUAI';
+    const siretOrg = org?.siret || '90001343400031';
+    const representantNom = org?.representantPrenom && org?.representantNom
+      ? `${org.representantPrenom} ${org.representantNom}`
+      : 'Le représentant légal';
+    const fonction = org?.representantFonction || 'Directeur';
+    const civRepresentant = fonction?.toLowerCase().includes('présidente') || fonction?.toLowerCase().includes('directrice') ? 'Madame' : 'Monsieur';
+
+    // Employee data
+    const civSalarie = employee.civilite || '';
+    const nomSalarie = (employee.nom || '').toUpperCase();
+    const prenomSalarie = employee.prenom || '';
+    const adresseSalarie = employee.adresse || '';
+    const cpSalarie = employee.codePostal || '';
+    const villeSalarie = (employee.ville || '').toUpperCase();
+    const nationalite = employee.nationalite || '';
+    const dateNaissance = fmtDate(employee.dateNaissance);
+    const lieuNaissance = employee.lieuNaissance || '';
 
     // ===== BANDEAU SUPÉRIEUR =====
     doc.setFillColor(35, 41, 54);
@@ -817,154 +873,86 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
     let y = 22;
 
     // ===== TITRE =====
-    doc.setFontSize(18);
+    doc.setFontSize(16);
     doc.setTextColor(35, 41, 54);
     doc.setFont('helvetica', 'bold');
-    doc.text('AVENANT AU CONTRAT DE TRAVAIL', pageWidth / 2, y, { align: 'center' });
+    doc.text('CDDI : AVENANT DE RENOUVELLEMENT', pageWidth / 2, y, { align: 'center' });
+    y += 14;
+
+    // ===== ENTRE LES SOUSSIGNÉS =====
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+
+    doc.text('Entre les soussignés :', margin, y);
+    y += 10;
+
+    // --- Employeur ---
+    const indentX = margin + 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`L'ASSOCIATION ${raisonSociale.toUpperCase()}`, indentX, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Dont le siège social est au ${adresseOrg}, ${cpOrg} ${villeOrg}`, indentX, y);
+    y += 6;
+    doc.text(`Siret : ${siretOrg}`, indentX, y);
+    y += 6;
+    y = writeBlock(`Représentée par ${civRepresentant} ${representantNom}, agissant en qualité de ${fonction}.`, indentX, contentWidth - 8, y);
     y += 8;
-    doc.setFontSize(12);
-    doc.setTextColor(249, 115, 22);
-    doc.text('Renouvellement CDDI', pageWidth / 2, y, { align: 'center' });
+
+    doc.setFont('helvetica', 'italic');
+    doc.text('D\'une part,', pageWidth / 2, y, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
     y += 10;
 
-    // ===== DATE D'ÉMISSION =====
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Date d'émission : ${dateEmission}`, pageWidth / 2, y, { align: 'center' });
-    y += 12;
-
-    // ===== INFOS STRUCTURE (encadré) =====
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'FD');
-
-    doc.setFontSize(11);
-    doc.setTextColor(35, 41, 54);
-    doc.setFont('helvetica', 'bold');
-    doc.text(org?.raisonSociale?.toUpperCase() || 'VALORISATION INCLUSION ÉTHIQUE 59', pageWidth / 2, y + 7, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
-    const adresseStr = org ? `${org.adresseSiege || ''}, ${org.codePostalSiege || ''} ${org.villeSiege || ''}` : '4120 route de Tournai, 59500 DOUAI';
-    doc.text(adresseStr, pageWidth / 2, y + 13, { align: 'center' });
-    doc.text(`Siret: ${org?.siret || '90001343400031'}`, pageWidth / 2, y + 18, { align: 'center' });
-    y += 30;
-
-    // ===== LIGNE SÉPARATRICE =====
-    doc.setDrawColor(249, 115, 22);
-    doc.setLineWidth(0.5);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 10;
-
-    const lineHeight = 7;
-
-    // ===== SECTION ENTRE =====
-    doc.setFontSize(12);
-    doc.setTextColor(35, 41, 54);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ENTRE LES SOUSSIGNÉS :', margin, y);
-    y += lineHeight * 1.5;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(40, 40, 40);
-    const raisonSociale = org?.raisonSociale || 'Valorisation Inclusion Éthique 59';
-    const representant = org?.representantPrenom && org?.representantNom ? `${org.representantPrenom} ${org.representantNom}` : 'Le représentant légal';
-    const fonction = org?.representantFonction || 'Directeur';
-
-    const entreText1 = `La structure ${raisonSociale}, représentée par ${representant}, en qualité de ${fonction}, ci-après dénommée "l'employeur",`;
-    const entreLines1 = doc.splitTextToSize(entreText1, contentWidth);
-    doc.text(entreLines1, margin, y);
-    y += entreLines1.length * 5 + 4;
-
-    doc.text('D\'une part,', margin, y);
-    y += lineHeight * 1.2;
-
+    // --- Salarié ---
     doc.text('Et', margin, y);
-    y += lineHeight * 1.2;
+    y += 7;
 
     doc.setFont('helvetica', 'bold');
-    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom}`, margin, y);
+    doc.text(`${civSalarie} ${nomSalarie} ${prenomSalarie}`, margin, y);
     doc.setFont('helvetica', 'normal');
-    y += 5;
-    doc.text(`Demeurant : ${employee.adresse || ''}, ${employee.codePostal || ''} ${employee.ville || ''}`, margin, y);
-    y += 5;
-    doc.text(`N° de sécurité sociale : ${employee.numeroSecu || '_______________'}`, margin, y);
-    y += 5;
-    doc.text('Ci-après dénommé(e) "le salarié",', margin, y);
-    y += lineHeight * 1.2;
+    y += 6;
+    doc.text(`Demeurant au : ${adresseSalarie}`, margin, y);
+    y += 6;
+    doc.text(`${cpSalarie} ${villeSalarie}`, margin, y);
+    y += 6;
+    doc.text(`De nationalité ${nationalite}`, margin, y);
+    y += 6;
+    doc.text(`Né(e) le ${dateNaissance} à ${lieuNaissance}`, margin, y);
+    y += 10;
 
-    doc.text('D\'autre part,', margin, y);
-    y += lineHeight * 1.8;
-
-    // ===== SECTION OBJET =====
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(35, 41, 54);
-    doc.text('ARTICLE 1 - OBJET', margin, y);
-    y += lineHeight;
-
-    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('D\'autre part,', pageWidth / 2, y, { align: 'center' });
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(40, 40, 40);
-    const objetText = `Le présent avenant a pour objet le renouvellement du contrat à durée déterminée d'insertion (CDDI) du salarié, conformément aux dispositions de l'article L.5132-15-1 du Code du travail.`;
-    const objetLines = doc.splitTextToSize(objetText, contentWidth);
-    doc.text(objetLines, margin, y);
-    y += objetLines.length * 5 + 6;
+    y += 14;
 
-    // ===== SECTION DURÉE =====
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(35, 41, 54);
-    doc.text('ARTICLE 2 - DURÉE', margin, y);
-    y += lineHeight;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(40, 40, 40);
-
-    const dateDebutFormatted = new Date(form.dateDebut).toLocaleDateString('fr-FR');
-    const dateFinFormatted = new Date(form.dateFin).toLocaleDateString('fr-FR');
-
-    // Encadré dates
-    doc.setFillColor(255, 247, 237);
-    doc.setDrawColor(249, 115, 22);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y - 3, contentWidth, 20, 2, 2, 'FD');
-
-    doc.setFont('helvetica', 'normal');
-    doc.text('Nouvelle date de début :', margin + 5, y + 3);
-    doc.setFont('helvetica', 'bold');
-    doc.text(dateDebutFormatted, margin + 55, y + 3);
-
-    doc.setFont('helvetica', 'normal');
-    doc.text('Nouvelle date de fin :', margin + 5, y + 11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(dateFinFormatted, margin + 50, y + 11);
-    y += 24;
-
-    // ===== SECTION CONDITIONS =====
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(35, 41, 54);
-    doc.text('ARTICLE 3 - CONDITIONS', margin, y);
-    y += lineHeight;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(40, 40, 40);
-    const condText = `Le salarié conserve son poste de ${form.poste}. La durée hebdomadaire de travail reste fixée à ${form.dureeHeures} heures. L'ensemble des autres clauses du contrat initial demeurent inchangées.`;
-    const condLines = doc.splitTextToSize(condText, contentWidth);
-    doc.text(condLines, margin, y);
-    y += condLines.length * 5 + 8;
-
-    // ===== FAIT À... =====
+    // ===== CORPS DU TEXTE =====
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fait à ${org?.villeSiege || 'Douai'}, le ${dateEmission}`, margin, y);
-    doc.text('En deux exemplaires originaux', pageWidth - margin, y, { align: 'right' });
+    doc.setTextColor(40, 40, 40);
+
+    doc.text('Il a été convenu et arrêté ce qui suit :', margin, y);
+    y += 10;
+
+    const paragraph1 = `${civSalarie} ${nomSalarie} ${prenomSalarie} a été engagé(e) par ${civRepresentant} ${representantNom} dans le cadre d'un contrat unique d'insertion dans sa version de ${form.qualification || 'ouvrier polyvalent N1P1'}.`;
+    y = writeBlock(paragraph1, margin, contentWidth, y);
+    y += 6;
+
+    const paragraph2 = `Le contrat, qui a pris effet le ${dateDebutInitialFormatted} et qui devait arriver à son terme le ${dateFinInitialFormatted} est renouvelé le ${dateDebutFormatted} pour une durée de ${form.dureeMois || '4'} MOIS, soit jusqu'au ${dateFinFormatted}, conformément à l'article L. 5134-25-1 du code du travail.`;
+    y = writeBlock(paragraph2, margin, contentWidth, y);
+    y += 6;
+
+    const paragraph3 = `Durant la période de renouvellement, les conditions d'exécution et de cessation du contrat demeureront identiques à celles initialement prévues.`;
+    y = writeBlock(paragraph3, margin, contentWidth, y);
+    y += 14;
+
+    // ===== FAIT EN DEUX EXEMPLAIRES =====
+    doc.setFont('helvetica', 'italic');
+    doc.text('Fait en deux exemplaires', pageWidth / 2, y, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    y += 7;
+    doc.text(`A ${form.lieuSignature || 'DOUAI'}, le ${dateSignature}`, margin, y);
     y += 14;
 
     // ===== DOUBLE ZONE SIGNATURE =====
@@ -978,11 +966,10 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(60, 60, 60);
-    doc.text('Pour l\'employeur :', margin + 4, y + 7);
+    doc.text('Signature de l\'employeur', margin + 4, y + 7);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`Nom : ${representant}`, margin + 4, y + 14);
-    doc.text(`Fonction : ${fonction}`, margin + 4, y + 20);
+    doc.text('"lu et approuvé"', margin + 4, y + 13);
 
     // Ajouter la signature de la direction si disponible
     const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
@@ -990,7 +977,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
       try {
         const supSigW = sigBoxWidth - 12;
         const supSigH = supSigW / 4.5;
-        doc.addImage(sigData, 'PNG', margin + 6, y + 22, supSigW, supSigH);
+        doc.addImage(sigData, 'PNG', margin + 6, y + 16, supSigW, supSigH);
       } catch (e) {
         console.error('Erreur ajout signature PDF:', e);
       }
@@ -1004,23 +991,10 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(60, 60, 60);
-    doc.text('Le salarié :', sigRightX + 4, y + 7);
+    doc.text('Signature du salarié', sigRightX + 4, y + 7);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`Nom : ${employee.prenom} ${employee.nom}`, sigRightX + 4, y + 14);
-    doc.text('Signature précédée de "Lu et approuvé"', sigRightX + 4, y + 20);
-
-    y += 62;
-
-    // ===== MENTION =====
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.2);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 6;
-    doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Un exemplaire est remis au salarié et un autre est conservé par la structure.', pageWidth / 2, y, { align: 'center' });
+    doc.text('"lu et approuvé"', sigRightX + 4, y + 13);
 
     // ===== BANDEAU INFÉRIEUR =====
     doc.setFillColor(249, 115, 22);
@@ -1093,14 +1067,22 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              <Input label="Date début contrat initial" name="dateDebutInitial" type="date" value={form.dateDebutInitial} onChange={handleChange} />
+              <Input label="Date fin contrat précédent" name="dateFinInitial" type="date" value={form.dateFinInitial} onChange={handleChange} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
               <Input label="Nouvelle date de début" name="dateDebut" type="date" value={form.dateDebut} onChange={handleChange} required />
+              <Input label="Durée (mois)" name="dureeMois" type="number" value={form.dureeMois} onChange={handleChange} required />
               <Input label="Nouvelle date de fin" name="dateFin" type="date" value={form.dateFin} onChange={handleChange} required />
             </div>
             <div className="grid grid-cols-2 gap-4">
+              <Input label="Qualification" name="qualification" value={form.qualification} onChange={handleChange} />
               <Input label="Durée hebdomadaire (heures)" name="dureeHeures" type="number" value={form.dureeHeures} onChange={handleChange} required />
-              <Input label="Poste" name="poste" value={form.poste} onChange={handleChange} />
             </div>
-            <Input label="Type de contrat" name="typeContrat" value={form.typeContrat} onChange={handleChange} disabled />
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Poste" name="poste" value={form.poste} onChange={handleChange} />
+              <Input label="Lieu de signature" name="lieuSignature" value={form.lieuSignature} onChange={handleChange} />
+            </div>
 
             <div>
               <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Signature de la direction</label>
