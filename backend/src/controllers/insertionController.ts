@@ -161,8 +161,16 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       const docsManquants = docsObligatoires.filter(d => !docsPresents.includes(d));
       const docsExpires = emp.documents.filter(d => d.typeDocument !== 'JUSTIF_DOMICILE' && d.dateExpiration && new Date(d.dateExpiration) < new Date());
 
-      // Date de sortie = date de fin du contrat le plus récent, ou dateSortie de l'employé en fallback
-      const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : (emp.dateSortie || null);
+      // Date de sortie = date de fin du contrat le plus récent, ou dateExpiration du document CONTRAT/AVENANT le plus récent, ou dateSortie de l'employé
+      let dateSortie: Date | null = null;
+      if (emp.contrats.length > 0) {
+        dateSortie = emp.contrats[0].dateFin;
+      } else {
+        const docsContrat = emp.documents
+          .filter(d => ['CONTRAT', 'AVENANT', 'RENOUVELLEMENT'].includes(d.typeDocument) && d.dateExpiration)
+          .sort((a, b) => new Date(b.dateExpiration!).getTime() - new Date(a.dateExpiration!).getTime());
+        dateSortie = docsContrat.length > 0 ? docsContrat[0].dateExpiration : (emp.dateSortie || null);
+      }
 
       // Congés payés depuis la dernière fiche de paie
       const derniereFiche = emp.fichesPaie.length > 0 ? emp.fichesPaie[0] : null;
