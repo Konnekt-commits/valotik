@@ -47,8 +47,7 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
         include: {
           fichePro: true,
           contrats: {
-            where: { statut: 'actif' },
-            take: 1
+            orderBy: { dateFin: 'desc' }
           },
           documents: {
             select: {
@@ -80,12 +79,16 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       const docsManquants = docsObligatoires.filter(d => !docsPresents.includes(d));
       const docsExpires = emp.documents.filter(d => d.typeDocument !== 'JUSTIF_DOMICILE' && d.dateExpiration && new Date(d.dateExpiration) < new Date());
 
+      // Date de sortie = date de fin du contrat le plus récent (dernier avenant ou contrat)
+      const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : null;
+
       return {
         ...emp,
         stats: {
           documentsManquants: docsManquants.length,
           documentsExpires: docsExpires.length,
-          dossierComplet: docsManquants.length === 0
+          dossierComplet: docsManquants.length === 0,
+          dateSortie
         }
       };
     });
