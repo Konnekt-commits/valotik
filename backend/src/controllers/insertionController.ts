@@ -1,8 +1,69 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { uploadToGCS, deleteFromGCS, getSignedUrl, streamFromGCS } from '../services/storageService';
+import { PDFParse } from 'pdf-parse';
 
 const prisma = new PrismaClient();
+
+// Extraire les congés payés depuis le texte d'un bulletin de salaire PDF
+// Structure du PDF : les valeurs congés sont les 2 derniers nombres avant "Net payé : X euros"
+// Premier = Congés N (Acquis), Deuxième = Congés N-1 (Solde)
+function extractCongesFromPDF(text: string): { congesN1Solde: number | null; congesNSolde: number | null } {
+  try {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+    // Trouver la ligne "Net payé : XXX euros" qui marque la fin
+    let netPayeLineIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (/Net payé\s*:\s*[\d.,]+\s*euros/i.test(lines[i])) {
+        netPayeLineIdx = i;
+        break;
+      }
+    }
+
+    if (netPayeLineIdx === -1) {
+      return { congesN1Solde: null, congesNSolde: null };
+    }
+
+    // Remonter depuis "Net payé : X euros" pour trouver les 2 derniers nombres
+    // qui sont les valeurs de congés (juste avant cette ligne)
+    const congesValues: number[] = [];
+    for (let i = netPayeLineIdx - 1; i >= 0 && congesValues.length < 2; i--) {
+      const num = lines[i].match(/^([\d]+[.,][\d]+)$/);
+      if (num) {
+        congesValues.unshift(parseFloat(num[1].replace(',', '.')));
+      } else if (lines[i] && !/^[\d.,\s-]+$/.test(lines[i])) {
+        // Si on tombe sur du texte non numérique, on arrête
+        break;
+      }
+    }
+
+    // Les 2 valeurs sont : [Acquis Congés N, Solde Congés N-1]
+    // Acquis Congés N = congesNSolde (si pas de pris, acquis = solde)
+    // Solde Congés N-1
+    if (congesValues.length >= 2) {
+      return { congesN1Solde: congesValues[1], congesNSolde: congesValues[0] };
+    } else if (congesValues.length === 1) {
+      return { congesN1Solde: congesValues[0], congesNSolde: null };
+    }
+
+    return { congesN1Solde: null, congesNSolde: null };
+  } catch (e) {
+    console.error('Erreur extraction congés PDF:', e);
+    return { congesN1Solde: null, congesNSolde: null };
+  }
+}
+
+// Parser un PDF buffer et extraire le texte
+async function parsePDFText(buffer: Buffer): Promise<string> {
+  const uint8 = new Uint8Array(buffer);
+  const parser = new PDFParse(uint8);
+  await parser.load();
+  const result = await parser.getText();
+  const text = typeof result === 'string' ? result : (result as any)?.text || (result as any)?.pages?.[0]?.text || '';
+  parser.destroy();
+  return text;
+}
 
 // ============================================
 // SALARIÉS EN INSERTION
@@ -59,6 +120,16 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
               dateExpiration: true
             }
           },
+          fichesPaie: {
+            orderBy: [{ annee: 'desc' }, { mois: 'desc' }],
+            take: 1,
+            select: {
+              congesN1Solde: true,
+              congesNSolde: true,
+              mois: true,
+              annee: true
+            }
+          },
           _count: {
             select: {
               suivis: true,
@@ -82,13 +153,20 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       // Date de sortie = date de fin du contrat le plus récent (dernier avenant ou contrat)
       const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : null;
 
+      // Congés payés depuis la dernière fiche de paie
+      const derniereFiche = emp.fichesPaie.length > 0 ? emp.fichesPaie[0] : null;
+      const congesPayes = derniereFiche
+        ? (derniereFiche.congesN1Solde || 0) + (derniereFiche.congesNSolde || 0)
+        : null;
+
       return {
         ...emp,
         stats: {
           documentsManquants: docsManquants.length,
           documentsExpires: docsExpires.length,
           dossierComplet: docsManquants.length === 0,
-          dateSortie
+          dateSortie,
+          congesPayes
         }
       };
     });
@@ -2189,6 +2267,16 @@ export const createFichePaie = async (req: Request, res: Response) => {
     // Upload vers GCS
     const fileUrl = await uploadToGCS(req.file, `fiches-paie/${employeeId}/${anneeNum}`);
 
+    // Parser le PDF pour extraire les congés payés
+    let congesData = { congesN1Solde: null as number | null, congesNSolde: null as number | null };
+    try {
+      const pdfText = await parsePDFText(req.file.buffer);
+      congesData = extractCongesFromPDF(pdfText);
+      console.log(`Congés extraits pour ${req.file.originalname}: N-1=${congesData.congesN1Solde}, N=${congesData.congesNSolde}`);
+    } catch (e) {
+      console.error('Erreur parsing PDF congés:', e);
+    }
+
     // Créer ou mettre à jour la fiche
     const fichePaie = await prisma.fichePaie.upsert({
       where: {
@@ -2203,7 +2291,9 @@ export const createFichePaie = async (req: Request, res: Response) => {
         nomFichier: req.file.originalname,
         taille: req.file.size,
         mimeType: req.file.mimetype,
-        notes: notes || null
+        notes: notes || null,
+        congesN1Solde: congesData.congesN1Solde,
+        congesNSolde: congesData.congesNSolde
       },
       create: {
         employeeId,
@@ -2213,7 +2303,9 @@ export const createFichePaie = async (req: Request, res: Response) => {
         nomFichier: req.file.originalname,
         taille: req.file.size,
         mimeType: req.file.mimetype,
-        notes: notes || null
+        notes: notes || null,
+        congesN1Solde: congesData.congesN1Solde,
+        congesNSolde: congesData.congesNSolde
       }
     });
 

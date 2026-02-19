@@ -589,6 +589,10 @@ model FichePaie {
   taille          Int?
   mimeType        String?  @db.VarChar(100)
 
+  // Données extraites du PDF
+  congesN1Solde   Float?   // Solde congés N-1
+  congesNSolde    Float?   // Solde congés N
+
   notes           String?  @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

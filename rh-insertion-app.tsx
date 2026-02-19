@@ -7175,7 +7175,7 @@ export default function RHInsertionApp() {
             <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} overflow-hidden`}>
               <table className="w-full">
                 <thead><tr className={`text-left text-xs ${text('text-slate-400', 'text-gray-500')} border-b ${bg('border-slate-700', 'border-gray-200')}`}>
-                  <th className="px-4 py-3">Salarié</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Contrat</th><th className="px-4 py-3">Entrée</th><th className="px-4 py-3">Sortie</th><th className="px-4 py-3">Dossier</th><th className="px-4 py-3"></th>
+                  <th className="px-4 py-3">Salarié</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Contrat</th><th className="px-4 py-3">Entrée</th><th className="px-4 py-3">Sortie</th><th className="px-4 py-3">CP</th><th className="px-4 py-3">Dossier</th><th className="px-4 py-3"></th>
                 </tr></thead>
                 <tbody>
                   {filteredEmployees.map(emp => (
@@ -7200,6 +7200,7 @@ export default function RHInsertionApp() {
                         const couleur = diffJours < 0 ? 'text-red-500' : diffJours <= 30 ? 'text-orange-500' : 'text-green-500';
                         return <div><p className="text-sm">{formatDate(ds)}</p><p className={`text-xs font-medium ${couleur}`}>{diffJours < 0 ? `${Math.abs(diffJours)}j dépassé` : `${diffJours}j`}</p></div>;
                       })()}</td>
+                      <td className="px-4 py-3">{emp.stats?.congesPayes != null ? <span className={`text-sm font-medium ${emp.stats.congesPayes > 0 ? 'text-blue-400' : text('text-slate-500', 'text-gray-400')}`}>{emp.stats.congesPayes}</span> : <span className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>-</span>}</td>
                       <td className="px-4 py-3">{emp.stats?.dossierComplet ? <CheckCircle className="w-5 h-5 text-green-500" /> : <div className="flex items-center gap-1"><AlertCircle className="w-5 h-5 text-orange-500" /><span className="text-xs text-orange-500">{emp.stats?.documentsManquants}</span></div>}</td>
                       <td className="px-4 py-3"><Eye className="w-4 h-4 text-blue-500" /></td>
                     </tr>
