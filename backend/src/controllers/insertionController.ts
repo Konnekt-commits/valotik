@@ -161,8 +161,8 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       const docsManquants = docsObligatoires.filter(d => !docsPresents.includes(d));
       const docsExpires = emp.documents.filter(d => d.typeDocument !== 'JUSTIF_DOMICILE' && d.dateExpiration && new Date(d.dateExpiration) < new Date());
 
-      // Date de sortie = date de fin du contrat le plus récent (dernier avenant ou contrat)
-      const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : null;
+      // Date de sortie = date de fin du contrat le plus récent, ou dateSortie de l'employé en fallback
+      const dateSortie = emp.contrats.length > 0 ? emp.contrats[0].dateFin : (emp.dateSortie || null);
 
       // Congés payés depuis la dernière fiche de paie
       const derniereFiche = emp.fichesPaie.length > 0 ? emp.fichesPaie[0] : null;
@@ -2253,28 +2253,6 @@ export const createFichePaie = async (req: Request, res: Response) => {
     const moisNum = parseInt(mois);
     const anneeNum = parseInt(annee);
 
-    // Vérifier si une fiche existe déjà pour ce mois/année
-    const existingFiche = await prisma.fichePaie.findUnique({
-      where: {
-        employeeId_mois_annee: {
-          employeeId,
-          mois: moisNum,
-          annee: anneeNum
-        }
-      }
-    });
-
-    if (existingFiche) {
-      // Supprimer l'ancien fichier de GCS si présent
-      if (existingFiche.url && existingFiche.url.startsWith('gs://')) {
-        try {
-          await deleteFromGCS(existingFiche.url);
-        } catch (e) {
-          console.error('Erreur suppression ancien fichier GCS:', e);
-        }
-      }
-    }
-
     // Upload vers GCS
     const fileUrl = await uploadToGCS(req.file, `fiches-paie/${employeeId}/${anneeNum}`);
 
@@ -2288,25 +2266,9 @@ export const createFichePaie = async (req: Request, res: Response) => {
       console.error('Erreur parsing PDF congés:', e);
     }
 
-    // Créer ou mettre à jour la fiche
-    const fichePaie = await prisma.fichePaie.upsert({
-      where: {
-        employeeId_mois_annee: {
-          employeeId,
-          mois: moisNum,
-          annee: anneeNum
-        }
-      },
-      update: {
-        url: fileUrl,
-        nomFichier: req.file.originalname,
-        taille: req.file.size,
-        mimeType: req.file.mimetype,
-        notes: notes || null,
-        congesN1Solde: congesData.congesN1Solde,
-        congesNSolde: congesData.congesNSolde
-      },
-      create: {
+    // Créer la fiche (on autorise plusieurs fichiers par mois)
+    const fichePaie = await prisma.fichePaie.create({
+      data: {
         employeeId,
         mois: moisNum,
         annee: anneeNum,
