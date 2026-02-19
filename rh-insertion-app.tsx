@@ -770,6 +770,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
   const [step, setStep] = useState<'form' | 'preview' | 'link'>('form');
   const [signingLink, setSigningLink] = useState<string>('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [savedSignatureData, setSavedSignatureData] = useState<string | null>(null);
 
   useEffect(() => {
     if (show && employee) {
@@ -798,6 +799,7 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
       setStep('form');
       setSigningLink('');
       setLinkCopied(false);
+      setSavedSignatureData(null);
       signatureRef.current?.clear();
     }
   }, [show, employee]);
@@ -1127,6 +1129,9 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
   };
 
   const handleGenerate = () => {
+    // Capturer la signature AVANT de changer de step (le canvas sera démonté)
+    const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
+    setSavedSignatureData(sigData);
     const doc = generatePDF();
     const blob = doc.output('bloburl');
     setPdfBlob(blob as string);
@@ -1153,15 +1158,13 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
         const contratData = await res.json();
         const contratId = contratData.data?.id;
 
-        // 2. Générer le lien de signature avec la signature employeur
-        const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
-
-        if (contratId && sigData) {
+        // 2. Générer le lien de signature avec la signature employeur (sauvegardée dans handleGenerate)
+        if (contratId && savedSignatureData) {
           const linkRes = await authFetch(`${API_URL}/contrats/${contratId}/generate-signing-link`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              signatureEmployeur: sigData,
+              signatureEmployeur: savedSignatureData,
               formData: form
             })
           });
