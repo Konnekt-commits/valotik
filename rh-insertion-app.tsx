@@ -789,7 +789,8 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
         dateDebutInitial: employee.dateEntree || '',
         dateFinInitial: dateSortie ? currentEnd.toISOString().split('T')[0] : '',
         dureeMois: String(dureeMois),
-        lieuSignature: organismeData?.villeSiege || 'DOUAI'
+        lieuSignature: organismeData?.villeSiege || 'DOUAI',
+        numUrssaf: '3170000010240641546'
       });
       setPdfBlob(null);
       setStep('form');
@@ -822,183 +823,299 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 25;
+    const margin = 20;
     const contentWidth = pageWidth - margin * 2;
     const org = organismeData;
-    const dateSignature = new Date().toLocaleDateString('fr-FR');
+    const fontSize = 9;
+    const lineH = 4.5;
 
-    // Helper: write wrapped text block at y, return new y
-    const writeBlock = (txt: string, x: number, maxW: number, yPos: number, lineH = 5.5): number => {
-      const lines = doc.splitTextToSize(txt, maxW);
-      doc.text(lines, x, yPos);
-      return yPos + lines.length * lineH;
+    // Helper: write mixed bold/normal segments on one or multiple lines
+    // segments = [{text, bold?, italic?}, ...]
+    const writeMixed = (segments: {text: string; bold?: boolean; italic?: boolean}[], x: number, yPos: number, maxW: number): number => {
+      // Build full text to check wrapping
+      const fullText = segments.map(s => s.text).join('');
+      const lines = doc.splitTextToSize(fullText, maxW);
+      if (lines.length <= 1) {
+        // Single line — render segments inline
+        let cx = x;
+        for (const seg of segments) {
+          doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
+          doc.text(seg.text, cx, yPos);
+          cx += doc.getTextWidth(seg.text);
+        }
+        return yPos + lineH;
+      }
+      // Multi-line — we need to split segments across lines
+      let charIndex = 0;
+      let currentY = yPos;
+      for (const line of lines) {
+        let cx = x;
+        let lineCharsLeft = line.length;
+        // Walk through segments to find which ones cover this line
+        let segIdx = 0;
+        let segCharOffset = 0;
+        // Find starting segment for this line's charIndex
+        let totalChars = 0;
+        for (let si = 0; si < segments.length; si++) {
+          if (totalChars + segments[si].text.length > charIndex) {
+            segIdx = si;
+            segCharOffset = charIndex - totalChars;
+            break;
+          }
+          totalChars += segments[si].text.length;
+        }
+        while (lineCharsLeft > 0 && segIdx < segments.length) {
+          const seg = segments[segIdx];
+          const available = seg.text.length - segCharOffset;
+          const take = Math.min(available, lineCharsLeft);
+          const chunk = seg.text.substring(segCharOffset, segCharOffset + take);
+          doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
+          doc.text(chunk, cx, currentY);
+          cx += doc.getTextWidth(chunk);
+          lineCharsLeft -= take;
+          charIndex += take;
+          segCharOffset += take;
+          if (segCharOffset >= seg.text.length) {
+            segIdx++;
+            segCharOffset = 0;
+          }
+        }
+        currentY += lineH;
+      }
+      return currentY;
     };
 
-    // Format dates
-    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '___/___/______';
-    const dateDebutFormatted = fmtDate(form.dateDebut);
-    const dateFinFormatted = fmtDate(form.dateFin);
-    const dateDebutInitialFormatted = fmtDate(form.dateDebutInitial);
-    const dateFinInitialFormatted = fmtDate(form.dateFinInitial);
+    // Long date format: "19 janvier 2026"
+    const moisFR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    const fmtDateLong = (d: string) => {
+      if (!d) return '_______________';
+      const dt = new Date(d);
+      return `${dt.getDate()} ${moisFR[dt.getMonth()]} ${dt.getFullYear()}`;
+    };
+    const fmtDateShort = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '___/___/______';
 
     // Org data
-    const raisonSociale = org?.raisonSociale || 'Valorisation Inclusion Éthique 59';
-    const adresseOrg = org?.adresseSiege || '4120 route de Tournai';
+    const raisonSociale = org?.raisonSociale || 'VIE 59';
+    const adresseOrg = org?.adresseSiege || '4120 Route de Tournai';
     const cpOrg = org?.codePostalSiege || '59500';
     const villeOrg = org?.villeSiege || 'DOUAI';
     const siretOrg = org?.siret || '90001343400031';
+    const numUrssaf = form.numUrssaf || '3170000010240641546';
     const representantNom = org?.representantPrenom && org?.representantNom
-      ? `${org.representantPrenom} ${org.representantNom}`
-      : 'Le représentant légal';
-    const fonction = org?.representantFonction || 'Directeur';
-    const civRepresentant = fonction?.toLowerCase().includes('présidente') || fonction?.toLowerCase().includes('directrice') ? 'Madame' : 'Monsieur';
+      ? `${org.representantNom.toUpperCase()} ${org.representantPrenom}`
+      : 'FELOUKI Sofiane';
+    const fonction = org?.representantFonction || 'président';
+    const civRepresentant = fonction?.toLowerCase().includes('présidente') || fonction?.toLowerCase().includes('directrice') ? 'Mme' : 'Mr';
 
     // Employee data
-    const civSalarie = employee.civilite || '';
+    const civSalarie = employee.civilite || 'Mr';
     const nomSalarie = (employee.nom || '').toUpperCase();
     const prenomSalarie = employee.prenom || '';
     const adresseSalarie = employee.adresse || '';
     const cpSalarie = employee.codePostal || '';
     const villeSalarie = (employee.ville || '').toUpperCase();
     const nationalite = employee.nationalite || '';
-    const dateNaissance = fmtDate(employee.dateNaissance);
+    const dateNaissance = fmtDateShort(employee.dateNaissance);
     const lieuNaissance = employee.lieuNaissance || '';
 
     // ===== BANDEAU SUPÉRIEUR =====
     doc.setFillColor(35, 41, 54);
-    doc.rect(0, 0, pageWidth, 8, 'F');
+    doc.rect(0, 0, pageWidth, 7, 'F');
     doc.setFillColor(249, 115, 22);
-    doc.rect(0, 8, pageWidth, 2, 'F');
+    doc.rect(0, 7, pageWidth, 1.5, 'F');
 
-    let y = 22;
+    let y = 20;
 
     // ===== TITRE =====
-    doc.setFontSize(16);
-    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(14);
+    doc.setTextColor(30, 30, 30);
     doc.setFont('helvetica', 'bold');
-    doc.text('CDDI : AVENANT DE RENOUVELLEMENT', pageWidth / 2, y, { align: 'center' });
-    y += 14;
+    doc.text('Cddi : avenant de renouvellement', pageWidth / 2, y, { align: 'center' });
+    y += 12;
 
     // ===== ENTRE LES SOUSSIGNÉS =====
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(fontSize);
+    doc.setTextColor(30, 30, 30);
+    const indentX = margin + 15;
 
-    doc.text('Entre les soussignés :', margin, y);
-    y += 10;
-
-    // --- Employeur ---
-    const indentX = margin + 8;
     doc.setFont('helvetica', 'bold');
-    doc.text(`L'ASSOCIATION ${raisonSociale.toUpperCase()}`, indentX, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Dont le siège social est au ${adresseOrg}, ${cpOrg} ${villeOrg}`, indentX, y);
-    y += 6;
-    doc.text(`Siret : ${siretOrg}`, indentX, y);
-    y += 6;
-    y = writeBlock(`Représentée par ${civRepresentant} ${representantNom}, agissant en qualité de ${fonction}.`, indentX, contentWidth - 8, y);
+    doc.text('Entre les soussignés :', margin + 12, y);
     y += 8;
 
-    doc.setFont('helvetica', 'italic');
-    doc.text('D\'une part,', pageWidth / 2, y, { align: 'center' });
+    // --- Association ---
     doc.setFont('helvetica', 'normal');
-    y += 10;
+    doc.text(`L'ASSOCIATION ${raisonSociale.toUpperCase()}`, indentX, y);
+    y += lineH + 1;
+    doc.text(`Dont le siège social est au ${adresseOrg}, ${cpOrg} ${villeOrg}`, indentX, y);
+    y += lineH + 1;
+    doc.text(`Siret : ${siretOrg} ; N° URSSAF : ${numUrssaf}`, indentX, y);
+    y += lineH + 1;
+    y = writeMixed([
+      { text: `Représentée par ${civRepresentant} ` },
+      { text: representantNom },
+      { text: `, agissant en qualité de ${fonction}.` }
+    ], indentX, y, contentWidth - 15);
+    y += 8;
 
-    // --- Salarié ---
+    // D'une part
+    doc.setFont('helvetica', 'bold');
+    doc.text('D\'une part,', pageWidth / 2 + 15, y, { align: 'center' });
+    y += 8;
+
+    // --- Et / Salarié ---
+    doc.setFont('helvetica', 'bold');
     doc.text('Et', margin, y);
-    y += 7;
+    y += lineH + 2;
 
     doc.setFont('helvetica', 'bold');
     doc.text(`${civSalarie} ${nomSalarie} ${prenomSalarie}`, margin, y);
+    y += lineH + 1;
+
     doc.setFont('helvetica', 'normal');
-    y += 6;
-    doc.text(`Demeurant au : ${adresseSalarie}`, margin, y);
-    y += 6;
+    doc.text('Demeurant au : ', margin, y);
+    const dwW = doc.getTextWidth('Demeurant au : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(adresseSalarie, margin + dwW, y);
+    y += lineH + 1;
+
+    doc.setFont('helvetica', 'bold');
     doc.text(`${cpSalarie} ${villeSalarie}`, margin, y);
-    y += 6;
-    doc.text(`De nationalité ${nationalite}`, margin, y);
-    y += 6;
-    doc.text(`Né(e) le ${dateNaissance} à ${lieuNaissance}`, margin, y);
+    y += lineH + 1;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('De nationalité ', margin, y);
+    const natW = doc.getTextWidth('De nationalité ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(nationalite, margin + natW, y);
+    y += lineH + 1;
+
+    // Né(e) le ... à ...
+    doc.setFont('helvetica', 'normal');
+    let nx = margin;
+    doc.text('Né(e) le ', nx, y);
+    nx += doc.getTextWidth('Né(e) le ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(dateNaissance, nx, y);
+    nx += doc.getTextWidth(dateNaissance);
+    doc.setFont('helvetica', 'normal');
+    doc.text(' à ', nx, y);
+    nx += doc.getTextWidth(' à ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(lieuNaissance, nx, y);
+    y += 8;
+
+    // D'autre part
+    doc.setFont('helvetica', 'bold');
+    doc.text('D\'autre part,', pageWidth / 2 + 15, y, { align: 'center' });
     y += 10;
 
-    doc.setFont('helvetica', 'italic');
-    doc.text('D\'autre part,', pageWidth / 2, y, { align: 'center' });
+    // ===== IL A ÉTÉ CONVENU =====
     doc.setFont('helvetica', 'normal');
-    y += 14;
-
-    // ===== CORPS DU TEXTE =====
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(40, 40, 40);
-
     doc.text('Il a été convenu et arrêté ce qui suit :', margin, y);
-    y += 10;
+    y += 8;
 
-    const paragraph1 = `${civSalarie} ${nomSalarie} ${prenomSalarie} a été engagé(e) par ${civRepresentant} ${representantNom} dans le cadre d'un contrat unique d'insertion dans sa version de ${form.qualification || 'ouvrier polyvalent N1P1'}.`;
-    y = writeBlock(paragraph1, margin, contentWidth, y);
-    y += 6;
+    // Paragraph 1: engagement
+    const qualif = form.qualification || 'ouvrier polyvalent N1P1';
+    y = writeMixed([
+      { text: `${civSalarie} `, bold: true },
+      { text: `${nomSalarie} ${prenomSalarie}`, bold: true },
+      { text: ` a été engagé(e) par ${civRepresentant} ${representantNom} dans le cadre d'un contrat unique d'insertion dans sa version d'${qualif}.` }
+    ], margin, y, contentWidth);
+    y += 3;
 
-    const paragraph2 = `Le contrat, qui a pris effet le ${dateDebutInitialFormatted} et qui devait arriver à son terme le ${dateFinInitialFormatted} est renouvelé le ${dateDebutFormatted} pour une durée de ${form.dureeMois || '4'} MOIS, soit jusqu'au ${dateFinFormatted}, conformément à l'article L. 5134-25-1 du code du travail.`;
-    y = writeBlock(paragraph2, margin, contentWidth, y);
-    y += 6;
+    // Paragraph 2: renouvellement — with bold dates
+    const dateDebutInitialLong = fmtDateLong(form.dateDebutInitial);
+    const dateFinInitialLong = fmtDateLong(form.dateFinInitial);
+    const dateDebutLong = fmtDateLong(form.dateDebut);
+    const dateFinLong = fmtDateLong(form.dateFin);
+    const dureeMoisVal = form.dureeMois || '4';
 
-    const paragraph3 = `Durant la période de renouvellement, les conditions d'exécution et de cessation du contrat demeureront identiques à celles initialement prévues.`;
-    y = writeBlock(paragraph3, margin, contentWidth, y);
-    y += 14;
+    y = writeMixed([
+      { text: 'Le contrat, qui a pris effet le ' },
+      { text: dateDebutInitialLong, bold: true },
+      { text: ' et qui devait arriver à son terme le ' },
+      { text: dateFinInitialLong, bold: true },
+      { text: ' est renouvelé le ' },
+      { text: dateDebutLong, bold: true },
+      { text: ' pour une durée de ' },
+      { text: `${dureeMoisVal} MOIS`, bold: true },
+      { text: ', soit jusqu\'au ' },
+      { text: dateFinLong, bold: true },
+      { text: ', conformément à l\'article L. 5134-25-1 du code du travail.' }
+    ], margin, y, contentWidth);
+    y += 3;
+
+    // Paragraph 3: conditions identiques
+    doc.setFont('helvetica', 'normal');
+    const p3Lines = doc.splitTextToSize('Durant la période de renouvellement, les conditions d\'exécution et de cessation du contrat demeureront identiques à celles initialement prévues.', contentWidth);
+    doc.text(p3Lines, margin, y);
+    y += p3Lines.length * lineH + 12;
 
     // ===== FAIT EN DEUX EXEMPLAIRES =====
-    doc.setFont('helvetica', 'italic');
-    doc.text('Fait en deux exemplaires', pageWidth / 2, y, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Fait en deux exemplaires', pageWidth / 2 + 15, y, { align: 'center' });
+    y += lineH + 3;
+
+    // A ..., le ...
+    doc.setFont('helvetica', 'bold');
+    doc.text('A ', margin, y);
+    let ax = margin + doc.getTextWidth('A ');
     doc.setFont('helvetica', 'normal');
-    y += 7;
-    doc.text(`A ${form.lieuSignature || 'DOUAI'}, le ${dateSignature}`, margin, y);
-    y += 14;
+    doc.text(form.lieuSignature || 'DOUAI', ax, y);
+    ax += doc.getTextWidth(form.lieuSignature || 'DOUAI');
+    doc.text(', le ', ax, y);
+    ax += doc.getTextWidth(', le ');
+    doc.setFont('helvetica', 'bold');
+    const signDateLong = fmtDateLong(new Date().toISOString().split('T')[0]);
+    doc.text(signDateLong, ax, y);
+    y += 12;
 
     // ===== DOUBLE ZONE SIGNATURE =====
-    const sigBoxWidth = (contentWidth - 10) / 2;
+    const sigColWidth = contentWidth / 2;
+    const sigLeftX = margin;
+    const sigRightX = margin + sigColWidth;
 
-    // Signature employeur (gauche)
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y, sigBoxWidth, 55, 2, 2, 'S');
-
-    doc.setFontSize(9);
+    // Headers
+    doc.setFontSize(fontSize);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(60, 60, 60);
-    doc.text('Signature de l\'employeur', margin + 4, y + 7);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('"lu et approuvé"', margin + 4, y + 13);
+    doc.text('Signature de l\'employeur', sigLeftX, y);
+    doc.text('Signature du salarié', sigRightX, y);
+    y += lineH + 1;
 
-    // Ajouter la signature de la direction si disponible
+    // Italic instructions
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.text('Faire précéder la signature de la mention', sigLeftX, y);
+    doc.text('Faire précéder la signature de la mention', sigRightX, y);
+    y += 3.5;
+    doc.text('« lu et approuvé »', sigLeftX, y);
+    doc.text('« lu et approuvé »', sigRightX, y);
+    y += 5;
+
+    // Signature boxes
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(fontSize);
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    const boxH = 40;
+    doc.rect(sigLeftX, y, sigColWidth - 5, boxH, 'S');
+    doc.rect(sigRightX, y, sigColWidth - 5, boxH, 'S');
+
+    // Add director signature if drawn
     const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
     if (sigData) {
       try {
-        const supSigW = sigBoxWidth - 12;
+        const supSigW = sigColWidth - 15;
         const supSigH = supSigW / 4.5;
-        doc.addImage(sigData, 'PNG', margin + 6, y + 16, supSigW, supSigH);
+        doc.addImage(sigData, 'PNG', sigLeftX + 3, y + 3, supSigW, supSigH);
       } catch (e) {
         console.error('Erreur ajout signature PDF:', e);
       }
     }
 
-    // Signature salarié (droite)
-    const sigRightX = margin + sigBoxWidth + 10;
-    doc.setDrawColor(200, 200, 200);
-    doc.roundedRect(sigRightX, y, sigBoxWidth, 55, 2, 2, 'S');
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(60, 60, 60);
-    doc.text('Signature du salarié', sigRightX + 4, y + 7);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('"lu et approuvé"', sigRightX + 4, y + 13);
-
     // ===== BANDEAU INFÉRIEUR =====
     doc.setFillColor(249, 115, 22);
-    doc.rect(0, pageHeight - 4, pageWidth, 2, 'F');
+    doc.rect(0, pageHeight - 3.5, pageWidth, 1.5, 'F');
     doc.setFillColor(35, 41, 54);
     doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
 
@@ -1079,9 +1196,10 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
               <Input label="Qualification" name="qualification" value={form.qualification} onChange={handleChange} />
               <Input label="Durée hebdomadaire (heures)" name="dureeHeures" type="number" value={form.dureeHeures} onChange={handleChange} required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <Input label="Poste" name="poste" value={form.poste} onChange={handleChange} />
               <Input label="Lieu de signature" name="lieuSignature" value={form.lieuSignature} onChange={handleChange} />
+              <Input label="N° URSSAF" name="numUrssaf" value={form.numUrssaf} onChange={handleChange} />
             </div>
 
             <div>
