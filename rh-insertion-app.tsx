@@ -1321,6 +1321,31 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
   );
 };
 
+// Les 21 motifs d'absence (répertoire pointage)
+const MOTIFS_ABSENCE: Record<number, string> = {
+  1: 'Congés payés',
+  2: 'Maladie',
+  3: 'Maladie enfant',
+  4: 'Congé formation rémunérée',
+  5: 'Absence événement familial sans retenue',
+  6: 'Absence autorisée NON rémunérée',
+  7: 'Absence NON autorisée NON rémunérée',
+  8: 'Absence rémunérée',
+  9: 'Mise à pied disciplinaire',
+  10: 'Accident de travail',
+  11: 'Congé sans solde',
+  12: 'Annulation absence',
+  13: 'Accident de travail (bis)',
+  14: 'Accident de trajet',
+  15: 'Congé pathologique pré-natal (14 jours)',
+  16: 'Congé pathologique post-natal',
+  17: 'Maladie professionnelle',
+  18: 'Maternité',
+  19: 'Paternité',
+  20: 'Congé de deuil',
+  21: 'Chômage intempéries'
+};
+
 export default function RHInsertionApp() {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -1375,6 +1400,8 @@ export default function RHInsertionApp() {
   const [pointagesLoading, setPointagesLoading] = useState(false);
   const [editingPointage, setEditingPointage] = useState<string | null>(null);
   const [pointageValues, setPointageValues] = useState<Record<string, Record<string, number>>>({});
+  const [absenceValues, setAbsenceValues] = useState<Record<string, Record<string, number | null>>>({});
+  const [absenceContextMenu, setAbsenceContextMenu] = useState<{ x: number; y: number; employeeId: string; dateStr: string; pointageMensuelId: string } | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
 
   // Mobile link states
@@ -1871,16 +1898,22 @@ export default function RHInsertionApp() {
       if (res.ok) {
         const data = await res.json();
         setPointagesData(data.data);
-        // Initialiser les valeurs de pointage avec les données réelles uniquement
+        // Initialiser les valeurs de pointage et absences avec les données réelles
         const values: Record<string, Record<string, number>> = {};
+        const absences: Record<string, Record<string, number | null>> = {};
         data.data.pointages.forEach((p: any) => {
           values[p.employee.id] = {};
+          absences[p.employee.id] = {};
           p.pointage.journees?.forEach((j: any) => {
             const dateStr = new Date(j.date).toISOString().split('T')[0];
             values[p.employee.id][dateStr] = j.heuresTravaillees;
+            if (j.typeJournee === 'absence' && j.motifAbsence) {
+              absences[p.employee.id][dateStr] = parseInt(j.motifAbsence) || null;
+            }
           });
         });
         setPointageValues(values);
+        setAbsenceValues(absences);
       }
     } catch (error) {
       console.error('Erreur pointages:', error);
@@ -1897,12 +1930,18 @@ export default function RHInsertionApp() {
 
   const savePointageValue = async (employeeId: string, pointageMensuelId: string, date: string, heures: number) => {
     try {
+      const absMotif = absenceValues[employeeId]?.[date];
+      const pointageEntry: any = { date, heures };
+      if (absMotif) {
+        pointageEntry.typeJournee = 'absence';
+        pointageEntry.motifAbsence = String(absMotif);
+      }
       await authFetch(`${POINTAGE_API}/journalier/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pointageMensuelId,
-          pointages: [{ date, heures }]
+          pointages: [pointageEntry]
         })
       });
       // Ne pas recharger les données pour éviter de perdre le focus
@@ -5225,6 +5264,64 @@ export default function RHInsertionApp() {
       savePointageValue(employeeId, pointageMensuelId, dateStr, heures);
     };
 
+    // Ouvrir le menu contextuel d'absence (clic droit)
+    const handleAbsenceContextMenu = (e: React.MouseEvent, employeeId: string, dateStr: string, pointageMensuelId: string) => {
+      e.preventDefault();
+      setAbsenceContextMenu({ x: e.clientX, y: e.clientY, employeeId, dateStr, pointageMensuelId });
+    };
+
+    // Sélectionner un motif d'absence
+    const selectAbsenceMotif = async (motifNum: number) => {
+      if (!absenceContextMenu) return;
+      const { employeeId, dateStr, pointageMensuelId } = absenceContextMenu;
+      // Mettre heures à 0 et enregistrer le motif d'absence
+      setPointageValues(prev => ({
+        ...prev,
+        [employeeId]: { ...prev[employeeId], [dateStr]: 0 }
+      }));
+      setAbsenceValues(prev => ({
+        ...prev,
+        [employeeId]: { ...prev[employeeId], [dateStr]: motifNum }
+      }));
+      setAbsenceContextMenu(null);
+      // Sauvegarder immédiatement
+      try {
+        await authFetch(`${POINTAGE_API}/journalier/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pointageMensuelId,
+            pointages: [{ date: dateStr, heures: 0, typeJournee: 'absence', motifAbsence: String(motifNum) }]
+          })
+        });
+      } catch (error) {
+        console.error('Erreur save absence:', error);
+      }
+    };
+
+    // Supprimer l'absence (remettre en mode travail)
+    const removeAbsence = async (employeeId: string, dateStr: string, pointageMensuelId: string) => {
+      setAbsenceValues(prev => {
+        const copy = { ...prev, [employeeId]: { ...prev[employeeId] } };
+        delete copy[employeeId][dateStr];
+        return copy;
+      });
+      setAbsenceContextMenu(null);
+      // Sauvegarder comme travail avec 0h
+      try {
+        await authFetch(`${POINTAGE_API}/journalier/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pointageMensuelId,
+            pointages: [{ date: dateStr, heures: 0, typeJournee: 'travail', motifAbsence: null }]
+          })
+        });
+      } catch (error) {
+        console.error('Erreur remove absence:', error);
+      }
+    };
+
     // Sauvegarder TOUS les pointages d'un employé (appelé quand on clique sur la disquette)
     const saveAllPointagesForEmployee = async (employeeId: string, pointageMensuelId: string): Promise<boolean> => {
       const empPointages = pointageValues[employeeId];
@@ -5234,12 +5331,21 @@ export default function RHInsertionApp() {
       }
 
       // Collecter tous les pointages non-vides (y compris 0 pour permettre la réinitialisation)
+      const empAbsences = absenceValues[employeeId] || {};
       const pointagesToSave = Object.entries(empPointages)
         .filter(([_, heures]) => heures !== undefined && heures !== null)
-        .map(([date, heures]) => ({
-          date,
-          heures: typeof heures === 'number' ? heures : (parseFloat(String(heures)) || 0)
-        }));
+        .map(([date, heures]) => {
+          const entry: any = {
+            date,
+            heures: typeof heures === 'number' ? heures : (parseFloat(String(heures)) || 0)
+          };
+          const absMotif = empAbsences[date];
+          if (absMotif) {
+            entry.typeJournee = 'absence';
+            entry.motifAbsence = String(absMotif);
+          }
+          return entry;
+        });
 
       console.log('Pointages à sauvegarder:', pointagesToSave);
 
@@ -5704,32 +5810,58 @@ export default function RHInsertionApp() {
         y += 2;
 
         const heuresParJour = emp.dureeHebdo ? Math.round(emp.dureeHebdo / 5 * 100) / 100 : 5.2;
-        const absenceTypes: Record<string, { label: string; jours: number; heures: number }> = {
-          maladie: { label: 'Maladie', jours: 0, heures: 0 },
-          conge: { label: 'Congé', jours: 0, heures: 0 },
-          absence: { label: 'Absence injustifiée', jours: 0, heures: 0 },
-          formation: { label: 'Formation', jours: 0, heures: 0 },
-          ferie: { label: 'Jour férié', jours: 0, heures: 0 }
-        };
+        // Comptage par motif d'absence (21 motifs)
+        const absenceMotifCounts: Record<number, { jours: number; heures: number }> = {};
 
         joursOuvresMois.forEach(j => {
           const journee = journeesMap[j.dateStr];
-          if (journee && journee.typeJournee && journee.typeJournee !== 'travail') {
-            const type = journee.typeJournee;
-            if (absenceTypes[type]) {
-              absenceTypes[type].jours++;
-              absenceTypes[type].heures += heuresParJour;
+          if (journee && journee.typeJournee === 'absence' && journee.motifAbsence) {
+            const motifNum = parseInt(journee.motifAbsence) || 0;
+            if (motifNum > 0 && MOTIFS_ABSENCE[motifNum]) {
+              if (!absenceMotifCounts[motifNum]) {
+                absenceMotifCounts[motifNum] = { jours: 0, heures: 0 };
+              }
+              absenceMotifCounts[motifNum].jours++;
+              absenceMotifCounts[motifNum].heures += heuresParJour;
+            }
+          } else if (journee && journee.typeJournee && journee.typeJournee !== 'travail') {
+            // Rétro-compatibilité anciens types
+            const legacyMap: Record<string, number> = { maladie: 2, conge: 1, absence: 7, formation: 4, ferie: 5 };
+            const motifNum = legacyMap[journee.typeJournee];
+            if (motifNum) {
+              if (!absenceMotifCounts[motifNum]) {
+                absenceMotifCounts[motifNum] = { jours: 0, heures: 0 };
+              }
+              absenceMotifCounts[motifNum].jours++;
+              absenceMotifCounts[motifNum].heures += heuresParJour;
             }
           }
         });
 
-        const absenceBody = Object.values(absenceTypes).map(a => [
-          a.label,
-          { content: String(a.jours), styles: { halign: 'center' as const } },
-          { content: `${Math.round(a.heures * 100) / 100}h`, styles: { halign: 'center' as const } }
-        ]);
-        const totalAbsJours = Object.values(absenceTypes).reduce((s, a) => s + a.jours, 0);
-        const totalAbsHeures = Object.values(absenceTypes).reduce((s, a) => s + a.heures, 0);
+        // N'afficher que les motifs avec au moins 1 jour
+        const absenceBody: any[] = [];
+        let totalAbsJours = 0;
+        let totalAbsHeures = 0;
+        Object.entries(MOTIFS_ABSENCE).forEach(([numStr, label]) => {
+          const num = parseInt(numStr);
+          const count = absenceMotifCounts[num];
+          if (count && count.jours > 0) {
+            absenceBody.push([
+              `A${num} - ${label}`,
+              { content: String(count.jours), styles: { halign: 'center' as const } },
+              { content: `${Math.round(count.heures * 100) / 100}h`, styles: { halign: 'center' as const } }
+            ]);
+            totalAbsJours += count.jours;
+            totalAbsHeures += count.heures;
+          }
+        });
+        if (absenceBody.length === 0) {
+          absenceBody.push([
+            { content: 'Aucune absence', styles: { textColor: [150, 150, 150] as [number, number, number] } },
+            { content: '0', styles: { halign: 'center' as const } },
+            { content: '0h', styles: { halign: 'center' as const } }
+          ]);
+        }
         absenceBody.push([
           { content: 'TOTAL', styles: { fontStyle: 'bold' as const } } as any,
           { content: String(totalAbsJours), styles: { halign: 'center' as const, fontStyle: 'bold' as const } },
@@ -5757,13 +5889,16 @@ export default function RHInsertionApp() {
         y += 2;
 
         const joursSemaine = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-        const typeLabels: Record<string, string> = {
-          travail: 'Travail',
-          absence: 'Absence',
-          conge: 'Congé',
-          maladie: 'Maladie',
-          formation: 'Formation',
-          ferie: 'Férié'
+        // Fonction pour obtenir le libellé du type de journée
+        const getTypeLabel = (journee: any): string => {
+          if (journee?.typeJournee === 'absence' && journee?.motifAbsence) {
+            const motifNum = parseInt(journee.motifAbsence);
+            return MOTIFS_ABSENCE[motifNum] ? `A${motifNum} - ${MOTIFS_ABSENCE[motifNum]}` : 'Absence';
+          }
+          const legacyLabels: Record<string, string> = {
+            travail: 'Travail', conge: 'Congé', maladie: 'Maladie', formation: 'Formation', ferie: 'Férié', absence: 'Absence'
+          };
+          return legacyLabels[journee?.typeJournee || 'travail'] || journee?.typeJournee || 'Travail';
         };
 
         let totalMatin = 0;
@@ -5781,12 +5916,12 @@ export default function RHInsertionApp() {
           totalAprem += hAprem;
           totalJour += hTotal;
 
-          const isAbsence = ['absence', 'conge', 'maladie', 'ferie', 'formation'].includes(typeJ);
+          const isAbsence = typeJ !== 'travail';
           const rowStyles = isAbsence ? { fillColor: [254, 240, 240] as [number, number, number] } : {};
 
           return [
             { content: `${joursSemaine[j.dayOfWeek]} ${String(j.jour).padStart(2, '0')}/${String(pointagesMois).padStart(2, '0')}`, styles: { ...rowStyles } },
-            { content: typeLabels[typeJ] || typeJ, styles: { ...rowStyles, textColor: isAbsence ? [200, 50, 50] as [number, number, number] : [60, 60, 60] as [number, number, number] } },
+            { content: getTypeLabel(journee), styles: { ...rowStyles, textColor: isAbsence ? [200, 50, 50] as [number, number, number] : [60, 60, 60] as [number, number, number], fontSize: 6.5 } },
             { content: isAbsence ? '-' : `${hMatin}h`, styles: { halign: 'center' as const, ...rowStyles } },
             { content: isAbsence ? '-' : `${hAprem}h`, styles: { halign: 'center' as const, ...rowStyles } },
             { content: `${Math.round(hTotal * 100) / 100}h`, styles: { halign: 'center' as const, fontStyle: 'bold' as const, ...rowStyles } }
@@ -6028,6 +6163,7 @@ export default function RHInsertionApp() {
                           {/* Jours */}
                           {pointagesData.joursMois.map((j: any, jourIndex: number) => {
                             const heures = pointageValues[emp.id]?.[j.date] || 0;
+                            const absMotif = absenceValues[emp.id]?.[j.date];
                             const empIndex = pointagesData.pointages.findIndex((pt: any) => pt.employee.id === emp.id);
                             // TabIndex vertical: colonne par colonne (jour d'abord, puis employé)
                             const tabIdx = jourIndex * pointagesData.pointages.length + empIndex + 1;
@@ -6035,6 +6171,15 @@ export default function RHInsertionApp() {
                               <td key={j.date} className={`px-0 py-1 text-center ${j.estWeekend ? bg('bg-slate-700/30', 'bg-gray-100') : ''}`}>
                                 {j.estWeekend ? (
                                   <span className="text-xs text-slate-500">-</span>
+                                ) : absMotif ? (
+                                  <span
+                                    className="inline-block w-12 px-1 py-1 text-center text-xs font-bold rounded bg-red-500/20 text-red-500 cursor-pointer"
+                                    title={`A${absMotif} - ${MOTIFS_ABSENCE[absMotif] || '?'}`}
+                                    onClick={() => isEditing && removeAbsence(emp.id, j.date, pointage.id)}
+                                    onContextMenu={(e) => isEditing && handleAbsenceContextMenu(e, emp.id, j.date, pointage.id)}
+                                  >
+                                    A{absMotif}
+                                  </span>
                                 ) : isEditing ? (
                                   <input
                                     type="text"
@@ -6049,6 +6194,7 @@ export default function RHInsertionApp() {
                                       }
                                     }}
                                     onBlur={() => handlePointageBlur(emp.id, pointage.id, j.date)}
+                                    onContextMenu={(e) => handleAbsenceContextMenu(e, emp.id, j.date, pointage.id)}
                                     className={`w-12 px-1 py-1 text-center text-xs rounded ${bg('bg-slate-600 text-white', 'bg-gray-100 text-gray-900')} border-0 focus:ring-1 focus:ring-blue-500`}
                                     style={{ MozAppearance: 'textfield', WebkitAppearance: 'none' }}
                                   />
@@ -6202,16 +6348,58 @@ export default function RHInsertionApp() {
                   <span className="px-2 py-1 rounded text-xs bg-purple-600 text-white">Valider</span>
                   <span className={text('text-slate-400', 'text-gray-600')}>Valide et transfère l'excédent vers la banque</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-500">A1</span>
+                  <span className={text('text-slate-400', 'text-gray-600')}>Absence (clic droit en mode édition pour choisir un motif)</span>
+                </div>
               </div>
               <div className={`mt-3 p-3 rounded-lg ${bg('bg-slate-700/50', 'bg-gray-50')}`}>
                 <p className={`text-xs ${text('text-slate-300', 'text-gray-600')}`}>
                   <strong>Fonctionnement :</strong><br/>
                   1. Cliquez sur le <Edit className="w-3 h-3 inline" /> pour saisir les heures jour par jour<br/>
-                  2. Si heures &lt; 100% et banque disponible, cliquez "Utiliser" pour compléter<br/>
-                  3. Cliquez <span className="px-1 py-0.5 bg-purple-600 text-white rounded text-[10px]">Valider</span> pour confirmer : les heures excédentaires sont créditées dans la banque pour le mois suivant
+                  2. <strong>Clic droit</strong> sur une cellule en mode édition pour marquer une absence (21 motifs disponibles)<br/>
+                  3. Si heures &lt; 100% et banque disponible, cliquez "Utiliser" pour compléter<br/>
+                  4. Cliquez <span className="px-1 py-0.5 bg-purple-600 text-white rounded text-[10px]">Valider</span> pour confirmer : les heures excédentaires sont créditées dans la banque pour le mois suivant
                 </p>
               </div>
             </div>
+
+            {/* Menu contextuel d'absence */}
+            {absenceContextMenu && (
+              <div
+                className="fixed inset-0 z-50"
+                onClick={() => setAbsenceContextMenu(null)}
+                onContextMenu={(e) => { e.preventDefault(); setAbsenceContextMenu(null); }}
+              >
+                <div
+                  className={`absolute ${bg('bg-slate-800 border-slate-600', 'bg-white border-gray-200')} border rounded-lg shadow-xl py-1 max-h-96 overflow-y-auto w-80`}
+                  style={{ left: absenceContextMenu.x, top: absenceContextMenu.y }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className={`px-3 py-2 border-b ${bg('border-slate-600', 'border-gray-200')}`}>
+                    <p className={`text-xs font-bold ${text('text-white', 'text-gray-900')}`}>Motif d'absence</p>
+                  </div>
+                  {absenceValues[absenceContextMenu.employeeId]?.[absenceContextMenu.dateStr] && (
+                    <button
+                      onClick={() => removeAbsence(absenceContextMenu.employeeId, absenceContextMenu.dateStr, absenceContextMenu.pointageMensuelId)}
+                      className={`w-full px-3 py-2 text-left text-xs hover:bg-green-500/20 text-green-500 font-medium border-b ${bg('border-slate-600', 'border-gray-200')}`}
+                    >
+                      Supprimer l'absence (remettre en travail)
+                    </button>
+                  )}
+                  {Object.entries(MOTIFS_ABSENCE).map(([num, label]) => (
+                    <button
+                      key={num}
+                      onClick={() => selectAbsenceMotif(parseInt(num))}
+                      className={`w-full px-3 py-1.5 text-left text-xs ${bg('hover:bg-slate-700', 'hover:bg-gray-100')} flex items-center gap-2`}
+                    >
+                      <span className="inline-block w-7 text-center font-bold text-red-500">A{num}</span>
+                      <span className={text('text-slate-300', 'text-gray-700')}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl p-8 text-center border ${bg('border-slate-700', 'border-gray-200')}`}>

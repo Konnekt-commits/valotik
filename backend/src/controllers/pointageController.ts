@@ -524,6 +524,20 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
 
         const heuresTravaillees = heuresMatin + heuresApresmidi;
 
+        // Déterminer typeJournee et motifAbsence
+        let typeJournee: string;
+        let motifAbsence: string | null = null;
+        if (p.typeJournee === 'absence') {
+          typeJournee = 'absence';
+          motifAbsence = p.motifAbsence || existant.motifAbsence || null;
+        } else if (p.typeJournee) {
+          typeJournee = p.typeJournee;
+          motifAbsence = p.motifAbsence !== undefined ? p.motifAbsence : existant.motifAbsence;
+        } else {
+          typeJournee = heuresTravaillees > 0 ? 'travail' : existant.typeJournee;
+          motifAbsence = existant.motifAbsence;
+        }
+
         await prisma.pointageJournalier.update({
           where: {
             pointageMensuelId_date: {
@@ -535,7 +549,8 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
             heuresMatin,
             heuresApresmidi,
             heuresTravaillees,
-            typeJournee: heuresTravaillees > 0 ? 'travail' : (p.typeJournee || existant.typeJournee)
+            typeJournee,
+            motifAbsence
           }
         });
       } else {
@@ -551,6 +566,10 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
 
         const heuresTravaillees = heuresMatin + heuresApresmidi;
 
+        // Déterminer typeJournee et motifAbsence
+        const typeJournee = p.typeJournee || (heuresTravaillees > 0 ? 'travail' : 'travail');
+        const motifAbsence = p.motifAbsence || null;
+
         await prisma.pointageJournalier.create({
           data: {
             pointageMensuelId,
@@ -558,7 +577,8 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
             heuresMatin,
             heuresApresmidi,
             heuresTravaillees,
-            typeJournee: heuresTravaillees > 0 ? 'travail' : (p.typeJournee || 'travail')
+            typeJournee,
+            motifAbsence
           }
         });
       }
