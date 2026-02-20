@@ -87,14 +87,43 @@ const formatShortDate = (date: Date): string => {
   return `${jours[date.getDay()]} ${date.getDate()}`;
 };
 
-// Types de journée avec icônes
+// Option "Travail" (toujours en premier)
+const TRAVAIL_OPTION = { value: 'travail', label: 'Travail', icon: Briefcase, color: 'emerald' };
+
+// Les 21 motifs d'absence
+const MOTIFS_ABSENCE_LIST = [
+  { num: 1, label: 'Congés payés', icon: Umbrella, color: 'blue' },
+  { num: 2, label: 'Maladie', icon: Heart, color: 'rose' },
+  { num: 3, label: 'Maladie enfant', icon: Heart, color: 'rose' },
+  { num: 4, label: 'Congé formation rémunérée', icon: GraduationCap, color: 'purple' },
+  { num: 5, label: 'Absence événement familial', icon: Calendar, color: 'blue' },
+  { num: 6, label: 'Absence autorisée NON rémunérée', icon: AlertCircle, color: 'orange' },
+  { num: 7, label: 'Absence NON autorisée', icon: AlertCircle, color: 'red' },
+  { num: 8, label: 'Absence rémunérée', icon: AlertCircle, color: 'amber' },
+  { num: 9, label: 'Mise à pied disciplinaire', icon: AlertCircle, color: 'red' },
+  { num: 10, label: 'Accident de travail', icon: Heart, color: 'rose' },
+  { num: 11, label: 'Congé sans solde', icon: Umbrella, color: 'orange' },
+  { num: 12, label: 'Annulation absence', icon: X, color: 'gray' },
+  { num: 13, label: 'Accident de travail (bis)', icon: Heart, color: 'rose' },
+  { num: 14, label: 'Accident de trajet', icon: Heart, color: 'rose' },
+  { num: 15, label: 'Congé patho. pré-natal', icon: Heart, color: 'pink' },
+  { num: 16, label: 'Congé patho. post-natal', icon: Heart, color: 'pink' },
+  { num: 17, label: 'Maladie professionnelle', icon: Heart, color: 'rose' },
+  { num: 18, label: 'Maternité', icon: Heart, color: 'pink' },
+  { num: 19, label: 'Paternité', icon: Heart, color: 'blue' },
+  { num: 20, label: 'Congé de deuil', icon: AlertCircle, color: 'gray' },
+  { num: 21, label: 'Chômage intempéries', icon: Coffee, color: 'amber' },
+];
+
+// Ancien format pour rétro-compatibilité affichage
 const typeJourneeOptions = [
-  { value: 'travail', label: 'Travail', icon: Briefcase, color: 'emerald' },
-  { value: 'conge', label: 'Congé', icon: Umbrella, color: 'blue' },
-  { value: 'maladie', label: 'Maladie', icon: Heart, color: 'rose' },
-  { value: 'formation', label: 'Formation', icon: GraduationCap, color: 'purple' },
-  { value: 'ferie', label: 'Férié', icon: Calendar, color: 'amber' },
-  { value: 'absence', label: 'Absence', icon: AlertCircle, color: 'orange' },
+  TRAVAIL_OPTION,
+  ...MOTIFS_ABSENCE_LIST.map(m => ({
+    value: `absence_${m.num}`,
+    label: `A${m.num} ${m.label}`,
+    icon: m.icon,
+    color: m.color
+  }))
 ];
 
 // Composant principal
@@ -167,11 +196,17 @@ export default function PointageMobileApp() {
               const matinSigne = !!journee.signatureMatin;
               const apresmidiSigne = !!journee.signatureApresmidi;
 
+              // Reconstituer le typeJournee local : si absence avec motif, utiliser absence_N
+              let localType = journee.typeJournee || 'travail';
+              if (localType === 'absence' && journee.motifAbsence) {
+                localType = `absence_${journee.motifAbsence}`;
+              }
+
               initialLocal[ep.employee.id] = {
                 // Si signé, utiliser la valeur stockée, sinon la valeur par défaut
                 matin: matinSigne ? journee.heuresMatin.toString() : defaultMatin,
                 apresmidi: apresmidiSigne ? journee.heuresApresmidi.toString() : defaultApresmidi,
-                typeJournee: journee.typeJournee || 'travail',
+                typeJournee: localType,
                 notes: journee.notes || '',
                 matinSigne,
                 apresmidiSigne,
@@ -603,8 +638,8 @@ export default function PointageMobileApp() {
                       </div>
                       <div className="text-right">
                         {local.typeJournee !== 'travail' ? (
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${typeOption?.color || 'gray'}-500/20 text-${typeOption?.color || 'gray'}-400`}>
-                            {typeOption?.label}
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                            {typeOption?.label || 'Absence'}
                           </span>
                         ) : toutSigne ? (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
@@ -710,10 +745,10 @@ export default function PointageMobileApp() {
                     {/* Tags rapides pour absences */}
                     {local.typeJournee !== 'travail' && (
                       <div className="flex items-center justify-center">
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bg(`bg-${typeOption?.color}-500/20`, `bg-${typeOption?.color}-100`)}`}>
-                          <TypeIcon size={16} className={`text-${typeOption?.color}-500`} />
-                          <span className={`text-sm font-medium text-${typeOption?.color}-${isDark ? '400' : '600'}`}>
-                            {typeOption?.label}
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bg('bg-red-500/20', 'bg-red-100')}`}>
+                          <AlertCircle size={16} className="text-red-500" />
+                          <span className={`text-sm font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                            {typeOption?.label || 'Absence'}
                           </span>
                         </div>
                       </div>
@@ -823,10 +858,20 @@ export default function PointageMobileApp() {
                 const saveTypeAndNotes = async (type?: string) => {
                   setSaving(prev => ({ ...prev, [employeeId]: true }));
                   try {
-                    const payload = {
+                    const selectedType = type || local.typeJournee;
+                    // Si c'est un motif d'absence (absence_N), extraire le numéro
+                    let apiTypeJournee = selectedType;
+                    let motifAbsence: string | undefined = undefined;
+                    if (selectedType.startsWith('absence_')) {
+                      apiTypeJournee = 'absence';
+                      motifAbsence = selectedType.replace('absence_', '');
+                    }
+
+                    const payload: any = {
                       pointageMensuelId: ep.pointage.id,
                       date: formatDateISO(selectedDate),
-                      typeJournee: type || local.typeJournee,
+                      typeJournee: apiTypeJournee,
+                      motifAbsence: motifAbsence || null,
                       notes: local.notes
                     };
 
@@ -881,23 +926,44 @@ export default function PointageMobileApp() {
                       <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-3 block`}>
                         Type de journée
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {typeJourneeOptions.map(option => {
-                          const Icon = option.icon;
-                          const isSelected = local.typeJournee === option.value;
+
+                      {/* Bouton Travail */}
+                      <button
+                        onClick={() => saveTypeAndNotes('travail')}
+                        disabled={saving[employeeId]}
+                        className={`w-full p-3 rounded-xl flex items-center gap-3 mb-3 transition-all ${local.typeJournee === 'travail'
+                          ? 'bg-emerald-500 text-white'
+                          : bg('bg-slate-700 text-gray-400 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+                        }`}
+                      >
+                        <Briefcase size={20} />
+                        <span className="font-medium">Travail</span>
+                        {local.typeJournee === 'travail' && <Check size={16} className="ml-auto" />}
+                      </button>
+
+                      {/* Séparateur */}
+                      <p className={`text-xs font-medium ${text('text-gray-500', 'text-gray-400')} mb-2`}>Motifs d'absence :</p>
+
+                      {/* Liste des 21 motifs d'absence */}
+                      <div className={`max-h-48 overflow-y-auto space-y-1 rounded-xl border ${bg('border-slate-600', 'border-gray-200')} p-1`}>
+                        {MOTIFS_ABSENCE_LIST.map(motif => {
+                          const motifValue = `absence_${motif.num}`;
+                          const Icon = motif.icon;
+                          const isSelected = local.typeJournee === motifValue;
 
                           return (
                             <button
-                              key={option.value}
-                              onClick={() => saveTypeAndNotes(option.value)}
+                              key={motif.num}
+                              onClick={() => saveTypeAndNotes(motifValue)}
                               disabled={saving[employeeId]}
-                              className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${isSelected
-                                ? `bg-${option.color}-500 text-white`
-                                : bg(`bg-slate-700 text-gray-400 hover:bg-slate-600`, `bg-gray-100 text-gray-600 hover:bg-gray-200`)
+                              className={`w-full px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-left ${isSelected
+                                ? 'bg-red-500 text-white'
+                                : bg('hover:bg-slate-600 text-gray-300', 'hover:bg-gray-100 text-gray-700')
                               }`}
                             >
-                              <Icon size={20} />
-                              <span className="text-xs font-medium">{option.label}</span>
+                              <span className={`text-xs font-bold w-7 text-center ${isSelected ? 'text-white' : 'text-red-400'}`}>A{motif.num}</span>
+                              <span className="text-sm flex-1">{motif.label}</span>
+                              {isSelected && <Check size={16} />}
                             </button>
                           );
                         })}
