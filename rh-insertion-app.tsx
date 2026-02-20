@@ -6174,30 +6174,36 @@ export default function RHInsertionApp() {
                                 ) : absMotif ? (
                                   <span
                                     className="inline-block w-12 px-1 py-1 text-center text-xs font-bold rounded bg-red-500/20 text-red-500 cursor-pointer"
-                                    title={`A${absMotif} - ${MOTIFS_ABSENCE[absMotif] || '?'}`}
-                                    onClick={() => isEditing && removeAbsence(emp.id, j.date, pointage.id)}
-                                    onContextMenu={(e) => isEditing && handleAbsenceContextMenu(e, emp.id, j.date, pointage.id)}
+                                    title={`A${absMotif} - ${MOTIFS_ABSENCE[absMotif] || '?'}\nCliquer pour changer`}
+                                    onClick={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
                                   >
                                     A{absMotif}
                                   </span>
                                 ) : isEditing ? (
-                                  <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    tabIndex={tabIdx}
-                                    value={heures || ''}
-                                    onChange={(e) => {
-                                      // Permettre virgule ou point comme séparateur décimal
-                                      let val = e.target.value.replace(',', '.');
-                                      if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
-                                        handlePointageChange(emp.id, j.date, val);
-                                      }
-                                    }}
-                                    onBlur={() => handlePointageBlur(emp.id, pointage.id, j.date)}
-                                    onContextMenu={(e) => handleAbsenceContextMenu(e, emp.id, j.date, pointage.id)}
-                                    className={`w-12 px-1 py-1 text-center text-xs rounded ${bg('bg-slate-600 text-white', 'bg-gray-100 text-gray-900')} border-0 focus:ring-1 focus:ring-blue-500`}
-                                    style={{ MozAppearance: 'textfield', WebkitAppearance: 'none' }}
-                                  />
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      tabIndex={tabIdx}
+                                      value={heures || ''}
+                                      onChange={(e) => {
+                                        let val = e.target.value.replace(',', '.');
+                                        if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                          handlePointageChange(emp.id, j.date, val);
+                                        }
+                                      }}
+                                      onBlur={() => handlePointageBlur(emp.id, pointage.id, j.date)}
+                                      className={`w-12 px-1 py-1 text-center text-xs rounded ${bg('bg-slate-600 text-white', 'bg-gray-100 text-gray-900')} border-0 focus:ring-1 focus:ring-blue-500`}
+                                      style={{ MozAppearance: 'textfield', WebkitAppearance: 'none' } as any}
+                                    />
+                                    <button
+                                      onClick={(e) => handleAbsenceContextMenu(e, emp.id, j.date, pointage.id)}
+                                      className="text-[9px] text-red-400 hover:text-red-300 leading-none"
+                                      title="Marquer une absence"
+                                    >
+                                      ABS
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span className={`text-xs ${heures > 0 ? text('text-white', 'text-gray-900') : 'text-slate-500'}`}>
                                     {heures > 0 ? heures : '-'}
@@ -6364,25 +6370,28 @@ export default function RHInsertionApp() {
               </div>
             </div>
 
-            {/* Menu contextuel d'absence */}
-            {absenceContextMenu && (
+            {/* Menu contextuel d'absence (portail React pour éviter le clipping du overflow) */}
+            {absenceContextMenu && createPortal(
               <div
-                className="fixed inset-0 z-50"
+                className="fixed inset-0 z-[9999]"
                 onClick={() => setAbsenceContextMenu(null)}
                 onContextMenu={(e) => { e.preventDefault(); setAbsenceContextMenu(null); }}
               >
                 <div
-                  className={`absolute ${bg('bg-slate-800 border-slate-600', 'bg-white border-gray-200')} border rounded-lg shadow-xl py-1 max-h-96 overflow-y-auto w-80`}
-                  style={{ left: absenceContextMenu.x, top: absenceContextMenu.y }}
+                  className={`fixed ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'} border rounded-lg shadow-2xl py-1 max-h-[70vh] overflow-y-auto w-80`}
+                  style={{
+                    left: Math.min(absenceContextMenu.x, window.innerWidth - 330),
+                    top: Math.min(absenceContextMenu.y, window.innerHeight - 400)
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className={`px-3 py-2 border-b ${bg('border-slate-600', 'border-gray-200')}`}>
-                    <p className={`text-xs font-bold ${text('text-white', 'text-gray-900')}`}>Motif d'absence</p>
+                  <div className={`px-3 py-2 border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}>
+                    <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Motif d'absence</p>
                   </div>
                   {absenceValues[absenceContextMenu.employeeId]?.[absenceContextMenu.dateStr] && (
                     <button
                       onClick={() => removeAbsence(absenceContextMenu.employeeId, absenceContextMenu.dateStr, absenceContextMenu.pointageMensuelId)}
-                      className={`w-full px-3 py-2 text-left text-xs hover:bg-green-500/20 text-green-500 font-medium border-b ${bg('border-slate-600', 'border-gray-200')}`}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-green-500/20 text-green-500 font-medium border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}
                     >
                       Supprimer l'absence (remettre en travail)
                     </button>
@@ -6391,14 +6400,15 @@ export default function RHInsertionApp() {
                     <button
                       key={num}
                       onClick={() => selectAbsenceMotif(parseInt(num))}
-                      className={`w-full px-3 py-1.5 text-left text-xs ${bg('hover:bg-slate-700', 'hover:bg-gray-100')} flex items-center gap-2`}
+                      className={`w-full px-3 py-2 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2`}
                     >
-                      <span className="inline-block w-7 text-center font-bold text-red-500">A{num}</span>
-                      <span className={text('text-slate-300', 'text-gray-700')}>{label}</span>
+                      <span className="inline-block w-8 text-center font-bold text-red-500">A{num}</span>
+                      <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>{label}</span>
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </>
         ) : (
