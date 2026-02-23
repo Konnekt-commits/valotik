@@ -382,8 +382,9 @@ export default function PointageMobileApp() {
     return { heuresTotal, heuresSignees, heuresNonSignees, heuresContratTotal, pourcentage };
   };
 
-  // Vérifier si c'est un weekend
-  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
+  // Vérifier si c'est un dimanche (samedi autorisé pour congés/absences)
+  const isWeekend = selectedDate.getDay() === 0;
+  const isSamedi = selectedDate.getDay() === 6;
 
   // Compter les périodes non signées
   const getSignatureStats = () => {
@@ -556,7 +557,10 @@ export default function PointageMobileApp() {
                 {formatDate(selectedDate)}
               </p>
               {isWeekend && (
-                <p className="text-center text-xs text-amber-500 font-medium">Weekend</p>
+                <p className="text-center text-xs text-amber-500 font-medium">Dimanche</p>
+              )}
+              {isSamedi && (
+                <p className="text-center text-xs text-blue-400 font-medium">Samedi</p>
               )}
             </button>
 

@@ -6123,10 +6123,10 @@ export default function RHInsertionApp() {
                       {pointagesData.joursMois.map((j: any) => (
                         <th
                           key={j.date}
-                          className={`px-1 py-2 text-center font-medium min-w-[40px] ${j.estWeekend ? bg('bg-slate-600/50', 'bg-gray-200') : ''}`}
+                          className={`px-1 py-2 text-center font-medium min-w-[40px] ${j.estWeekend ? bg('bg-slate-600/50', 'bg-gray-200') : j.estSamedi ? bg('bg-slate-600/30', 'bg-blue-50') : ''}`}
                         >
-                          <div className={`text-xs ${j.estWeekend ? 'text-slate-400' : ''}`}>{j.nomJour}</div>
-                          <div className={`text-xs ${j.estWeekend ? 'text-slate-400' : ''}`}>{j.jour}</div>
+                          <div className={`text-xs ${j.estWeekend ? 'text-slate-400' : j.estSamedi ? 'text-blue-400' : ''}`}>{j.nomJour}</div>
+                          <div className={`text-xs ${j.estWeekend ? 'text-slate-400' : j.estSamedi ? 'text-blue-400' : ''}`}>{j.jour}</div>
                         </th>
                       ))}
                       <th className={`px-2 py-2 text-center font-medium border-l ${bg('border-slate-600', 'border-gray-200')}`}>Total</th>
@@ -6168,7 +6168,7 @@ export default function RHInsertionApp() {
                             // TabIndex vertical: colonne par colonne (jour d'abord, puis employé)
                             const tabIdx = jourIndex * pointagesData.pointages.length + empIndex + 1;
                             return (
-                              <td key={j.date} className={`px-0 py-1 text-center ${j.estWeekend ? bg('bg-slate-700/30', 'bg-gray-100') : ''}`}>
+                              <td key={j.date} className={`px-0 py-1 text-center ${j.estWeekend ? bg('bg-slate-700/30', 'bg-gray-100') : j.estSamedi ? bg('bg-slate-700/15', 'bg-blue-50/50') : ''}`}>
                                 {j.estWeekend ? (
                                   <span className="text-xs text-slate-500">-</span>
                                 ) : absMotif ? (

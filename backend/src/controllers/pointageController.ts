@@ -39,7 +39,8 @@ const getJoursMois = (mois: number, annee: number) => {
       date: dateStr,
       jour: d,
       jourSemaine: jour,
-      estWeekend: jour === 0 || jour === 6,
+      estWeekend: jour === 0, // Seul le dimanche est bloqué
+      estSamedi: jour === 6,
       nomJour: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][jour]
     });
   }
@@ -1168,7 +1169,8 @@ export const getMobilePointage = async (req: Request, res: Response) => {
         jour: d,
         dateStr,
         nomJour: nomsJours[jourSemaine],
-        estWeekend: jourSemaine === 0 || jourSemaine === 6,
+        estWeekend: jourSemaine === 0, // Seul le dimanche est bloqué
+        estSamedi: jourSemaine === 6,
         estAujourdhui: d === jourAujourdhui,
         pointage: pointageJour ? {
           heuresMatin: pointageJour.heuresMatin,
@@ -1260,10 +1262,10 @@ export const signerMobile = async (req: Request, res: Response) => {
 
     const dateObj = new Date(dateStr);
 
-    // Vérifier que ce n'est pas un weekend
+    // Vérifier que ce n'est pas un dimanche
     const jourSemaine = dateObj.getDay();
-    if (jourSemaine === 0 || jourSemaine === 6) {
-      return res.status(400).json({ success: false, error: 'Impossible de signer un weekend' });
+    if (jourSemaine === 0) {
+      return res.status(400).json({ success: false, error: 'Impossible de signer un dimanche' });
     }
 
     // Récupérer ou créer le pointage mensuel
