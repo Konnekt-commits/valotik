@@ -5,6 +5,15 @@ import { PDFParse } from 'pdf-parse';
 
 const prisma = new PrismaClient();
 
+// Corriger les dates avec année à 2 chiffres (ex: 0026 -> 2026)
+const fixDate = (value: string | Date): Date => {
+  const d = new Date(value);
+  if (d.getFullYear() < 100) {
+    d.setFullYear(d.getFullYear() + 2000);
+  }
+  return d;
+};
+
 // Extraire les congés payés depuis le texte d'un bulletin de salaire PDF
 // Les valeurs congés sont les derniers nombres avant "Net payé : X euros"
 // Section congés : Acquis / Pris / Solde pour N-1 et N (jusqu'à 6 valeurs)
@@ -258,7 +267,8 @@ const ALLOWED_EMPLOYEE_CREATE_FIELDS = [
   'inscritFranceTravail', 'numeroFranceTravail', 'beneficiaireRSA', 'beneficiaireASS', 'beneficiaireAAH', 'reconnaissanceTH',
   'passInclusionNumero', 'passInclusionDate', 'passInclusionExpiration', 'eligibiliteIAE',
   'dateEntree', 'dateSortie', 'typeContrat', 'dureeHebdo', 'poste', 'salaireBrut',
-  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes'
+  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes',
+  'personneContactNom', 'personneContactTelephone', 'personneContactLien'
 ];
 
 // Créer un salarié
@@ -274,13 +284,13 @@ export const createInsertionEmployee = async (req: Request, res: Response) => {
       }
     }
 
-    // Convertir les dates
-    if (data.dateNaissance) data.dateNaissance = new Date(data.dateNaissance);
-    if (data.dateEntree) data.dateEntree = new Date(data.dateEntree);
-    if (data.dateSortie) data.dateSortie = new Date(data.dateSortie);
-    if (data.dateExpirationPiece) data.dateExpirationPiece = new Date(data.dateExpirationPiece);
-    if (data.passInclusionDate) data.passInclusionDate = new Date(data.passInclusionDate);
-    if (data.passInclusionExpiration) data.passInclusionExpiration = new Date(data.passInclusionExpiration);
+    // Convertir les dates (fixDate corrige les années à 2 chiffres ex: 0026 -> 2026)
+    if (data.dateNaissance) data.dateNaissance = fixDate(data.dateNaissance);
+    if (data.dateEntree) data.dateEntree = fixDate(data.dateEntree);
+    if (data.dateSortie) data.dateSortie = fixDate(data.dateSortie);
+    if (data.dateExpirationPiece) data.dateExpirationPiece = fixDate(data.dateExpirationPiece);
+    if (data.passInclusionDate) data.passInclusionDate = fixDate(data.passInclusionDate);
+    if (data.passInclusionExpiration) data.passInclusionExpiration = fixDate(data.passInclusionExpiration);
 
     const employee = await prisma.insertionEmployee.create({
       data: data as any,
@@ -305,7 +315,8 @@ const ALLOWED_EMPLOYEE_FIELDS = [
   'inscritFranceTravail', 'numeroFranceTravail', 'beneficiaireRSA', 'beneficiaireASS', 'beneficiaireAAH', 'reconnaissanceTH',
   'passInclusionNumero', 'passInclusionDate', 'passInclusionExpiration', 'eligibiliteIAE',
   'dateEntree', 'dateSortie', 'typeContrat', 'dureeHebdo', 'poste', 'salaireBrut',
-  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes'
+  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes',
+  'personneContactNom', 'personneContactTelephone', 'personneContactLien'
 ];
 
 // Mettre à jour un salarié
@@ -325,13 +336,13 @@ export const updateInsertionEmployee = async (req: Request, res: Response) => {
     // Convertir les entiers
     if (data.nombreEnfants !== undefined) data.nombreEnfants = parseInt(data.nombreEnfants) || 0;
 
-    // Convertir les dates
-    if (data.dateNaissance) data.dateNaissance = new Date(data.dateNaissance);
-    if (data.dateEntree) data.dateEntree = new Date(data.dateEntree);
-    if (data.dateSortie) data.dateSortie = new Date(data.dateSortie);
-    if (data.dateExpirationPiece) data.dateExpirationPiece = new Date(data.dateExpirationPiece);
-    if (data.passInclusionDate) data.passInclusionDate = new Date(data.passInclusionDate);
-    if (data.passInclusionExpiration) data.passInclusionExpiration = new Date(data.passInclusionExpiration);
+    // Convertir les dates (fixDate corrige les années à 2 chiffres)
+    if (data.dateNaissance) data.dateNaissance = fixDate(data.dateNaissance);
+    if (data.dateEntree) data.dateEntree = fixDate(data.dateEntree);
+    if (data.dateSortie) data.dateSortie = fixDate(data.dateSortie);
+    if (data.dateExpirationPiece) data.dateExpirationPiece = fixDate(data.dateExpirationPiece);
+    if (data.passInclusionDate) data.passInclusionDate = fixDate(data.passInclusionDate);
+    if (data.passInclusionExpiration) data.passInclusionExpiration = fixDate(data.passInclusionExpiration);
 
     const employee = await prisma.insertionEmployee.update({
       where: { id },
@@ -588,8 +599,8 @@ export const createDocument = async (req: Request, res: Response) => {
         typeDocument: data.typeDocument || 'AUTRE',
         nomDocument: data.nomDocument || req.file?.originalname || 'Document',
         url: fileUrl || '',
-        dateDocument: data.dateDocument ? new Date(data.dateDocument) : new Date(),
-        dateExpiration: data.dateExpiration ? new Date(data.dateExpiration) : undefined
+        dateDocument: data.dateDocument ? fixDate(data.dateDocument) : new Date(),
+        dateExpiration: data.dateExpiration ? fixDate(data.dateExpiration) : undefined
       }
     });
 
@@ -672,11 +683,11 @@ export const createContrat = async (req: Request, res: Response) => {
       data: {
         employeeId,
         ...data,
-        dateDebut: new Date(data.dateDebut),
-        dateFin: new Date(data.dateFin),
-        dpaeDate: data.dpaeDate ? new Date(data.dpaeDate) : null,
-        dateSignature: data.dateSignature ? new Date(data.dateSignature) : null,
-        dateSortieEffective: data.dateSortieEffective ? new Date(data.dateSortieEffective) : null
+        dateDebut: fixDate(data.dateDebut),
+        dateFin: fixDate(data.dateFin),
+        dpaeDate: data.dpaeDate ? fixDate(data.dpaeDate) : null,
+        dateSignature: data.dateSignature ? fixDate(data.dateSignature) : null,
+        dateSortieEffective: data.dateSortieEffective ? fixDate(data.dateSortieEffective) : null
       }
     });
 
@@ -692,11 +703,11 @@ export const updateContrat = async (req: Request, res: Response) => {
     const { id } = req.params;
     const data = req.body;
 
-    if (data.dateDebut) data.dateDebut = new Date(data.dateDebut);
-    if (data.dateFin) data.dateFin = new Date(data.dateFin);
-    if (data.dpaeDate) data.dpaeDate = new Date(data.dpaeDate);
-    if (data.dateSignature) data.dateSignature = new Date(data.dateSignature);
-    if (data.dateSortieEffective) data.dateSortieEffective = new Date(data.dateSortieEffective);
+    if (data.dateDebut) data.dateDebut = fixDate(data.dateDebut);
+    if (data.dateFin) data.dateFin = fixDate(data.dateFin);
+    if (data.dpaeDate) data.dpaeDate = fixDate(data.dpaeDate);
+    if (data.dateSignature) data.dateSignature = fixDate(data.dateSignature);
+    if (data.dateSortieEffective) data.dateSortieEffective = fixDate(data.dateSortieEffective);
 
     const contrat = await prisma.contratInsertion.update({
       where: { id },

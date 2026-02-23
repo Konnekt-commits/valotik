@@ -546,6 +546,11 @@ model InsertionEmployee {
   motifSortie         String?  @db.VarChar(100)
   typeSortie          String?  @db.VarChar(50) // positive, négative, neutre
 
+  // Personne à contacter (urgence)
+  personneContactNom       String?  @db.VarChar(100)
+  personneContactTelephone String?  @db.VarChar(20)
+  personneContactLien      String?  @db.VarChar(50) // Conjoint, Parent, Frère/Sœur, Ami, Autre
+
   // Photo
   photoUrl            String?  @db.VarChar(500)
 

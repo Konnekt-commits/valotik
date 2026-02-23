@@ -6633,6 +6633,24 @@ export default function RHInsertionApp() {
           </div>
         </Section>
 
+        {/* Personne à contacter */}
+        <Section title="Personne à contacter (urgence)" icon={Phone}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Input label="Nom et prénom" name="personneContactNom" value={emp.personneContactNom} onChange={handleChange} disabled={!editingEmployee} placeholder="Nom complet du contact" />
+            <Input label="Téléphone" name="personneContactTelephone" type="tel" value={emp.personneContactTelephone} onChange={handleChange} disabled={!editingEmployee} placeholder="06 XX XX XX XX" />
+            <Input label="Lien avec le salarié" name="personneContactLien" type="select" value={emp.personneContactLien} onChange={handleChange} disabled={!editingEmployee}
+              options={[
+                { value: 'Conjoint(e)', label: 'Conjoint(e)' },
+                { value: 'Parent', label: 'Parent (père/mère)' },
+                { value: 'Enfant', label: 'Enfant' },
+                { value: 'Frère/Sœur', label: 'Frère / Sœur' },
+                { value: 'Ami(e)', label: 'Ami(e)' },
+                { value: 'Tuteur/Curateur', label: 'Tuteur / Curateur' },
+                { value: 'Autre', label: 'Autre' }
+              ]} />
+          </div>
+        </Section>
+
         {/* Notes */}
         <Section title="Notes / Observations" icon={FileText}>
           <Input name="notes" type="textarea" value={emp.notes} onChange={handleChange} disabled={!editingEmployee} placeholder="Notes libres sur le salarié..." />
