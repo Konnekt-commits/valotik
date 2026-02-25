@@ -1321,6 +1321,739 @@ const AvenantModalContent = ({ show, onClose, employee, organismeData, darkMode,
   );
 };
 
+const ContratCDDIModalContent = ({ show, onClose, employee, organismeData, darkMode, onSaved, saving, setSaving }: any) => {
+  const [form, setForm] = useState<any>({});
+  const [pdfBlob, setPdfBlob] = useState<string | null>(null);
+  const signatureRef = useRef<SignatureCanvas>(null);
+  const [step, setStep] = useState<'form' | 'preview' | 'link'>('form');
+  const [signingLink, setSigningLink] = useState<string>('');
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [savedSignatureData, setSavedSignatureData] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (show && employee) {
+      const dateEntree = employee.dateEntree ? new Date(employee.dateEntree) : new Date();
+      const dureeMois = 4;
+      const dateFin = new Date(dateEntree);
+      dateFin.setMonth(dateFin.getMonth() + dureeMois);
+      setForm({
+        dateDebut: dateEntree.toISOString().split('T')[0],
+        dateFin: dateFin.toISOString().split('T')[0],
+        dureeMois: String(dureeMois),
+        dureeHeures: employee.dureeHebdo ? String((employee.dureeHebdo * 52 / 12).toFixed(2)) : '112.67',
+        dureeHebdo: employee.dureeHebdo || 26,
+        typeContrat: 'CDDI',
+        poste: employee.poste || 'Agent de valorisation',
+        qualification: employee.poste || 'ouvrier Polyvalent N1P1',
+        coefficient: '150',
+        salaireBrut: employee.salaireBrut || '1354.29',
+        periodeEssai: '14',
+        lieuTravail: organismeData ? `${organismeData.adresseSiege || '4120 Route de Tournai'}, ${organismeData.codePostalSiege || '59500'} ${organismeData.villeSiege || 'DOUAI'}` : '4120 Route de Tournai, 59500 DOUAI',
+        secteurGeo: 'Réseau HDF',
+        lieuSignature: organismeData?.villeSiege || 'DOUAI',
+        numUrssaf: '3170000010240641546',
+        conventionCollective: '3016 - Convention collective nationale des ateliers et chantiers d\'insertion'
+      });
+      setPdfBlob(null);
+      setStep('form');
+      setSigningLink('');
+      setLinkCopied(false);
+      setSavedSignatureData(null);
+      signatureRef.current?.clear();
+    }
+  }, [show, employee]);
+
+  const handleChange = useCallback((e: any) => {
+    const { name, value } = e.target;
+    setForm((prev: any) => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'dureeMois' || name === 'dateDebut') {
+        const debut = new Date(name === 'dateDebut' ? value : prev.dateDebut);
+        const mois = parseInt(name === 'dureeMois' ? value : prev.dureeMois, 10);
+        if (!isNaN(debut.getTime()) && !isNaN(mois) && mois > 0) {
+          const fin = new Date(debut);
+          fin.setMonth(fin.getMonth() + mois);
+          updated.dateFin = fin.toISOString().split('T')[0];
+        }
+      }
+      if (name === 'dureeHebdo') {
+        const h = parseFloat(value);
+        if (!isNaN(h)) updated.dureeHeures = (h * 52 / 12).toFixed(2);
+      }
+      return updated;
+    });
+  }, []);
+
+  const bg = (dark: string, light: string) => darkMode ? dark : light;
+  const text = (dark: string, light: string) => darkMode ? dark : light;
+
+  const generatePDF = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'A4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentWidth = pageWidth - margin * 2;
+    const org = organismeData;
+    const fontSize = 9;
+    const lineH = 4.5;
+    const bottomLimit = pageHeight - 25;
+
+    const writeMixed = (segments: {text: string; bold?: boolean; italic?: boolean}[], x: number, yPos: number, maxW: number): number => {
+      const fullText = segments.map(s => s.text).join('');
+      const lines = doc.splitTextToSize(fullText, maxW);
+      if (lines.length <= 1) {
+        let cx = x;
+        for (const seg of segments) {
+          doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
+          doc.text(seg.text, cx, yPos);
+          cx += doc.getTextWidth(seg.text);
+        }
+        return yPos + lineH;
+      }
+      let charIndex = 0;
+      let currentY = yPos;
+      for (const line of lines) {
+        let cx = x;
+        let lineCharsLeft = line.length;
+        let segIdx = 0;
+        let segCharOffset = 0;
+        let totalChars = 0;
+        for (let si = 0; si < segments.length; si++) {
+          if (totalChars + segments[si].text.length > charIndex) {
+            segIdx = si;
+            segCharOffset = charIndex - totalChars;
+            break;
+          }
+          totalChars += segments[si].text.length;
+        }
+        while (lineCharsLeft > 0 && segIdx < segments.length) {
+          const seg = segments[segIdx];
+          const available = seg.text.length - segCharOffset;
+          const take = Math.min(available, lineCharsLeft);
+          const chunk = seg.text.substring(segCharOffset, segCharOffset + take);
+          doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
+          doc.text(chunk, cx, currentY);
+          cx += doc.getTextWidth(chunk);
+          lineCharsLeft -= take;
+          charIndex += take;
+          segCharOffset += take;
+          if (segCharOffset >= seg.text.length) {
+            segIdx++;
+            segCharOffset = 0;
+          }
+        }
+        currentY += lineH;
+      }
+      return currentY;
+    };
+
+    const moisFR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    const fmtDateLong = (d: string) => {
+      if (!d) return '_______________';
+      const dt = new Date(d);
+      return `${dt.getDate()} ${moisFR[dt.getMonth()]} ${dt.getFullYear()}`;
+    };
+    const fmtDateShort = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '___/___/______';
+
+    let y = 0;
+    let pageNum = 1;
+
+    const addBandeauHaut = () => {
+      doc.setFillColor(35, 41, 54);
+      doc.rect(0, 0, pageWidth, 7, 'F');
+      doc.setFillColor(249, 115, 22);
+      doc.rect(0, 7, pageWidth, 1.5, 'F');
+    };
+
+    const addBandeauBas = () => {
+      doc.setFillColor(249, 115, 22);
+      doc.rect(0, pageHeight - 3.5, pageWidth, 1.5, 'F');
+      doc.setFillColor(35, 41, 54);
+      doc.rect(0, pageHeight - 2, pageWidth, 2, 'F');
+    };
+
+    const checkPage = (needed: number = 20) => {
+      if (y > bottomLimit - needed) {
+        addBandeauBas();
+        doc.addPage();
+        pageNum++;
+        addBandeauHaut();
+        y = 18;
+      }
+    };
+
+    const writeArticle = (title: string, paragraphs: string[]) => {
+      checkPage(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(30, 30, 30);
+      doc.text(title, margin, y);
+      y += lineH + 2;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(fontSize);
+      for (const p of paragraphs) {
+        checkPage(15);
+        const lines = doc.splitTextToSize(p, contentWidth);
+        for (const line of lines) {
+          checkPage(lineH + 1);
+          doc.text(line, margin, y);
+          y += lineH;
+        }
+        y += 2;
+      }
+      y += 3;
+    };
+
+    const writeArticleMixed = (title: string, content: {text: string; bold?: boolean; italic?: boolean}[][]) => {
+      checkPage(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(30, 30, 30);
+      doc.text(title, margin, y);
+      y += lineH + 2;
+      doc.setFontSize(fontSize);
+      for (const segments of content) {
+        checkPage(15);
+        y = writeMixed(segments, margin, y, contentWidth);
+        y += 2;
+      }
+      y += 3;
+    };
+
+    // Org data
+    const raisonSociale = org?.raisonSociale || 'VIE 59';
+    const adresseOrg = org?.adresseSiege || '4120 Route de Tournai';
+    const cpOrg = org?.codePostalSiege || '59500';
+    const villeOrg = org?.villeSiege || 'DOUAI';
+    const siretOrg = org?.siret || '90001343400031';
+    const numUrssaf = form.numUrssaf || '3170000010240641546';
+    const representantNom = org?.representantPrenom && org?.representantNom
+      ? `${org.representantNom.toUpperCase()} ${org.representantPrenom}`
+      : 'FELOUKI Sofiane';
+    const fonction = org?.representantFonction || 'président';
+    const civRepresentant = fonction?.toLowerCase().includes('présidente') || fonction?.toLowerCase().includes('directrice') ? 'Mme' : 'Mr';
+
+    // Employee data
+    const civSalarie = employee.civilite || 'Mr';
+    const nomSalarie = (employee.nom || '').toUpperCase();
+    const prenomSalarie = employee.prenom || '';
+    const adresseSalarie = employee.adresse || '';
+    const cpSalarie = employee.codePostal || '';
+    const villeSalarie = (employee.ville || '').toUpperCase();
+    const nationalite = employee.nationalite || '';
+    const dateNaissance = fmtDateShort(employee.dateNaissance);
+    const lieuNaissance = employee.lieuNaissance || '';
+    const numeroSecu = employee.numeroSecu || '';
+
+    // ===== PAGE 1 =====
+    addBandeauHaut();
+    y = 20;
+
+    // TITRE
+    doc.setFontSize(13);
+    doc.setTextColor(30, 30, 30);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CDDI : Contrat à durée déterminée d\'insertion', pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    // ENTRE LES SOUSSIGNÉS
+    doc.setFontSize(fontSize);
+    doc.setTextColor(30, 30, 30);
+    const indentX = margin + 15;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Entre les soussignés :', margin + 12, y);
+    y += 8;
+
+    // --- Association ---
+    doc.setFont('helvetica', 'normal');
+    doc.text(`L'ASSOCIATION ${raisonSociale.toUpperCase()}`, indentX, y);
+    y += lineH + 1;
+    doc.text(`Reconnue comme Atelier Chantier d'Insertion`, indentX, y);
+    y += lineH + 1;
+    doc.text(`Dont le siège social est au ${adresseOrg}, ${cpOrg} ${villeOrg}`, indentX, y);
+    y += lineH + 1;
+    doc.text(`Siret : ${siretOrg} ; N° URSSAF : ${numUrssaf}`, indentX, y);
+    y += lineH + 1;
+    y = writeMixed([
+      { text: `Représentée par ${civRepresentant} ` },
+      { text: representantNom, bold: true },
+      { text: `, agissant en qualité de ${fonction}.` }
+    ], indentX, y, contentWidth - 15);
+    y += 8;
+
+    // D'une part
+    doc.setFont('helvetica', 'bold');
+    doc.text('D\'une part,', pageWidth / 2 + 15, y, { align: 'center' });
+    y += 8;
+
+    // --- Et / Salarié ---
+    doc.setFont('helvetica', 'bold');
+    doc.text('Et', margin, y);
+    y += lineH + 2;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${civSalarie} ${nomSalarie} ${prenomSalarie}`, margin, y);
+    y += lineH + 1;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Demeurant au : ', margin, y);
+    const dwW = doc.getTextWidth('Demeurant au : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(adresseSalarie, margin + dwW, y);
+    y += lineH + 1;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${cpSalarie} ${villeSalarie}`, margin, y);
+    y += lineH + 1;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('De nationalité ', margin, y);
+    const natW = doc.getTextWidth('De nationalité ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(nationalite, margin + natW, y);
+    y += lineH + 1;
+
+    // Né(e) le ... à ...
+    doc.setFont('helvetica', 'normal');
+    let nx = margin;
+    doc.text('Né(e) le ', nx, y);
+    nx += doc.getTextWidth('Né(e) le ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(dateNaissance, nx, y);
+    nx += doc.getTextWidth(dateNaissance);
+    doc.setFont('helvetica', 'normal');
+    doc.text(' à ', nx, y);
+    nx += doc.getTextWidth(' à ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(lieuNaissance, nx, y);
+    y += lineH + 1;
+
+    // N° sécu
+    doc.setFont('helvetica', 'normal');
+    doc.text('N° de sécurité sociale : ', margin, y);
+    const secuW = doc.getTextWidth('N° de sécurité sociale : ');
+    doc.setFont('helvetica', 'bold');
+    doc.text(numeroSecu, margin + secuW, y);
+    y += 8;
+
+    // D'autre part
+    doc.setFont('helvetica', 'bold');
+    doc.text('D\'autre part,', pageWidth / 2 + 15, y, { align: 'center' });
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Il a été convenu et arrêté ce qui suit :', margin, y);
+    y += 10;
+
+    // ===== ARTICLES =====
+    const qualif = form.qualification || 'ouvrier Polyvalent N1P1';
+    const coeff = form.coefficient || '150';
+    const dateDebutLong = fmtDateLong(form.dateDebut);
+    const dateFinLong = fmtDateLong(form.dateFin);
+    const dureeMoisVal = form.dureeMois || '4';
+    const dureeHeuresVal = form.dureeHeures || '112.67';
+    const dureeHebdoVal = form.dureeHebdo || '26';
+    const salaireBrutVal = form.salaireBrut || '1354.29';
+    const periodeEssaiVal = form.periodeEssai || '14';
+    const lieuTravailVal = form.lieuTravail || '4120 Route de Tournai, 59500 DOUAI';
+    const secteurGeoVal = form.secteurGeo || 'Réseau HDF';
+
+    // Article 1
+    writeArticleMixed('Article 1 : Nature et objet du contrat', [
+      [
+        { text: `L'association ${raisonSociale.toUpperCase()} engage ` },
+        { text: `${civSalarie} ${nomSalarie} ${prenomSalarie}`, bold: true },
+        { text: ` pour une durée déterminée, temps partiel.` }
+      ],
+      [
+        { text: `Conformément à l'article L.5132-15-1 du Code du travail, le présent contrat est conclu au titre des dispositions destinées à favoriser l'embauche de certaines catégories de personnes sans emploi rencontrant des difficultés sociales et professionnelles particulières.` }
+      ],
+      [
+        { text: `Le présent contrat est un Contrat de travail à Durée Déterminée d'Insertion (CDDI), régi par les articles L 1242-3 et suivants du Code du Travail. Le salarié s'engage à intégrer un parcours d'insertion par lequel un projet d'insertion socioprofessionnel est mis en œuvre.` }
+      ]
+    ]);
+
+    // Article 2
+    writeArticleMixed('Article 2 : Convention Collective applicable', [
+      [
+        { text: `Le contrat est régi par la convention collective ` },
+        { text: form.conventionCollective || '3016 - Convention collective nationale des ateliers et chantiers d\'insertion', bold: true },
+        { text: '.' }
+      ]
+    ]);
+
+    // Article 3
+    writeArticleMixed('Article 3 : Durée du contrat', [
+      [
+        { text: `Le contrat prend effet le ` },
+        { text: dateDebutLong, bold: true },
+        { text: `, pour une durée déterminée de ` },
+        { text: `${dureeMoisVal} mois`, bold: true },
+        { text: `, se terminant le ` },
+        { text: dateFinLong, bold: true },
+        { text: '.' }
+      ],
+      [
+        { text: `En vertu de l'article L.5132-15-1 du Code du travail, la structure pourra proposer des avenants, la durée totale ne pouvant dépasser ` },
+        { text: '24 mois', bold: true },
+        { text: '.' }
+      ],
+      [
+        { text: `En vertu des articles L1243-8, L 1243-10 et L 1243-3, le salarié ne pourra pas prétendre à l'indemnité de fin de contrat. À titre dérogatoire, le contrat pourra être renouvelé au-delà de la durée maximale pour permettre au salarié d'achever une action de formation professionnelle en cours.` }
+      ]
+    ]);
+
+    // Article 4
+    writeArticleMixed('Article 4 : Période d\'essai', [
+      [
+        { text: `Période d'essai de ` },
+        { text: `${periodeEssaiVal} jours`, bold: true },
+        { text: `, au cours de laquelle il pourra être mis fin au contrat par l'une ou l'autre des parties, sous réserve de respecter les délais de prévenance prévus aux articles L. 1221-25 et L. 1221-26 du code du travail.` }
+      ]
+    ]);
+
+    // Article 5
+    writeArticleMixed('Article 5 : Emploi et qualification', [
+      [
+        { text: `${civSalarie} ${nomSalarie} ${prenomSalarie}`, bold: true },
+        { text: ` est engagé en qualité d'` },
+        { text: `${qualif}, Coefficient ${coeff}`, bold: true },
+        { text: '. Il s\'engage à :' }
+      ],
+      [{ text: `    • Exercer sa fonction au mieux des intérêts de l'association ${raisonSociale.toUpperCase()} dans le respect des orientations et directives ;` }],
+      [{ text: `    • Respecter le règlement intérieur, le livret d'accueil sécurité, ainsi que la sécurité tant sur chantier qu'en dehors ;` }],
+      [{ text: `    • Réaliser toutes missions particulières ou exceptionnelles confiées par la Direction ;` }],
+      [{ text: `    • En cas d'empêchement, aviser l'association par courrier recommandé dans les plus brefs délais.` }]
+    ]);
+
+    // Article 6
+    writeArticleMixed('Article 6 : Rémunération', [
+      [
+        { text: `Rémunération brute mensuelle de ` },
+        { text: `${salaireBrutVal} euros`, bold: true },
+        { text: ` sur la base de ` },
+        { text: `${dureeHeuresVal} heures par mois`, bold: true },
+        { text: ` (mensualisation). Cette rémunération est forfaitaire.` }
+      ],
+      [
+        { text: `L'indemnité de fin de contrat n'est pas due (article L1243-8, alinéa 1er de l'article 1242-3).` }
+      ]
+    ]);
+
+    // Article 7
+    writeArticleMixed('Article 7 : Lieu de travail', [
+      [
+        { text: `Locaux de l'entreprise situés au ` },
+        { text: lieuTravailVal, bold: true },
+        { text: `, ou dans le secteur géographique : ` },
+        { text: secteurGeoVal, bold: true },
+        { text: '.' }
+      ]
+    ]);
+
+    // Article 8
+    writeArticleMixed('Article 8 : Durée du travail', [
+      [
+        { text: `${dureeHeuresVal} heures par mois`, bold: true },
+        { text: `, soit ` },
+        { text: `${dureeHebdoVal}h/semaine`, bold: true },
+        { text: `. Répartition hebdomadaire :` }
+      ],
+      [{ text: `    • Du lundi au jeudi de 8h30 à 12h00 et de 13h00 à 16h00` }],
+      [{ text: `    • Possibilité de travailler le vendredi et samedi` }],
+      [{ text: `Horaires susceptibles de modifications avec un délai de prévenance d'une semaine. Les heures complémentaires accomplies avec signature d'avenant donnent droit à des journées de repos supplémentaires, selon planning et accord du supérieur.` }]
+    ]);
+
+    // Article 9
+    writeArticle('Article 9 : Congés payés', [
+      'Droit à congés payés conformément aux dispositions légales et conventionnelles. Minimum : 2,5 jours de congés payés par mois.'
+    ]);
+
+    // Article 10
+    writeArticle('Article 10 : Retraite complémentaire, prévoyance et frais de santé', [
+      'Affiliation à la caisse de retraite complémentaire : AGIRC - ARRCO.',
+      'Mutuelle groupe obligatoire, prise en charge à hauteur de 50% par la société.',
+      'Congés payés légalement prévus à prendre à une ou plusieurs époques à convenir avec la Direction.'
+    ]);
+
+    // Article 11
+    writeArticle('Article 11 : Autres avantages sociaux', [
+      'Le salarié bénéficie dans les mêmes conditions que les autres salariés des avantages accordés par l\'entreprise.'
+    ]);
+
+    // Article 12
+    writeArticle('Article 12 : Obligations professionnelles', [
+      'Le salarié doit observer les dispositions réglementant les conditions de travail et les règles de discipline et sécurité. Il s\'engage à :',
+      '    • Se conformer aux directives et instructions émanant de la Direction ;',
+      '    • Informer l\'entreprise en cas d\'absence et produire dans les 48 heures les justificatifs ;',
+      '    • Suivre les actions de formations et d\'accompagnement programmées dans le cadre de son parcours d\'insertion.'
+    ]);
+
+    // Article 13
+    writeArticle('Article 13 : Rupture anticipée du contrat', [
+      'Après la période d\'essai, le contrat ne pourra être résilié avant le terme convenu, sauf accord des parties, qu\'en cas de faute grave, faute lourde, force majeure, ou inaptitude constatée par le médecin du travail.',
+      'Conformément à l\'article L.5132-15-1, le contrat pourra également être rompu sans préavis en cas d\'embauche du salarié à l\'issue d\'une période de mise en situation en milieu professionnel, d\'une action concourant à son insertion professionnelle, ou d\'une période d\'essai afférente à une offre d\'emploi visant une embauche en CDI ou CDD d\'au moins 6 mois.',
+      'En dehors de ces hypothèses, la rupture anticipée donnera lieu au versement de dommages et intérêts.'
+    ]);
+
+    // Article 14
+    writeArticle('Article 14 : Dispositions spécifiques', [
+      'En vertu de l\'article L.5132-15-1, pendant l\'exécution du contrat, le salarié pourra bénéficier d\'une période de mise en situation professionnelle qui lui permettra soit de découvrir un métier ou un secteur d\'activité, soit de confirmer un projet professionnel, soit d\'initier une démarche de recrutement.'
+    ]);
+
+    // ===== FAIT EN DEUX EXEMPLAIRES =====
+    checkPage(80);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(fontSize);
+    doc.text('Fait en double exemplaires', pageWidth / 2, y, { align: 'center' });
+    y += lineH + 3;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('A ', margin, y);
+    let ax = margin + doc.getTextWidth('A ');
+    doc.setFont('helvetica', 'normal');
+    doc.text(form.lieuSignature || 'DOUAI', ax, y);
+    ax += doc.getTextWidth(form.lieuSignature || 'DOUAI');
+    doc.text(', le ', ax, y);
+    ax += doc.getTextWidth(', le ');
+    doc.setFont('helvetica', 'bold');
+    const signDateLong = fmtDateLong(form.dateDebut || new Date().toISOString().split('T')[0]);
+    doc.text(signDateLong, ax, y);
+    y += 12;
+
+    // ===== DOUBLE ZONE SIGNATURE =====
+    checkPage(60);
+    const sigColWidth = contentWidth / 2;
+    const sigLeftX = margin;
+    const sigRightX = margin + sigColWidth;
+
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Signature de l\'employeur', sigLeftX, y);
+    doc.text('Signature du salarié', sigRightX, y);
+    y += lineH + 1;
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.text('Faire précéder la signature de la mention', sigLeftX, y);
+    doc.text('Faire précéder la signature de la mention', sigRightX, y);
+    y += 3.5;
+    doc.text('« lu et approuvé »', sigLeftX, y);
+    doc.text('« lu et approuvé »', sigRightX, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(fontSize);
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    const boxH = 40;
+    doc.rect(sigLeftX, y, sigColWidth - 5, boxH, 'S');
+    doc.rect(sigRightX, y, sigColWidth - 5, boxH, 'S');
+
+    const sigData = savedSignatureData || (signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null);
+    if (sigData) {
+      try {
+        const supSigW = sigColWidth - 15;
+        const supSigH = supSigW / 4.5;
+        doc.addImage(sigData, 'PNG', sigLeftX + 3, y + 3, supSigW, supSigH);
+      } catch (e) {
+        console.error('Erreur ajout signature PDF:', e);
+      }
+    }
+
+    // Bandeau bas sur toutes les pages
+    addBandeauBas();
+
+    return doc;
+  };
+
+  const handleGenerate = () => {
+    const sigData = signatureRef.current && !signatureRef.current.isEmpty() ? signatureRef.current.toDataURL('image/png') : null;
+    setSavedSignatureData(sigData);
+    const doc = generatePDF();
+    const blob = doc.output('bloburl');
+    setPdfBlob(blob as string);
+    setStep('preview');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await authFetch(`${API_URL}/employees/${employee.id}/contrats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dateDebut: form.dateDebut,
+          dateFin: form.dateFin,
+          dureeHeures: parseFloat(form.dureeHeures),
+          motif: 'Initial',
+          typeContrat: 'CDDI',
+          statut: 'actif'
+        })
+      });
+      if (res.ok) {
+        const contratData = await res.json();
+        const contratId = contratData.data?.id;
+
+        if (contratId && savedSignatureData) {
+          const linkRes = await authFetch(`${API_URL}/contrats/${contratId}/generate-signing-link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              signatureEmployeur: savedSignatureData,
+              formData: form
+            })
+          });
+          if (linkRes.ok) {
+            const linkData = await linkRes.json();
+            const baseUrl = window.location.origin;
+            setSigningLink(`${baseUrl}${linkData.data.signingUrl}`);
+            setStep('link');
+            onSaved();
+          }
+        } else {
+          const doc = generatePDF();
+          doc.save(`Contrat_CDDI_${employee.nom}_${employee.prenom}_${form.dateDebut}.pdf`);
+          onClose();
+          onSaved();
+        }
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde contrat CDDI:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!show || !employee) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto`} onMouseDown={(e: any) => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <FileSignature className="w-5 h-5 text-blue-500" />
+            </div>
+            <div>
+              <h2 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>Contrat CDDI initial</h2>
+              <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{employee.prenom} {employee.nom}</p>
+            </div>
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5" /></button>
+        </div>
+
+        {step === 'form' ? (
+          <div className="p-4 space-y-4">
+            <div className={`p-3 rounded-lg ${bg('bg-blue-500/10 border border-blue-500/20', 'bg-blue-50 border border-blue-200')}`}>
+              <p className={`text-sm font-medium ${text('text-blue-400', 'text-blue-700')}`}>Contrat CDDI initial pour {employee.civilite} {employee.prenom} {employee.nom}</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <Input label="Date de début" name="dateDebut" type="date" value={form.dateDebut} onChange={handleChange} required />
+              <Input label="Durée (mois)" name="dureeMois" type="number" value={form.dureeMois} onChange={handleChange} required />
+              <Input label="Date de fin" name="dateFin" type="date" value={form.dateFin} onChange={handleChange} required />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input label="Durée hebdomadaire (h)" name="dureeHebdo" type="number" value={form.dureeHebdo} onChange={handleChange} required />
+              <Input label="Heures mensuelles" name="dureeHeures" type="number" value={form.dureeHeures} onChange={handleChange} required />
+              <Input label="Salaire brut mensuel (€)" name="salaireBrut" type="number" value={form.salaireBrut} onChange={handleChange} required />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input label="Qualification" name="qualification" value={form.qualification} onChange={handleChange} />
+              <Input label="Coefficient" name="coefficient" value={form.coefficient} onChange={handleChange} />
+              <Input label="Période d'essai (jours)" name="periodeEssai" type="number" value={form.periodeEssai} onChange={handleChange} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Lieu de travail" name="lieuTravail" value={form.lieuTravail} onChange={handleChange} />
+              <Input label="Secteur géographique" name="secteurGeo" value={form.secteurGeo} onChange={handleChange} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Input label="Convention collective" name="conventionCollective" value={form.conventionCollective} onChange={handleChange} />
+              <Input label="Lieu de signature" name="lieuSignature" value={form.lieuSignature} onChange={handleChange} />
+              <Input label="N° URSSAF" name="numUrssaf" value={form.numUrssaf} onChange={handleChange} />
+            </div>
+
+            <div>
+              <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Signature de la direction</label>
+              <div className={`rounded-lg overflow-hidden border-2 border-dashed ${bg('border-slate-600 bg-slate-700', 'border-gray-300 bg-gray-50')}`}>
+                <SignatureCanvas ref={signatureRef} canvasProps={{ width: 700, height: 120, className: 'w-full cursor-crosshair', style: { width: '100%', height: '120px' } }} penColor={darkMode ? '#ffffff' : '#000000'} backgroundColor={darkMode ? '#334155' : '#f9fafb'} />
+              </div>
+              <button type="button" onClick={() => signatureRef.current?.clear()} className={`mt-1 text-xs ${text('text-slate-400 hover:text-slate-300', 'text-gray-500 hover:text-gray-600')}`}>Effacer la signature</button>
+            </div>
+          </div>
+        ) : step === 'preview' ? (
+          <div className="p-4 space-y-4">
+            <div className={`p-3 rounded-lg ${bg('bg-blue-500/10 border border-blue-500/20', 'bg-blue-50 border border-blue-200')}`}>
+              <p className={`text-sm font-medium ${text('text-blue-400', 'text-blue-700')}`}>Prévisualisation du contrat CDDI - Vérifiez le document avant validation</p>
+            </div>
+            {pdfBlob && (
+              <iframe src={pdfBlob} className="w-full h-[60vh] rounded-lg border border-slate-600" title="Prévisualisation contrat CDDI" />
+            )}
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            <div className={`p-4 rounded-lg ${bg('bg-green-500/10 border border-green-500/20', 'bg-green-50 border border-green-200')}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className={`w-5 h-5 ${text('text-green-400', 'text-green-600')}`} />
+                <p className={`text-sm font-bold ${text('text-green-400', 'text-green-700')}`}>Contrat CDDI créé avec succès !</p>
+              </div>
+              <p className={`text-sm ${text('text-green-300', 'text-green-600')}`}>Envoyez le lien ci-dessous au salarié pour qu'il signe le contrat. Le lien expire dans 7 jours.</p>
+            </div>
+            <div>
+              <label className={`block text-xs font-medium mb-2 ${text('text-slate-400', 'text-gray-600')}`}>Lien de signature pour le salarié</label>
+              <div className="flex gap-2">
+                <input type="text" readOnly value={signingLink} className={`flex-1 px-3 py-2 rounded-lg text-sm ${bg('bg-slate-700 text-white border-slate-600', 'bg-gray-100 text-gray-900 border-gray-300')} border`} />
+                <button
+                  onClick={() => { navigator.clipboard.writeText(signingLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }}
+                  className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium ${linkCopied ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                >
+                  {linkCopied ? <><CheckCircle className="w-4 h-4" /> Copié !</> : <><Copy className="w-4 h-4" /> Copier</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 border-t border-slate-700/50 flex justify-between">
+          {step === 'preview' && (
+            <button onClick={() => setStep('form')} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-200 hover:bg-gray-300')} flex items-center gap-2`}>
+              <ChevronLeft className="w-4 h-4" /> Modifier
+            </button>
+          )}
+          <div className="flex-1" />
+          <div className="flex gap-3">
+            {step === 'link' ? (
+              <button onClick={onClose} className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700">Fermer</button>
+            ) : (
+              <button onClick={onClose} className={`px-4 py-2 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>Annuler</button>
+            )}
+            {step === 'form' ? (
+              <button
+                onClick={handleGenerate}
+                disabled={!form.dateDebut || !form.dateFin}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Eye className="w-4 h-4" /> Prévisualiser le contrat
+              </button>
+            ) : step === 'preview' ? (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {saving ? 'Enregistrement...' : <><CheckCircle className="w-4 h-4" /> Signer et Générer le lien</>}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 // Les 21 motifs d'absence (répertoire pointage)
 const MOTIFS_ABSENCE: Record<number, string> = {
   1: 'Congés payés',
@@ -1439,6 +2172,10 @@ export default function RHInsertionApp() {
   // Avenant (renouvellement) states
   const [showAvenantModal, setShowAvenantModal] = useState(false);
   const [avenantEmployee, setAvenantEmployee] = useState<any>(null);
+
+  // Contrat CDDI initial states
+  const [showContratCDDIModal, setShowContratCDDIModal] = useState(false);
+  const [contratCDDIEmployee, setContratCDDIEmployee] = useState<any>(null);
 
   // Objectifs states
   const [objectifConfig, setObjectifConfig] = useState<any>(null);
@@ -5754,9 +6491,9 @@ export default function RHInsertionApp() {
         doc.text('RÉCAPITULATIF MENSUEL', 14, y);
         y += 2;
 
-        const ecart = Math.round((pointage.heuresPointees - pointage.heuresContrat) * 100) / 100;
-        const pourcentage = pointage.heuresContrat > 0
-          ? Math.round(pointage.heuresPointees / pointage.heuresContrat * 100)
+        const ecart = Math.round((pointage.heuresPointees - 112.67) * 100) / 100;
+        const pourcentage = 112.67 > 0
+          ? Math.round(pointage.heuresPointees / 112.67 * 100)
           : 0;
 
         autoTable(doc, {
@@ -5768,7 +6505,7 @@ export default function RHInsertionApp() {
             { content: '%', styles: { halign: 'center' } }
           ]],
           body: [[
-            { content: `${Math.round(pointage.heuresContrat * 100) / 100}h`, styles: { halign: 'center' } },
+            { content: `${Math.round(112.67 * 100) / 100}h`, styles: { halign: 'center' } },
             { content: `${Math.round(pointage.heuresPointees * 100) / 100}h`, styles: { halign: 'center', fontStyle: 'bold' } },
             { content: `${ecart >= 0 ? '+' : ''}${ecart}h`, styles: { halign: 'center', textColor: ecart >= 0 ? [34, 139, 34] : [220, 38, 38] } },
             { content: `${pourcentage}%`, styles: { halign: 'center', fontStyle: 'bold' } }
@@ -6054,9 +6791,9 @@ export default function RHInsertionApp() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>Heures contrat</p>
-                    <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{Math.round(pointagesData.totaux.heuresContrat)}h</p>
+                    <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{Math.round(112.67 * pointagesData.pointages.length)}h</p>
                     {(() => {
-                      const diff = pointagesData.totaux.heuresPointees - pointagesData.totaux.heuresContrat;
+                      const diff = pointagesData.totaux.heuresPointees - 112.67 * pointagesData.pointages.length;
                       const diffArrondi = Math.round(diff * 10) / 10;
                       return (
                         <p className={`text-xs font-medium ${diff >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -6081,8 +6818,8 @@ export default function RHInsertionApp() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>% Global</p>
-                    <p className={`text-2xl font-bold ${getPourcentageColor(pointagesData.totaux.pourcentageGlobal).split(' ')[0]}`}>
-                      {pointagesData.totaux.pourcentageGlobal}%
+                    <p className={`text-2xl font-bold ${getPourcentageColor(Math.round(pointagesData.totaux.heuresPointees / (112.67 * pointagesData.pointages.length) * 100)).split(' ')[0]}`}>
+                      {Math.round(pointagesData.totaux.heuresPointees / (112.67 * pointagesData.pointages.length) * 100)}%
                     </p>
                   </div>
                   <PieChart className="w-8 h-8 text-purple-500/30" />
@@ -6141,6 +6878,7 @@ export default function RHInsertionApp() {
                       const pointage = p.pointage;
                       const heuresParJour = Math.round(emp.dureeHebdo / 5 * 100) / 100;
                       const isEditing = editingPointage === emp.id;
+                      const pctContrat = 112.67 > 0 ? Math.round(pointage.heuresPointees / 112.67 * 100) : 0;
 
                       return (
                         <tr key={emp.id} className={`border-t ${bg('border-slate-700', 'border-gray-200')} ${bg('hover:bg-slate-700/30', 'hover:bg-gray-50')}`}>
@@ -6158,7 +6896,7 @@ export default function RHInsertionApp() {
                           </td>
                           {/* Heures contrat */}
                           <td className={`px-2 py-2 text-center border-r ${bg('border-slate-700', 'border-gray-200')}`}>
-                            <span className="text-xs font-medium">{Math.round(pointage.heuresContrat)}h</span>
+                            <span className="text-xs font-medium">112.67h</span>
                           </td>
                           {/* Jours */}
                           {pointagesData.joursMois.map((j: any, jourIndex: number) => {
@@ -6218,8 +6956,8 @@ export default function RHInsertionApp() {
                           </td>
                           {/* Pourcentage */}
                           <td className="px-2 py-2 text-center">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${getPourcentageColor(pointage.pourcentage)}`}>
-                              {pointage.pourcentage}%
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${getPourcentageColor(pctContrat)}`}>
+                              {pctContrat}%
                             </span>
                           </td>
                           {/* Banque */}
@@ -6249,10 +6987,10 @@ export default function RHInsertionApp() {
                                   {pointage.heuresBanqueEntree < 0 && (
                                     <span className="text-[10px] text-red-400">déficit à rattraper</span>
                                   )}
-                                  {pointage.pourcentage < 100 && pointage.heuresBanqueEntree > 0 && pointage.statut !== 'valide' && (
+                                  {pctContrat < 100 && pointage.heuresBanqueEntree > 0 && pointage.statut !== 'valide' && (
                                     <button
                                       onClick={() => {
-                                        const heuresManquantes = Math.round((pointage.heuresContrat - pointage.heuresPointees) * 10) / 10;
+                                        const heuresManquantes = Math.round((112.67 - pointage.heuresPointees) * 10) / 10;
                                         const aUtiliser = Math.min(heuresManquantes, pointage.heuresBanqueEntree);
                                         if (confirm(`Utiliser ${aUtiliser}h de la banque pour atteindre 100% ?`)) {
                                           utiliserBanqueHeures(pointage.id, aUtiliser);
@@ -6263,14 +7001,14 @@ export default function RHInsertionApp() {
                                       Utiliser
                                     </button>
                                   )}
-                                  {pointage.pourcentage > 100 && (
+                                  {pctContrat > 100 && (
                                     <span className="text-[10px] text-blue-400">
-                                      +{Math.round((pointage.heuresPointees - pointage.heuresContrat) * 10) / 10}h à transférer
+                                      +{Math.round((pointage.heuresPointees - 112.67) * 10) / 10}h à transférer
                                     </span>
                                   )}
-                                  {pointage.pourcentage < 100 && pointage.heuresBanqueEntree <= 0 && (
+                                  {pctContrat < 100 && pointage.heuresBanqueEntree <= 0 && (
                                     <span className="text-[10px] text-orange-400">
-                                      {Math.round((pointage.heuresContrat - pointage.heuresPointees) * 10) / 10}h manquantes
+                                      {Math.round((112.67 - pointage.heuresPointees) * 10) / 10}h manquantes
                                     </span>
                                   )}
                                 </>
@@ -6313,7 +7051,7 @@ export default function RHInsertionApp() {
                                   {pointage.heuresPointees > 0 && (
                                     <button
                                       onClick={() => {
-                                        const excedent = Math.max(0, pointage.heuresPointees - pointage.heuresContrat);
+                                        const excedent = Math.max(0, pointage.heuresPointees - 112.67);
                                         validerPointageIndividuel(pointage.id, `${emp.prenom} ${emp.nom}`, excedent);
                                       }}
                                       className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
@@ -6585,7 +7323,11 @@ export default function RHInsertionApp() {
         </Section>
 
         {/* Contrat de travail */}
-        <Section title="Contrat de travail" icon={FileSignature}>
+        <Section title="Contrat de travail" icon={FileSignature} action={
+          <button onClick={() => { setContratCDDIEmployee(emp); setShowContratCDDIModal(true); }} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+            <FileText className="w-4 h-4" /> Générer contrat CDDI
+          </button>
+        }>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input label="Date d'entrée" name="dateEntree" type="date" value={emp.dateEntree?.split('T')[0]} onChange={handleChange} disabled={!editingEmployee} required />
             <Input label="Type de contrat" name="typeContrat" type="select" value={emp.typeContrat} onChange={handleChange} disabled={!editingEmployee}
@@ -8389,6 +9131,7 @@ export default function RHInsertionApp() {
       <AutorisationSortieModalContent show={showAutorisationSortieModal} onClose={() => setShowAutorisationSortieModal(false)} onSave={saveAutorisationSortie} saving={saving} initialData={autorisationSortieForm} darkMode={darkMode} MOTIF_CATEGORIES={MOTIF_CATEGORIES} />
       <ObjectifModalContent show={showObjectifModal} onClose={() => { setShowObjectifModal(false); setObjectifForm({}); setEditingObjectifId(null); }} onSave={saveObjectifIndividuel} saving={saving} initialData={objectifForm} isEditing={!!editingObjectifId} />
       <AvenantModalContent show={showAvenantModal} onClose={() => { setShowAvenantModal(false); setAvenantEmployee(null); }} employee={avenantEmployee} organismeData={organismeData} darkMode={darkMode} onSaved={loadData} saving={saving} setSaving={setSaving} />
+      <ContratCDDIModalContent show={showContratCDDIModal} onClose={() => { setShowContratCDDIModal(false); setContratCDDIEmployee(null); }} employee={contratCDDIEmployee} organismeData={organismeData} darkMode={darkMode} onSaved={loadData} saving={saving} setSaving={setSaving} />
 
       {/* Modal prévisualisation document */}
       {showDocumentPreview && (
