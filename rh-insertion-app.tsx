@@ -2090,7 +2090,7 @@ export default function RHInsertionApp() {
 
   const [darkMode, setDarkMode] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'liste' | 'fiche' | 'pointages' | 'agenda' | 'reglages' | 'organisme'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'liste' | 'fiche' | 'pointages' | 'agenda' | 'reglages' | 'organisme' | 'declarations'>('dashboard');
   const [employees, setEmployees] = useState<InsertionEmployee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<InsertionEmployee | null>(null);
   const [stats, setStats] = useState<any>(null);
@@ -2176,6 +2176,13 @@ export default function RHInsertionApp() {
   // Contrat CDDI initial states
   const [showContratCDDIModal, setShowContratCDDIModal] = useState(false);
   const [contratCDDIEmployee, setContratCDDIEmployee] = useState<any>(null);
+
+  // Déclarations sociales states
+  const [declMois, setDeclMois] = useState<number>(new Date().getMonth() + 1);
+  const [declAnnee, setDeclAnnee] = useState<number>(new Date().getFullYear());
+  const [declData, setDeclData] = useState<any>(null);
+  const [declLoading, setDeclLoading] = useState(false);
+  const [expandedDeclEmployee, setExpandedDeclEmployee] = useState<string | null>(null);
 
   // Objectifs states
   const [objectifConfig, setObjectifConfig] = useState<any>(null);
@@ -2664,6 +2671,28 @@ export default function RHInsertionApp() {
       loadPointages();
     }
   }, [activeView, loadPointages]);
+
+  // Déclarations sociales - chargement des données
+  const loadDeclarations = useCallback(async () => {
+    setDeclLoading(true);
+    try {
+      const res = await authFetch(`${POINTAGE_API}/mensuel?mois=${declMois}&annee=${declAnnee}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDeclData(data.data);
+      }
+    } catch (error) {
+      console.error('Erreur déclarations:', error);
+    } finally {
+      setDeclLoading(false);
+    }
+  }, [declMois, declAnnee]);
+
+  useEffect(() => {
+    if (activeView === 'declarations') {
+      loadDeclarations();
+    }
+  }, [activeView, loadDeclarations]);
 
   const savePointageValue = async (employeeId: string, pointageMensuelId: string, date: string, heures: number) => {
     try {
@@ -5970,6 +5999,410 @@ export default function RHInsertionApp() {
 
   // =================== POINTAGES ===================
 
+  // ===== DÉCLARATIONS SOCIALES =====
+  const renderDeclarations = () => {
+    const moisNoms = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const HEURES_CONTRAT_MENSUEL = 112.67;
+
+    const changerMoisDecl = (delta: number) => {
+      let newMois = declMois + delta;
+      let newAnnee = declAnnee;
+      if (newMois < 1) { newMois = 12; newAnnee--; }
+      if (newMois > 12) { newMois = 1; newAnnee++; }
+      setDeclMois(newMois);
+      setDeclAnnee(newAnnee);
+      setExpandedDeclEmployee(null);
+    };
+
+    // Catégorisation des absences
+    const CONGES_MOTIFS = [1];
+    const MALADIE_MOTIFS = [2, 3, 17];
+    const ABS_JUSTIFIEES_MOTIFS = [4, 5, 8, 10, 13, 14, 15, 16, 18, 19, 20, 21];
+    const ABS_INJUSTIFIEES_MOTIFS = [6, 7, 9, 11];
+
+    const categorizeAbsences = (journees: any[]) => {
+      const counts = { conges: 0, maladie: 0, justifiees: 0, injustifiees: 0 };
+      const details: Record<number, number> = {};
+      const absenceDays: any[] = [];
+
+      journees?.forEach((j: any) => {
+        if (j.typeJournee === 'absence' && j.motifAbsence) {
+          const motif = parseInt(j.motifAbsence) || 0;
+          if (motif > 0) {
+            details[motif] = (details[motif] || 0) + 1;
+            absenceDays.push(j);
+            if (CONGES_MOTIFS.includes(motif)) counts.conges++;
+            else if (MALADIE_MOTIFS.includes(motif)) counts.maladie++;
+            else if (ABS_JUSTIFIEES_MOTIFS.includes(motif)) counts.justifiees++;
+            else if (ABS_INJUSTIFIEES_MOTIFS.includes(motif)) counts.injustifiees++;
+          }
+        }
+      });
+      return { counts, details, absenceDays };
+    };
+
+    // Nombre de jours ouvrés du mois
+    const getNbJoursOuvres = () => {
+      if (!declData?.joursMois) return 22;
+      return declData.joursMois.filter((j: any) => !j.estWeekend).length;
+    };
+
+    // Calcul des données par salarié
+    const computeEmployeeDecl = (p: any) => {
+      const emp = p.employee;
+      const pointage = p.pointage;
+      const journees = pointage.journees || [];
+      const { counts, details, absenceDays } = categorizeAbsences(journees);
+      const nbJoursOuvres = getNbJoursOuvres();
+      const heuresParJourContrat = nbJoursOuvres > 0 ? HEURES_CONTRAT_MENSUEL / nbJoursOuvres : 0;
+      const deductionJours = counts.injustifiees;
+      const deductionHeures = deductionJours * heuresParJourContrat;
+      const heuresDeclarees = Math.round((HEURES_CONTRAT_MENSUEL - deductionHeures) * 100) / 100;
+      const totalAbsences = counts.conges + counts.maladie + counts.justifiees + counts.injustifiees;
+      const taux = HEURES_CONTRAT_MENSUEL > 0 ? Math.round(pointage.heuresPointees / HEURES_CONTRAT_MENSUEL * 100) : 0;
+      const banque = Math.round(((pointage.heuresBanqueSortie || 0)) * 100) / 100;
+
+      return { emp, pointage, counts, details, absenceDays, heuresDeclarees, totalAbsences, taux, banque, nbJoursOuvres };
+    };
+
+    // Agrégation pour les KPI
+    const allDecl = declData?.pointages?.map(computeEmployeeDecl) || [];
+    const nbSalaries = allDecl.length;
+    const totalHeuresContrat = Math.round(HEURES_CONTRAT_MENSUEL * nbSalaries * 100) / 100;
+    const totalHeuresPointees = Math.round(allDecl.reduce((s: number, d: any) => s + (d.pointage.heuresPointees || 0), 0) * 100) / 100;
+    const tauxGlobal = totalHeuresContrat > 0 ? Math.round(totalHeuresPointees / totalHeuresContrat * 100) : 0;
+    const totalJoursAbsence = allDecl.reduce((s: number, d: any) => s + d.totalAbsences, 0);
+
+    // Export PDF
+    const exportDeclarationsPDF = () => {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(30, 58, 138);
+      doc.rect(0, 0, pageWidth, 22, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Déclarations Sociales - ${moisNoms[declMois]} ${declAnnee}`, 14, 14);
+
+      doc.setTextColor(60, 60, 60);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - 50, 28);
+
+      // KPI summary
+      let y = 32;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Effectif: ${nbSalaries} | H. Contrat: ${totalHeuresContrat}h | H. Pointées: ${totalHeuresPointees}h | Taux: ${tauxGlobal}% | Jours absence: ${totalJoursAbsence}`, 14, y);
+      y += 6;
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Salarié', 'H. Contrat', 'H. Pointées', 'Taux', 'Congés', 'Maladie', 'Abs. just.', 'Abs. injust.', 'H. Déclarées', 'Banque', 'Statut']],
+        body: allDecl.map((d: any) => [
+          `${d.emp.prenom} ${d.emp.nom}`,
+          `${HEURES_CONTRAT_MENSUEL}h`,
+          `${Math.round(d.pointage.heuresPointees * 100) / 100}h`,
+          `${d.taux}%`,
+          `${d.counts.conges}j`,
+          `${d.counts.maladie}j`,
+          `${d.counts.justifiees}j`,
+          `${d.counts.injustifiees}j`,
+          `${d.heuresDeclarees}h`,
+          `${d.banque}h`,
+          d.taux >= 98 ? 'OK' : d.taux >= 80 ? 'Attention' : 'Alerte'
+        ]),
+        theme: 'grid',
+        styles: { fontSize: 7.5, cellPadding: 2 },
+        headStyles: { fillColor: [30, 58, 138], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+          5: { halign: 'center' },
+          6: { halign: 'center' },
+          7: { halign: 'center' },
+          8: { halign: 'center', fontStyle: 'bold' },
+          9: { halign: 'center' },
+          10: { halign: 'center' }
+        },
+        margin: { left: 14, right: 14 }
+      });
+
+      doc.save(`declarations_sociales_${moisNoms[declMois]}_${declAnnee}.pdf`);
+    };
+
+    if (declLoading) {
+      return (
+        <div className="flex-1 flex items-center justify-center p-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+        </div>
+      );
+    }
+
+    if (!declData) {
+      return (
+        <div className="flex-1 flex items-center justify-center p-12">
+          <p className={text('text-slate-400', 'text-gray-500')}>Aucune donnée disponible</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>Déclarations Sociales</h1>
+            <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>Récapitulatif mensuel des heures déclarées (base {HEURES_CONTRAT_MENSUEL}h/mois)</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => changerMoisDecl(-1)} className={`p-2 rounded-lg ${bg('hover:bg-slate-700 bg-slate-800', 'hover:bg-gray-100 bg-white')} border ${bg('border-slate-600', 'border-gray-300')}`}>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className={`text-lg font-semibold min-w-[200px] text-center ${text('text-white', 'text-gray-900')}`}>
+                {moisNoms[declMois]} {declAnnee}
+              </span>
+              <button onClick={() => changerMoisDecl(1)} className={`p-2 rounded-lg ${bg('hover:bg-slate-700 bg-slate-800', 'hover:bg-gray-100 bg-white')} border ${bg('border-slate-600', 'border-gray-300')}`}>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <button onClick={exportDeclarationsPDF} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <Download className="w-4 h-4" />Export PDF
+            </button>
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-4 gap-4">
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} p-4`}>
+            <p className={`text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>H. Contrat totales</p>
+            <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{totalHeuresContrat}h</p>
+            <p className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>{HEURES_CONTRAT_MENSUEL}h × {nbSalaries} salariés</p>
+          </div>
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} p-4`}>
+            <p className={`text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>H. Pointées totales</p>
+            <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{totalHeuresPointees}h</p>
+            <p className={`text-xs ${totalHeuresPointees >= totalHeuresContrat ? 'text-green-500' : 'text-orange-500'}`}>
+              {totalHeuresPointees >= totalHeuresContrat ? '+' : ''}{Math.round((totalHeuresPointees - totalHeuresContrat) * 100) / 100}h vs contrat
+            </p>
+          </div>
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} p-4`}>
+            <p className={`text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Taux de présence global</p>
+            <p className={`text-2xl font-bold ${tauxGlobal >= 98 ? 'text-green-500' : tauxGlobal >= 80 ? 'text-orange-500' : 'text-red-500'}`}>{tauxGlobal}%</p>
+            <p className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>Objectif : ≥ 98%</p>
+          </div>
+          <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} p-4`}>
+            <p className={`text-xs ${text('text-slate-400', 'text-gray-500')} mb-1`}>Jours d'absence totaux</p>
+            <p className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>{totalJoursAbsence}</p>
+            <p className={`text-xs ${text('text-slate-500', 'text-gray-400')}`}>Sur {nbSalaries} salariés</p>
+          </div>
+        </div>
+
+        {/* Tableau principal */}
+        <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={`${bg('bg-slate-700', 'bg-gray-100')}`}>
+                  <th className={`px-4 py-3 text-left font-medium ${text('text-slate-300', 'text-gray-600')}`}>Salarié</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>H. Contrat</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>H. Pointées</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Taux</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Congés</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Maladie</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Abs. just.</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Abs. injust.</th>
+                  <th className={`px-3 py-3 text-center font-medium text-blue-400`}>H. Déclarées</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Banque</th>
+                  <th className={`px-3 py-3 text-center font-medium ${text('text-slate-300', 'text-gray-600')}`}>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allDecl.map((d: any) => {
+                  const isExpanded = expandedDeclEmployee === d.emp.id;
+                  return (
+                    <React.Fragment key={d.emp.id}>
+                      <tr
+                        className={`border-t ${bg('border-slate-700', 'border-gray-200')} ${bg('hover:bg-slate-700/30', 'hover:bg-gray-50')} cursor-pointer`}
+                        onClick={() => setExpandedDeclEmployee(isExpanded ? null : d.emp.id)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? <ChevronDown className="w-4 h-4 text-blue-500" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                              <span className="text-xs font-medium text-blue-500">{d.emp.prenom?.[0]}{d.emp.nom?.[0]}</span>
+                            </div>
+                            <div>
+                              <p className={`font-medium ${text('text-white', 'text-gray-900')}`}>{d.emp.prenom} {d.emp.nom}</p>
+                              <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>{d.emp.poste || d.emp.typeContrat || 'CDDI'} - {d.emp.dureeHebdo || 26}h/sem</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-center font-medium">{HEURES_CONTRAT_MENSUEL}h</td>
+                        <td className="px-3 py-3 text-center font-medium">{Math.round(d.pointage.heuresPointees * 100) / 100}h</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${d.taux >= 98 ? 'bg-green-500/20 text-green-500' : d.taux >= 80 ? 'bg-orange-500/20 text-orange-500' : 'bg-red-500/20 text-red-500'}`}>
+                            {d.taux}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {d.counts.conges > 0 ? <span className="text-blue-400 font-medium">{d.counts.conges}j</span> : <span className="text-slate-500">-</span>}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {d.counts.maladie > 0 ? <span className="text-purple-400 font-medium">{d.counts.maladie}j</span> : <span className="text-slate-500">-</span>}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {d.counts.justifiees > 0 ? <span className="text-yellow-400 font-medium">{d.counts.justifiees}j</span> : <span className="text-slate-500">-</span>}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {d.counts.injustifiees > 0 ? <span className="text-red-500 font-bold">{d.counts.injustifiees}j</span> : <span className="text-slate-500">-</span>}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="text-blue-400 font-bold text-base">{d.heuresDeclarees}h</span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`text-sm ${d.banque > 0 ? 'text-green-400' : d.banque < 0 ? 'text-red-400' : text('text-slate-400', 'text-gray-500')}`}>
+                            {d.banque > 0 ? '+' : ''}{d.banque}h
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {d.taux >= 98 ? (
+                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-500">OK</span>
+                          ) : d.taux >= 80 ? (
+                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-orange-500/20 text-orange-500">Attention</span>
+                          ) : (
+                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-500">Alerte</span>
+                          )}
+                        </td>
+                      </tr>
+                      {/* Détail expandable */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={11} className={`px-4 py-4 ${bg('bg-slate-750', 'bg-gray-50')}`}>
+                            <div className="space-y-4 pl-8">
+                              {/* Breakdown par catégorie */}
+                              <div className="grid grid-cols-4 gap-3">
+                                <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-slate-600', 'border-gray-200')}`}>
+                                  <p className="text-xs text-blue-400 font-medium mb-1">Congés payés</p>
+                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.conges}j</p>
+                                  <p className="text-xs text-slate-500">Rémunérés - pas de déduction</p>
+                                </div>
+                                <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-slate-600', 'border-gray-200')}`}>
+                                  <p className="text-xs text-purple-400 font-medium mb-1">Maladie</p>
+                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.maladie}j</p>
+                                  <p className="text-xs text-slate-500">Maintien de salaire</p>
+                                </div>
+                                <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-slate-600', 'border-gray-200')}`}>
+                                  <p className="text-xs text-yellow-400 font-medium mb-1">Abs. justifiées</p>
+                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.justifiees}j</p>
+                                  <p className="text-xs text-slate-500">Pas de déduction</p>
+                                </div>
+                                <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-red-500/30', 'border-red-200')}`}>
+                                  <p className="text-xs text-red-400 font-medium mb-1">Abs. injustifiées</p>
+                                  <p className={`text-lg font-bold text-red-500`}>{d.counts.injustifiees}j</p>
+                                  <p className="text-xs text-red-400">Déduction: -{Math.round(d.counts.injustifiees * (HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres) * 100) / 100}h</p>
+                                </div>
+                              </div>
+
+                              {/* Détail par motif */}
+                              {Object.keys(d.details).length > 0 && (
+                                <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg border ${bg('border-slate-600', 'border-gray-200')} overflow-hidden`}>
+                                  <div className={`px-4 py-2 ${bg('bg-slate-600', 'bg-gray-100')} border-b ${bg('border-slate-500', 'border-gray-200')}`}>
+                                    <p className={`text-xs font-medium ${text('text-slate-300', 'text-gray-600')}`}>Détail par motif d'absence</p>
+                                  </div>
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>
+                                        <th className="px-4 py-2 text-left">Motif</th>
+                                        <th className="px-4 py-2 text-center">Jours</th>
+                                        <th className="px-4 py-2 text-center">Heures</th>
+                                        <th className="px-4 py-2 text-center">Déduction</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {Object.entries(d.details).sort(([a], [b]) => Number(a) - Number(b)).map(([motifStr, jours]) => {
+                                        const motif = Number(motifStr);
+                                        const nbJours = jours as number;
+                                        const heuresParJour = (d.emp.dureeHebdo || 26) / 5;
+                                        const heuresAbs = Math.round(nbJours * heuresParJour * 100) / 100;
+                                        const isDeductible = ABS_INJUSTIFIEES_MOTIFS.includes(motif);
+                                        return (
+                                          <tr key={motif} className={`border-t ${bg('border-slate-600', 'border-gray-100')}`}>
+                                            <td className="px-4 py-2">
+                                              <span className={`inline-block w-6 text-center text-xs rounded px-1 py-0.5 mr-2 ${isDeductible ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                                                A{motif}
+                                              </span>
+                                              <span className={text('text-white', 'text-gray-900')}>{MOTIFS_ABSENCE[motif] || `Motif ${motif}`}</span>
+                                            </td>
+                                            <td className="px-4 py-2 text-center font-medium">{nbJours}j</td>
+                                            <td className="px-4 py-2 text-center">{heuresAbs}h</td>
+                                            <td className="px-4 py-2 text-center">
+                                              {isDeductible ? (
+                                                <span className="text-red-500 font-bold">-{Math.round(nbJours * (HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres) * 100) / 100}h</span>
+                                              ) : (
+                                                <span className="text-slate-500">-</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* Mini-tableau des jours d'absence */}
+                              {d.absenceDays.length > 0 && (
+                                <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg border ${bg('border-slate-600', 'border-gray-200')} overflow-hidden`}>
+                                  <div className={`px-4 py-2 ${bg('bg-slate-600', 'bg-gray-100')} border-b ${bg('border-slate-500', 'border-gray-200')}`}>
+                                    <p className={`text-xs font-medium ${text('text-slate-300', 'text-gray-600')}`}>Journées d'absence du mois</p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 p-3">
+                                    {d.absenceDays.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((day: any, idx: number) => {
+                                      const motif = parseInt(day.motifAbsence) || 0;
+                                      const dateObj = new Date(day.date);
+                                      const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                                      const isDeductible = ABS_INJUSTIFIEES_MOTIFS.includes(motif);
+                                      return (
+                                        <span key={idx} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${isDeductible ? 'bg-red-500/20 text-red-400 border border-red-500/30' : bg('bg-slate-600 text-slate-300', 'bg-gray-100 text-gray-700')}`}>
+                                          <span className="font-medium">{dateStr}</span>
+                                          <span className="opacity-70">A{motif}</span>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Calcul H. Déclarées */}
+                              <div className={`${bg('bg-blue-900/30', 'bg-blue-50')} rounded-lg p-3 border ${bg('border-blue-500/30', 'border-blue-200')}`}>
+                                <p className="text-xs text-blue-400 font-medium mb-1">Calcul des heures déclarées</p>
+                                <p className={`text-sm ${text('text-white', 'text-gray-900')}`}>
+                                  {HEURES_CONTRAT_MENSUEL}h (contrat)
+                                  {d.counts.injustifiees > 0 && (
+                                    <> - {Math.round(d.counts.injustifiees * (HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres) * 100) / 100}h ({d.counts.injustifiees}j abs. injustifiées × {Math.round(HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres * 100) / 100}h/j)</>
+                                  )}
+                                  {' '}= <span className="text-blue-400 font-bold text-base">{d.heuresDeclarees}h</span>
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderPointages = () => {
     const moisNoms = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -8785,7 +9218,7 @@ export default function RHInsertionApp() {
           </div>
         </div>
         <nav className="p-3 space-y-1">
-          {[{ id: 'dashboard', icon: Home, label: 'Tableau de bord' }, { id: 'liste', icon: Users, label: 'Salariés' }, { id: 'pointages', icon: Clock, label: 'Pointages' }, { id: 'agenda', icon: Calendar, label: 'Agenda' }, { id: 'organisme', icon: Landmark, label: 'Organisme' }].map(item => (
+          {[{ id: 'dashboard', icon: Home, label: 'Tableau de bord' }, { id: 'liste', icon: Users, label: 'Salariés' }, { id: 'pointages', icon: Clock, label: 'Pointages' }, { id: 'declarations', icon: ClipboardList, label: 'Déclarations' }, { id: 'agenda', icon: Calendar, label: 'Agenda' }, { id: 'organisme', icon: Landmark, label: 'Organisme' }].map(item => (
             <button key={item.id} onClick={() => { setActiveView(item.id as any); setSelectedEmployee(null); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${activeView === item.id || (activeView === 'fiche' && item.id === 'liste') ? 'bg-blue-600 text-white' : `${text('text-slate-300 hover:bg-slate-700', 'text-gray-700 hover:bg-gray-100')}`}`}>
               <item.icon className="w-5 h-5" />{sidebarOpen && <span>{item.label}</span>}
@@ -8859,6 +9292,8 @@ export default function RHInsertionApp() {
               {activeTab === 'paie' && renderFichesPaie()}
             </div>
           </div>
+        ) : activeView === 'declarations' ? (
+          <div className="flex-1 overflow-auto">{renderDeclarations()}</div>
         ) : activeView === 'pointages' ? (
           <div className="flex-1 overflow-auto">{renderPointages()}</div>
         ) : activeView === 'agenda' ? (
