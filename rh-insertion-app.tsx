@@ -1399,52 +1399,53 @@ const ContratCDDIModalContent = ({ show, onClose, employee, organismeData, darkM
     const bottomLimit = pageHeight - 25;
 
     const writeMixed = (segments: {text: string; bold?: boolean; italic?: boolean}[], x: number, yPos: number, maxW: number): number => {
-      const fullText = segments.map(s => s.text).join('');
-      const lines = doc.splitTextToSize(fullText, maxW);
-      if (lines.length <= 1) {
-        let cx = x;
-        for (const seg of segments) {
-          doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
-          doc.text(seg.text, cx, yPos);
-          cx += doc.getTextWidth(seg.text);
+      // Build word-level tokens preserving formatting
+      type Token = { text: string; bold?: boolean; italic?: boolean; isSpace: boolean };
+      const tokens: Token[] = [];
+      for (const seg of segments) {
+        const parts = seg.text.split(/(\s+)/);
+        for (const part of parts) {
+          if (part === '') continue;
+          tokens.push({ text: part, bold: seg.bold, italic: seg.italic, isSpace: /^\s+$/.test(part) });
         }
-        return yPos + lineH;
       }
-      let charIndex = 0;
-      let currentY = yPos;
+      // Layout tokens into lines (never break words)
+      const lines: Token[][] = [];
+      let currentLine: Token[] = [];
+      let lineWidth = 0;
+      for (const token of tokens) {
+        doc.setFont('helvetica', token.bold ? 'bold' : token.italic ? 'italic' : 'normal');
+        const tw = doc.getTextWidth(token.text);
+        if (token.isSpace) {
+          if (currentLine.length > 0) { currentLine.push(token); lineWidth += tw; }
+          continue;
+        }
+        if (lineWidth + tw > maxW && currentLine.length > 0) {
+          while (currentLine.length > 0 && currentLine[currentLine.length - 1].isSpace) currentLine.pop();
+          lines.push(currentLine);
+          currentLine = [token];
+          lineWidth = tw;
+        } else {
+          currentLine.push(token);
+          lineWidth += tw;
+        }
+      }
+      if (currentLine.length > 0) {
+        while (currentLine.length > 0 && currentLine[currentLine.length - 1].isSpace) currentLine.pop();
+        if (currentLine.length > 0) lines.push(currentLine);
+      }
+      // Render lines
+      let cy = yPos;
       for (const line of lines) {
         let cx = x;
-        let lineCharsLeft = line.length;
-        let segIdx = 0;
-        let segCharOffset = 0;
-        let totalChars = 0;
-        for (let si = 0; si < segments.length; si++) {
-          if (totalChars + segments[si].text.length > charIndex) {
-            segIdx = si;
-            segCharOffset = charIndex - totalChars;
-            break;
-          }
-          totalChars += segments[si].text.length;
+        for (const token of line) {
+          doc.setFont('helvetica', token.bold ? 'bold' : token.italic ? 'italic' : 'normal');
+          doc.text(token.text, cx, cy);
+          cx += doc.getTextWidth(token.text);
         }
-        while (lineCharsLeft > 0 && segIdx < segments.length) {
-          const seg = segments[segIdx];
-          const available = seg.text.length - segCharOffset;
-          const take = Math.min(available, lineCharsLeft);
-          const chunk = seg.text.substring(segCharOffset, segCharOffset + take);
-          doc.setFont('helvetica', seg.bold ? 'bold' : seg.italic ? 'italic' : 'normal');
-          doc.text(chunk, cx, currentY);
-          cx += doc.getTextWidth(chunk);
-          lineCharsLeft -= take;
-          charIndex += take;
-          segCharOffset += take;
-          if (segCharOffset >= seg.text.length) {
-            segIdx++;
-            segCharOffset = 0;
-          }
-        }
-        currentY += lineH;
+        cy += lineH;
       }
-      return currentY;
+      return cy;
     };
 
     const moisFR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
@@ -1559,27 +1560,26 @@ const ContratCDDIModalContent = ({ show, onClose, employee, organismeData, darkM
     // ENTRE LES SOUSSIGNÉS
     doc.setFontSize(fontSize);
     doc.setTextColor(30, 30, 30);
-    const indentX = margin + 15;
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Entre les soussignés :', margin + 12, y);
+    doc.text('Entre les soussignés', margin, y);
     y += 8;
 
     // --- Association ---
     doc.setFont('helvetica', 'normal');
-    doc.text(`L'ASSOCIATION ${raisonSociale.toUpperCase()}`, indentX, y);
+    doc.text(`L'association ${raisonSociale.toUpperCase()} (Valorisation inclusion éthique 59) reconnue comme Atelier Chantier d'Insertion,`, margin, y);
     y += lineH + 1;
-    doc.text(`Reconnue comme Atelier Chantier d'Insertion`, indentX, y);
+    doc.text(`N° SIRET ${siretOrg}`, margin, y);
     y += lineH + 1;
-    doc.text(`Dont le siège social est au ${adresseOrg}, ${cpOrg} ${villeOrg}`, indentX, y);
+    doc.text(`N° URSSAF ${numUrssaf}`, margin, y);
     y += lineH + 1;
-    doc.text(`Siret : ${siretOrg} ; N° URSSAF : ${numUrssaf}`, indentX, y);
+    doc.text(`Dont le siège social est situé au ${adresseOrg}, ${cpOrg} ${villeOrg}`, margin, y);
     y += lineH + 1;
     y = writeMixed([
       { text: `Représentée par ${civRepresentant} ` },
       { text: representantNom, bold: true },
-      { text: `, agissant en qualité de ${fonction}.` }
-    ], indentX, y, contentWidth - 15);
+      { text: `, le ${fonction}.` }
+    ], margin, y, contentWidth);
     y += 8;
 
     // D'une part
@@ -1659,26 +1659,39 @@ const ContratCDDIModalContent = ({ show, onClose, employee, organismeData, darkM
     const lieuTravailVal = form.lieuTravail || '4120 Route de Tournai, 59500 DOUAI';
     const secteurGeoVal = form.secteurGeo || 'Réseau HDF';
 
+    // Shorthand for employee name
+    const empNomComplet = `${civSalarie} ${nomSalarie} ${prenomSalarie}`;
+
     // Article 1
     writeArticleMixed('Article 1 : Nature et objet du contrat', [
       [
-        { text: `L'association ${raisonSociale.toUpperCase()} engage ` },
-        { text: `${civSalarie} ${nomSalarie} ${prenomSalarie}`, bold: true },
+        { text: `L'association ${raisonSociale.toUpperCase()} (Valorisation inclusion éthique 59) reconnue Atelier Chantier d'Insertion, engage ` },
+        { text: empNomComplet, bold: true },
         { text: ` pour une durée déterminée, temps partiel.` }
       ],
       [
-        { text: `Conformément à l'article L.5132-15-1 du Code du travail, le présent contrat est conclu au titre des dispositions destinées à favoriser l'embauche de certaines catégories de personnes sans emploi rencontrant des difficultés sociales et professionnelles particulières.` }
+        { text: `Conformément à l'article L.5132-15-1 du Code du travail,` }
       ],
       [
-        { text: `Le présent contrat est un Contrat de travail à Durée Déterminée d'Insertion (CDDI), régi par les articles L 1242-3 et suivants du Code du Travail. Le salarié s'engage à intégrer un parcours d'insertion par lequel un projet d'insertion socioprofessionnel est mis en œuvre.` }
+        { text: `Le présent contrat est conclu au titre des dispositions législatives et réglementaires destinées à favoriser l'embauche de certaines catégories de personnes sans emploi rencontrant des difficultés sociales et professionnelles particulières.` }
+      ],
+      [
+        { text: `Le présent contrat, régi par les dispositions des articles L 1242-3 et suivants du Code du Travail, est donc un Contrat de travail à Durée Déterminée d'Insertion.` }
+      ],
+      [
+        { text: `Dans ce cadre, le salarié s'engage à intégrer un parcours d'insertion par lequel un projet d'insertion socioprofessionnel est mis en œuvre.` }
+      ],
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` déclare être libre de tout engagement.` }
       ]
     ]);
 
     // Article 2
     writeArticleMixed('Article 2 : Convention Collective applicable', [
       [
-        { text: `Le contrat est régi par la convention collective ` },
-        { text: form.conventionCollective || '3016 - Convention collective nationale des ateliers et chantiers d\'insertion', bold: true },
+        { text: `Outre les règles spécifiques mentionnées à l'article 1, le présent contrat est régi par les dispositions de la convention collective ` },
+        { text: form.conventionCollective || '3016 – Convention collective nationale des ateliers et chantiers d\'insertion', bold: true },
         { text: '.' }
       ]
     ]);
@@ -1686,120 +1699,184 @@ const ContratCDDIModalContent = ({ show, onClose, employee, organismeData, darkM
     // Article 3
     writeArticleMixed('Article 3 : Durée du contrat', [
       [
-        { text: `Le contrat prend effet le ` },
+        { text: `Le présent contrat qui prendra effet le ` },
         { text: dateDebutLong, bold: true },
-        { text: `, pour une durée déterminée de ` },
+        { text: `, est conclu pour une durée déterminée de ` },
         { text: `${dureeMoisVal} mois`, bold: true },
-        { text: `, se terminant le ` },
+        { text: '.' }
+      ],
+      [
+        { text: `Il se terminera le ` },
         { text: dateFinLong, bold: true },
         { text: '.' }
       ],
       [
-        { text: `En vertu de l'article L.5132-15-1 du Code du travail, la structure pourra proposer des avenants, la durée totale ne pouvant dépasser ` },
+        { text: `En vertu de l'article L.5132-15-1 du Code du travail, la structure pourra éventuellement proposer des avenants à ce contrat, la durée totale du contrat et de ses avenants éventuels ne pouvant dépasser ` },
         { text: '24 mois', bold: true },
-        { text: '.' }
+        { text: ' au total.' }
       ],
       [
-        { text: `En vertu des articles L1243-8, L 1243-10 et L 1243-3, le salarié ne pourra pas prétendre à l'indemnité de fin de contrat. À titre dérogatoire, le contrat pourra être renouvelé au-delà de la durée maximale pour permettre au salarié d'achever une action de formation professionnelle en cours.` }
+        { text: `En vertu de la combinaison des articles L1243-8, L 1243-10 et L 1243-3 du Code du travail, ` },
+        { text: empNomComplet, bold: true },
+        { text: ` ne pourra pas prétendre à l'indemnité de fin de contrat à l'échéance de ce dernier.` }
+      ],
+      [
+        { text: `A titre dérogatoire, ce contrat pourra être renouvelé au-delà de la durée maximale prévue afin de permettre au salarié d'achever une action de formation professionnelle en cours au moment de l'échéance.` }
+      ],
+      [
+        { text: `Le terme du contrat correspondra alors exactement à celui de l'action concernée.` }
       ]
     ]);
 
     // Article 4
     writeArticleMixed('Article 4 : Période d\'essai', [
       [
-        { text: `Période d'essai de ` },
+        { text: `Le présent engagement est conclu sous réserve d'une période d'essai de ` },
         { text: `${periodeEssaiVal} jours`, bold: true },
-        { text: `, au cours de laquelle il pourra être mis fin au contrat par l'une ou l'autre des parties, sous réserve de respecter les délais de prévenance prévus aux articles L. 1221-25 et L. 1221-26 du code du travail.` }
+        { text: ` au cours de laquelle il pourra être mis fin au contrat, à tout moment, par l'une ou l'autre des parties, sous réserve de respecter les délais de prévenance prévus aux articles L. 1221-25 et L. 1221-26 du code du travail.` }
       ]
     ]);
 
     // Article 5
     writeArticleMixed('Article 5 : Emploi et qualification', [
       [
-        { text: `${civSalarie} ${nomSalarie} ${prenomSalarie}`, bold: true },
+        { text: empNomComplet, bold: true },
         { text: ` est engagé en qualité d'` },
-        { text: `${qualif}, Coefficient ${coeff}`, bold: true },
-        { text: '. Il s\'engage à :' }
+        { text: `${qualif}, Coefficient ${coeff}`, bold: true }
       ],
-      [{ text: `    • Exercer sa fonction au mieux des intérêts de l'association ${raisonSociale.toUpperCase()} dans le respect des orientations et directives ;` }],
-      [{ text: `    • Respecter le règlement intérieur, le livret d'accueil sécurité, ainsi que la sécurité tant sur chantier qu'en dehors ;` }],
-      [{ text: `    • Réaliser toutes missions particulières ou exceptionnelles confiées par la Direction ;` }],
-      [{ text: `    • En cas d'empêchement, aviser l'association par courrier recommandé dans les plus brefs délais.` }]
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` s'engage et s'oblige à :` }
+      ],
+      [{ text: `    • Exercer sa fonction au mieux des intérêts de L'association ${raisonSociale.toUpperCase()} (Valorisation inclusion éthique 59) dans le respect des orientations et directives qui lui seront données à ce titre ;` }],
+      [{ text: `    • À respecter le règlement intérieur, le livret d'accueil sécurité, ainsi que la sécurité tant sur chantier qu'en dehors, pendant ses heures de travail.` }],
+      [{ text: `    • Réaliser toutes missions particulières ou exceptionnelles, temporaires ou durables qui lui serait confié par la Direction ;` }],
+      [{ text: `    • En cas d'empêchement justifié d'assurer sa fonction, pour quelques raisons que ce soient, à aviser l'association ${raisonSociale.toUpperCase()} (Valorisation inclusion éthique 59) par courrier recommandé au ${adresseOrg}, ${cpOrg} ${villeOrg} dans les plus brefs délais et par tout moyen, en indiquant la durée probable de son absence. La même règle est applicable en cas de prolongation d'absence.` }]
     ]);
 
     // Article 6
     writeArticleMixed('Article 6 : Rémunération', [
       [
-        { text: `Rémunération brute mensuelle de ` },
+        { text: `Conformément aux textes applicables aux contrats à durée déterminée d'Insertion,` }
+      ],
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` percevra mensuellement en contrepartie de ses fonctions, une rémunération brute mensuelle de ` },
         { text: `${salaireBrutVal} euros`, bold: true },
         { text: ` sur la base de ` },
         { text: `${dureeHeuresVal} heures par mois`, bold: true },
-        { text: ` (mensualisation). Cette rémunération est forfaitaire.` }
+        { text: ` (Mensualisation).` }
       ],
       [
-        { text: `L'indemnité de fin de contrat n'est pas due (article L1243-8, alinéa 1er de l'article 1242-3).` }
+        { text: `Les parties conviennent expressément que cette rémunération est forfaitaire et qu'elle comprend le paiement les heures correspondantes à la durée légale du temps de travail.` }
+      ],
+      [
+        { text: `Conformément à l'article L1243-8, à l'issue du présent contrat, l'indemnité de fin de contrat visée au présent article n'est pas due dans le cas du contrat de travail conclu au titre de l'alinéa 1er de l'article 1242-3 du code du travail.` }
       ]
     ]);
 
     // Article 7
     writeArticleMixed('Article 7 : Lieu de travail', [
       [
-        { text: `Locaux de l'entreprise situés au ` },
-        { text: lieuTravailVal, bold: true },
-        { text: `, ou dans le secteur géographique : ` },
-        { text: secteurGeoVal, bold: true },
-        { text: '.' }
-      ]
+        { text: `A titre indicatif, ` },
+        { text: empNomComplet, bold: true },
+        { text: ` exercera ses fonctions dans les locaux de l'entreprise situé au ` },
+        { text: lieuTravailVal, bold: true }
+      ],
+      [
+        { text: `Ou` }
+      ],
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` sera conduit à exercer ses fonctions dans le secteur géographique suivant :` }
+      ],
+      [{ text: `    • ${secteurGeoVal}` }]
     ]);
 
     // Article 8
     writeArticleMixed('Article 8 : Durée du travail', [
       [
-        { text: `${dureeHeuresVal} heures par mois`, bold: true },
-        { text: `, soit ` },
+        { text: empNomComplet, bold: true },
+        { text: ` effectuera ` },
+        { text: `${dureeHeuresVal} heures`, bold: true },
+        { text: ` de travail par mois ; soit ` },
         { text: `${dureeHebdoVal}h/semaine`, bold: true },
-        { text: `. Répartition hebdomadaire :` }
+        { text: '.' }
       ],
-      [{ text: `    • Du lundi au jeudi de 8h30 à 12h00 et de 13h00 à 16h00` }],
-      [{ text: `    • Possibilité de travailler le vendredi et samedi` }],
-      [{ text: `Horaires susceptibles de modifications avec un délai de prévenance d'une semaine. Les heures complémentaires accomplies avec signature d'avenant donnent droit à des journées de repos supplémentaires, selon planning et accord du supérieur.` }]
+      [
+        { text: `Répartition hebdomadaire`, bold: true }
+      ],
+      [
+        { text: `La durée hebdomadaire de travail de ${dureeHebdoVal} heures sera répartie selon les plages horaires suivantes, sur chantier, en fonction des besoins de ce dernier :` }
+      ],
+      [{ text: `    Du lundi au jeudi de 9h00 à 12h00 et de 13h00 à 16h00` }],
+      [{ text: `    Possibilité de travailler le vendredi et samedi.` }],
+      [{ text: `Ces horaires sont, moyennant un délai de prévenance d'une semaine, susceptibles de modifications.` }],
+      [
+        { text: `Heures complémentaires`, bold: true }
+      ],
+      [{ text: `Chacune des heures complémentaires accomplies avec signature d'avenant, donne droit à des journées de repos supplémentaires, selon le planning et accord du supérieur.` }]
     ]);
 
     // Article 9
-    writeArticle('Article 9 : Congés payés', [
-      'Droit à congés payés conformément aux dispositions légales et conventionnelles. Minimum : 2,5 jours de congés payés par mois.'
+    writeArticleMixed('Article 9 : Congés payés', [
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` bénéficie d'un droit à congés payés conformément aux dispositions légales, et conventionnelles en vigueur.` }
+      ],
+      [{ text: `Les minimums sont les suivants : 2,5 jours de congés payés par mois dans l'entreprise.` }]
     ]);
 
     // Article 10
-    writeArticle('Article 10 : Retraite complémentaire, prévoyance et frais de santé', [
-      'Affiliation à la caisse de retraite complémentaire : AGIRC - ARRCO.',
-      'Mutuelle groupe obligatoire, prise en charge à hauteur de 50% par la société.',
-      'Congés payés légalement prévus à prendre à une ou plusieurs époques à convenir avec la Direction.'
+    writeArticleMixed('Article 10 : Retraite complémentaire, prévoyance et frais de santé', [
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` sera affilié à la Caisse (ou aux caisses) de retraite complémentaire dont relève l'entreprise :` }
+      ],
+      [{ text: `En matière de retraite complémentaire obligatoire, il est rappelé que la société adhère auprès de : AGIRC – ARRCO` }],
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` bénéficiera d'une mutuelle groupe obligatoire, prise en charge à hauteur de 50% par la société.` }
+      ],
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` bénéficiera chaque année, aux congés payés légalement prévus à prendre à une ou plusieurs époques à convenir avec la Direction.` }
+      ]
     ]);
 
     // Article 11
-    writeArticle('Article 11 : Autres avantages sociaux', [
-      'Le salarié bénéficie dans les mêmes conditions que les autres salariés des avantages accordés par l\'entreprise.'
+    writeArticleMixed('Article 11 : Autres avantages sociaux', [
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` bénéficie dans les mêmes conditions que les autres salariés, des avantages accordés par l'entreprise.` }
+      ]
     ]);
 
     // Article 12
-    writeArticle('Article 12 : Obligations professionnelles', [
-      'Le salarié doit observer les dispositions réglementant les conditions de travail et les règles de discipline et sécurité. Il s\'engage à :',
-      '    • Se conformer aux directives et instructions émanant de la Direction ;',
-      '    • Informer l\'entreprise en cas d\'absence et produire dans les 48 heures les justificatifs ;',
-      '    • Suivre les actions de formations et d\'accompagnement programmées dans le cadre de son parcours d\'insertion.'
+    writeArticleMixed('Article 12 : Obligations professionnelles', [
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` sera tenu d'observer les dispositions réglementant les conditions de travail applicables à l'ensemble des salariés de l'entreprise ainsi que les règles générales concernant la discipline et la sécurité du travail.` }
+      ],
+      [
+        { text: empNomComplet, bold: true },
+        { text: ` s'engage par ailleurs :` }
+      ],
+      [{ text: `    • À se conformer aux directives et instructions émanant de la Direction ou de son représentant.` }],
+      [{ text: `    • À informer l'entreprise en cas d'absence, quel qu'en soit le motif et à produire dans les 48 heures les justificatifs appropriés.` }],
+      [{ text: `    • A suivre les actions de formations et d'accompagnement programmées dans le cadre de son parcours d'insertion.` }]
     ]);
 
     // Article 13
     writeArticle('Article 13 : Rupture anticipée du contrat', [
-      'Après la période d\'essai, le contrat ne pourra être résilié avant le terme convenu, sauf accord des parties, qu\'en cas de faute grave, faute lourde, force majeure, ou inaptitude constatée par le médecin du travail.',
-      'Conformément à l\'article L.5132-15-1, le contrat pourra également être rompu sans préavis en cas d\'embauche du salarié à l\'issue d\'une période de mise en situation en milieu professionnel, d\'une action concourant à son insertion professionnelle, ou d\'une période d\'essai afférente à une offre d\'emploi visant une embauche en CDI ou CDD d\'au moins 6 mois.',
+      'Après la période d\'essai, le présent contrat ne pourra être résilié avant le terme convenu, sauf accord des parties, qu\'en cas de faute grave, de faute lourde, de force majeure ou d\'inaptitude dûment constatée par le médecin du travail.',
+      'Conformément à l\'article L.5132-15-1, le présent contrat pourra également être rompu sans préavis, en cas d\'embauche du salarié à l\'issue d\'une période de mise en situation en milieu professionnel, d\'une action concourant à son insertion professionnelle, où d\'une période d\'essai afférente à une offre d\'emploi visant une embauche en contrat de travail à durée indéterminée ou à durée déterminée au moins égale à six mois.',
       'En dehors de ces hypothèses, la rupture anticipée donnera lieu au versement de dommages et intérêts.'
     ]);
 
     // Article 14
     writeArticle('Article 14 : Dispositions spécifiques', [
-      'En vertu de l\'article L.5132-15-1, pendant l\'exécution du contrat, le salarié pourra bénéficier d\'une période de mise en situation professionnelle qui lui permettra soit de découvrir un métier ou un secteur d\'activité, soit de confirmer un projet professionnel, soit d\'initier une démarche de recrutement.'
+      'En vertu de l\'article L.5132-15-1, pendant l\'exécution du présent contrat, le salarié pourra bénéficier d\'une période de mise en situation professionnelle qui lui permettra, soit de découvrir un métier ou un secteur d\'activité, soit de confirmer un projet professionnel, soit d\'initier une démarche de recrutement.'
     ]);
 
     // ===== FAIT EN DEUX EXEMPLAIRES =====
@@ -1830,17 +1907,26 @@ const ContratCDDIModalContent = ({ show, onClose, employee, organismeData, darkM
 
     doc.setFontSize(fontSize);
     doc.setFont('helvetica', 'bold');
-    doc.text('Signature de l\'employeur', sigLeftX, y);
-    doc.text('Signature du salarié', sigRightX, y);
-    y += lineH + 1;
+    doc.text(`Pour L'association ${raisonSociale.toUpperCase()}`, sigLeftX, y);
+    doc.text('Le Salarié', sigRightX, y);
+    y += lineH;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('(Valorisation inclusion éthique 59)', sigLeftX, y);
+    y += lineH;
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${civRepresentant === 'Mme' ? 'Madame' : 'Monsieur'} ${representantNom}`, sigLeftX, y);
+    y += lineH;
+    doc.setFont('helvetica', 'normal');
+    doc.text(fonction.charAt(0).toUpperCase() + fonction.slice(1), sigLeftX, y);
+    y += lineH + 2;
 
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(8);
-    doc.text('Faire précéder la signature de la mention', sigLeftX, y);
-    doc.text('Faire précéder la signature de la mention', sigRightX, y);
+    doc.text('(Signature précédée de la mention', sigRightX, y);
     y += 3.5;
-    doc.text('« lu et approuvé »', sigLeftX, y);
-    doc.text('« lu et approuvé »', sigRightX, y);
+    doc.text('« Lu et approuvé »)', sigRightX, y);
     y += 5;
 
     doc.setFont('helvetica', 'normal');
