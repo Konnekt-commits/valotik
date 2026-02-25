@@ -3,7 +3,7 @@ import {
   ChevronLeft, ChevronRight, User, Clock, Sun, Moon,
   Check, X, Calendar, AlertCircle, Coffee, GraduationCap,
   Umbrella, Heart, Briefcase, Save, Loader2, RefreshCw, Trash2, PenTool,
-  LogOut, FileText, Download
+  LogOut, FileText, Download, CalendarPlus, CircleOff, Baby, Search
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -162,6 +162,43 @@ export default function PointageMobileApp() {
   const [superieurSignature, setSuperieurSignature] = useState<string | null>(null);
   const superieurCanvasRef = useRef<HTMLCanvasElement>(null);
   const [savingAutorisation, setSavingAutorisation] = useState(false);
+
+  // États pour demande de congé
+  const [showCongeSheet, setShowCongeSheet] = useState(false);
+  const [congeStep, setCongeStep] = useState<'employee' | 'type' | 'nature' | 'form'>('employee');
+  const [congeEmployeeId, setCongeEmployeeId] = useState<string | null>(null);
+  const [congeEmployeeName, setCongeEmployeeName] = useState('');
+  const [congeType, setCongeType] = useState('');
+  const [congeNature, setCongeNature] = useState('');
+  const [congeDateDebut, setCongeDateDebut] = useState('');
+  const [congeDateFin, setCongeDateFin] = useState('');
+  const [congeDemiJournee, setCongeDemiJournee] = useState(false);
+  const [congeMotif, setCongeMotif] = useState('');
+  const [congeSearch, setCongeSearch] = useState('');
+  const [congeSignature, setCongeSignature] = useState<string | null>(null);
+  const [savingConge, setSavingConge] = useState(false);
+  const congeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [congeIsDrawing, setCongeIsDrawing] = useState(false);
+
+  // Init congé canvas when step changes to form
+  useEffect(() => {
+    if (showCongeSheet && congeStep === 'form') {
+      setTimeout(() => {
+        const canvas = congeCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * 2;
+        canvas.height = rect.height * 2;
+        ctx.scale(2, 2);
+        ctx.strokeStyle = isDark ? '#22d3ee' : '#0891b2';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      }, 150);
+    }
+  }, [showCongeSheet, congeStep]);
 
   // Couleurs dynamiques
   const bg = (dark: string, light: string) => isDark ? dark : light;
@@ -530,6 +567,123 @@ export default function PointageMobileApp() {
     }
   };
 
+  // Types de congé
+  const CONGE_TYPES = [
+    { value: 'conge_paye', label: 'Congés payés', Icon: Umbrella },
+    { value: 'conge_special', label: 'Congés spéciaux', Icon: Heart },
+    { value: 'sans_solde', label: 'Sans solde', Icon: CircleOff },
+    { value: 'recuperation', label: 'Récupération', Icon: RefreshCw },
+    { value: 'rtt', label: 'RTT', Icon: Clock },
+    { value: 'conge_parental', label: 'Congé parental', Icon: Baby },
+  ];
+
+  const CONGE_SPECIAL_NATURES = [
+    { value: 'mariage', label: 'Mariage', jours: 4 },
+    { value: 'naissance', label: 'Naissance / Adoption', jours: 3 },
+    { value: 'deces_conjoint', label: 'Décès conjoint / enfant', jours: 5 },
+    { value: 'deces_parent', label: 'Décès parent / frère', jours: 3 },
+    { value: 'deces_gd_parent', label: 'Décès grands-parents', jours: 1 },
+    { value: 'demenagement', label: 'Déménagement', jours: 1 },
+    { value: 'pacs', label: 'PACS', jours: 4 },
+  ];
+
+  // Calcul jours ouvrés
+  const calculerJoursOuvresLocal = (debut: string, fin: string): number => {
+    if (!debut || !fin) return 0;
+    const d = new Date(debut);
+    const f = new Date(fin);
+    let count = 0;
+    const current = new Date(d);
+    while (current <= f) {
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) count++;
+      current.setDate(current.getDate() + 1);
+    }
+    return count;
+  };
+
+  const congeNbJours = congeDemiJournee ? 0.5 : calculerJoursOuvresLocal(congeDateDebut, congeDateFin);
+
+  // Congé canvas handlers
+  const congeStartDraw = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    const canvas = congeCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !canvas) return;
+    setCongeIsDrawing(true);
+    const rect = canvas.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+  };
+
+  const congeDraw = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!congeIsDrawing) return;
+    e.preventDefault();
+    const canvas = congeCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const congeEndDraw = () => {
+    setCongeIsDrawing(false);
+    const canvas = congeCanvasRef.current;
+    if (canvas) {
+      setCongeSignature(canvas.toDataURL('image/png'));
+    }
+  };
+
+  const clearCongeSignature = () => {
+    const canvas = congeCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    setCongeSignature(null);
+  };
+
+  const submitDemandeConge = async () => {
+    if (!congeEmployeeId || !congeType || !congeDateDebut || !congeDateFin) return;
+    setSavingConge(true);
+    try {
+      const res = await fetch(`${API_URL}/pointage/demande-conge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: congeEmployeeId,
+          type: congeType,
+          natureSpecial: congeNature || null,
+          dateDebut: congeDateDebut,
+          dateFin: congeDateFin,
+          demiJournee: congeDemiJournee,
+          motif: congeMotif || null,
+          signature: congeSignature || null,
+          createdBy: 'encadrant'
+        })
+      });
+      if (res.ok) {
+        setSaveSuccess('Demande de congé envoyée');
+        setTimeout(() => setSaveSuccess(null), 3000);
+        setShowCongeSheet(false);
+      } else {
+        const data = await res.json();
+        setSaveError(data.error || 'Erreur lors de la demande');
+        setTimeout(() => setSaveError(null), 3000);
+      }
+    } catch (err) {
+      setSaveError('Erreur réseau');
+      setTimeout(() => setSaveError(null), 3000);
+    } finally {
+      setSavingConge(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen ${bg('bg-slate-900', 'bg-gray-100')} transition-colors duration-300`}>
       {/* Header */}
@@ -540,12 +694,33 @@ export default function PointageMobileApp() {
             <h1 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
               Pointage Encadrant
             </h1>
-            <button
-              onClick={() => setIsDark(!isDark)}
-              className={`p-2 rounded-full ${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-200 hover:bg-gray-300')}`}
-            >
-              {isDark ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-slate-600" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setShowCongeSheet(true);
+                  setCongeStep('employee');
+                  setCongeEmployeeId(null);
+                  setCongeEmployeeName('');
+                  setCongeType('');
+                  setCongeNature('');
+                  setCongeDateDebut('');
+                  setCongeDateFin('');
+                  setCongeDemiJournee(false);
+                  setCongeMotif('');
+                  setCongeSearch('');
+                  setCongeSignature(null);
+                }}
+                className={`p-2 rounded-full ${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-200 hover:bg-gray-300')}`}
+              >
+                <CalendarPlus size={20} className={text('text-cyan-400', 'text-cyan-600')} />
+              </button>
+              <button
+                onClick={() => setIsDark(!isDark)}
+                className={`p-2 rounded-full ${bg('bg-slate-700 hover:bg-slate-600', 'bg-gray-200 hover:bg-gray-300')}`}
+              >
+                {isDark ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-slate-600" />}
+              </button>
+            </div>
           </div>
 
           {/* Navigation date */}
@@ -2201,6 +2376,233 @@ export default function PointageMobileApp() {
           </div>
         );
       })()}
+
+      {/* Bottom sheet demande de congé */}
+      {showCongeSheet && (
+        <div className="fixed inset-0 z-[70]">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCongeSheet(false)} />
+          <div className={`absolute bottom-0 left-0 right-0 ${bg('bg-slate-800', 'bg-white')} rounded-t-3xl max-h-[90vh] overflow-hidden animate-slide-up`}>
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className={`w-10 h-1 rounded-full ${bg('bg-slate-600', 'bg-gray-300')}`} />
+            </div>
+
+            {/* Titre + back */}
+            <div className="px-4 pb-3 flex items-center gap-3">
+              {congeStep !== 'employee' && (
+                <button onClick={() => {
+                  if (congeStep === 'form') setCongeStep(congeType === 'conge_special' && congeNature ? 'nature' : 'type');
+                  else if (congeStep === 'nature') setCongeStep('type');
+                  else setCongeStep('employee');
+                }} className={`p-1.5 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>
+                  <ChevronLeft size={20} className={text('text-white', 'text-gray-700')} />
+                </button>
+              )}
+              <h2 className={`text-lg font-bold flex-1 ${text('text-white', 'text-gray-900')}`}>
+                {congeStep === 'employee' ? 'Demande de congé' :
+                 congeStep === 'type' ? `Congé pour ${congeEmployeeName}` :
+                 congeStep === 'nature' ? 'Nature du congé spécial' :
+                 'Dates et signature'}
+              </h2>
+              <button onClick={() => setShowCongeSheet(false)} className={`p-1.5 rounded-lg ${bg('bg-slate-700', 'bg-gray-200')}`}>
+                <X size={20} className={text('text-white', 'text-gray-700')} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto max-h-[75vh] px-4 pb-8">
+              {/* Étape 1 : Sélection salarié */}
+              {congeStep === 'employee' && (
+                <div>
+                  <div className={`relative mb-3`}>
+                    <Search size={18} className={`absolute left-3 top-1/2 -translate-y-1/2 ${text('text-gray-400', 'text-gray-500')}`} />
+                    <input
+                      type="text"
+                      placeholder="Rechercher un salarié..."
+                      value={congeSearch}
+                      onChange={e => setCongeSearch(e.target.value)}
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl ${bg('bg-slate-700 text-white placeholder:text-gray-400', 'bg-gray-100 text-gray-900 placeholder:text-gray-500')} outline-none`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    {employees
+                      .filter(ep => {
+                        const q = congeSearch.toLowerCase();
+                        return !q || ep.employee.nom.toLowerCase().includes(q) || ep.employee.prenom.toLowerCase().includes(q);
+                      })
+                      .map(ep => (
+                        <button
+                          key={ep.employee.id}
+                          onClick={() => {
+                            setCongeEmployeeId(ep.employee.id);
+                            setCongeEmployeeName(`${ep.employee.prenom} ${ep.employee.nom}`);
+                            setCongeStep('type');
+                          }}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${bg('bg-slate-700/50 hover:bg-slate-600', 'bg-gray-50 hover:bg-gray-100')}`}
+                        >
+                          <div className="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white font-bold text-sm">
+                            {ep.employee.prenom[0]}{ep.employee.nom[0]}
+                          </div>
+                          <div className="text-left">
+                            <p className={`font-semibold ${text('text-white', 'text-gray-900')}`}>{ep.employee.prenom} {ep.employee.nom}</p>
+                            <p className={`text-xs ${text('text-gray-400', 'text-gray-500')}`}>{ep.employee.poste || 'Salarié'}</p>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Étape 2 : Type de congé */}
+              {congeStep === 'type' && (
+                <div className="grid grid-cols-2 gap-3">
+                  {CONGE_TYPES.map(ct => (
+                    <button
+                      key={ct.value}
+                      onClick={() => {
+                        setCongeType(ct.value);
+                        if (ct.value === 'conge_special') {
+                          setCongeStep('nature');
+                        } else {
+                          setCongeNature('');
+                          setCongeStep('form');
+                          setCongeDateDebut(formatDateISO(new Date()));
+                          setCongeDateFin(formatDateISO(new Date()));
+                        }
+                      }}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-all ${bg('bg-slate-700/50 hover:bg-slate-600', 'bg-gray-50 hover:bg-gray-100')}`}
+                    >
+                      <ct.Icon size={28} className="text-cyan-500" />
+                      <span className={`text-sm font-medium text-center ${text('text-white', 'text-gray-900')}`}>{ct.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Étape 2b : Nature du congé spécial */}
+              {congeStep === 'nature' && (
+                <div className="space-y-2">
+                  {CONGE_SPECIAL_NATURES.map(n => (
+                    <button
+                      key={n.value}
+                      onClick={() => {
+                        setCongeNature(n.value);
+                        setCongeDateDebut(formatDateISO(new Date()));
+                        const fin = new Date();
+                        // Calculer date fin en jours ouvrés
+                        let added = 0;
+                        while (added < n.jours - 1) {
+                          fin.setDate(fin.getDate() + 1);
+                          if (fin.getDay() !== 0 && fin.getDay() !== 6) added++;
+                        }
+                        setCongeDateFin(formatDateISO(fin));
+                        setCongeStep('form');
+                      }}
+                      className={`w-full flex items-center justify-between p-3.5 rounded-xl transition-all ${bg('bg-slate-700/50 hover:bg-slate-600', 'bg-gray-50 hover:bg-gray-100')}`}
+                    >
+                      <span className={`font-medium ${text('text-white', 'text-gray-900')}`}>{n.label}</span>
+                      <span className="text-cyan-500 font-bold text-sm">{n.jours}j</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Étape 3 : Dates + motif + signature */}
+              {congeStep === 'form' && (
+                  <div className="space-y-4">
+                    {/* Dates */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={`text-xs font-medium mb-1 block ${text('text-gray-400', 'text-gray-500')}`}>Date début</label>
+                        <input
+                          type="date"
+                          value={congeDateDebut}
+                          onChange={e => setCongeDateDebut(e.target.value)}
+                          className={`w-full px-3 py-2.5 rounded-xl ${bg('bg-slate-700 text-white', 'bg-gray-100 text-gray-900')} outline-none`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-xs font-medium mb-1 block ${text('text-gray-400', 'text-gray-500')}`}>Date fin</label>
+                        <input
+                          type="date"
+                          value={congeDateFin}
+                          onChange={e => setCongeDateFin(e.target.value)}
+                          className={`w-full px-3 py-2.5 rounded-xl ${bg('bg-slate-700 text-white', 'bg-gray-100 text-gray-900')} outline-none`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Demi-journée toggle + nb jours */}
+                    <div className="flex items-center justify-between">
+                      {congeDateDebut === congeDateFin && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={congeDemiJournee}
+                            onChange={e => setCongeDemiJournee(e.target.checked)}
+                            className="w-5 h-5 rounded accent-cyan-500"
+                          />
+                          <span className={`text-sm ${text('text-gray-300', 'text-gray-700')}`}>Demi-journée</span>
+                        </label>
+                      )}
+                      <div className={`text-right font-bold text-lg ${congeNbJours > 0 ? 'text-cyan-500' : text('text-gray-500', 'text-gray-400')}`}>
+                        {congeNbJours} jour{congeNbJours > 1 ? 's' : ''} ouvré{congeNbJours > 1 ? 's' : ''}
+                      </div>
+                    </div>
+
+                    {/* Motif */}
+                    <div>
+                      <label className={`text-xs font-medium mb-1 block ${text('text-gray-400', 'text-gray-500')}`}>Motif (optionnel)</label>
+                      <textarea
+                        value={congeMotif}
+                        onChange={e => setCongeMotif(e.target.value)}
+                        rows={2}
+                        placeholder="Motif de la demande..."
+                        className={`w-full px-3 py-2.5 rounded-xl ${bg('bg-slate-700 text-white placeholder:text-gray-500', 'bg-gray-100 text-gray-900 placeholder:text-gray-400')} outline-none resize-none`}
+                      />
+                    </div>
+
+                    {/* Signature salarié */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className={`text-xs font-medium ${text('text-gray-400', 'text-gray-500')}`}>Signature du salarié</label>
+                        {congeSignature && (
+                          <button onClick={clearCongeSignature} className="text-xs text-red-400 flex items-center gap-1">
+                            <Trash2 size={12} /> Effacer
+                          </button>
+                        )}
+                      </div>
+                      <canvas
+                        ref={congeCanvasRef}
+                        onTouchStart={congeStartDraw}
+                        onTouchMove={congeDraw}
+                        onTouchEnd={congeEndDraw}
+                        onMouseDown={congeStartDraw}
+                        onMouseMove={congeDraw}
+                        onMouseUp={congeEndDraw}
+                        onMouseLeave={congeEndDraw}
+                        className={`w-full h-28 rounded-xl border-2 border-dashed ${bg('border-slate-600 bg-slate-700/50', 'border-gray-300 bg-gray-50')} touch-none`}
+                      />
+                    </div>
+
+                    {/* Bouton envoi */}
+                    <button
+                      onClick={submitDemandeConge}
+                      disabled={savingConge || congeNbJours <= 0}
+                      className={`w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all ${
+                        savingConge || congeNbJours <= 0
+                          ? 'bg-gray-500 opacity-50'
+                          : 'bg-cyan-500 hover:bg-cyan-600 active:scale-[0.98]'
+                      }`}
+                    >
+                      {savingConge ? <Loader2 size={20} className="animate-spin" /> : <CalendarPlus size={20} />}
+                      {savingConge ? 'Envoi en cours...' : 'Envoyer la demande'}
+                    </button>
+                  </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Styles pour l'animation */}
       <style>{`

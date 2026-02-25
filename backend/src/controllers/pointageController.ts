@@ -1087,6 +1087,138 @@ export const deleteAutorisationSortie = async (req: Request, res: Response) => {
 };
 
 // ============================================
+// DEMANDES DE CONGÉ
+// ============================================
+
+// Calculer les jours ouvrés entre deux dates (lun-ven)
+const calculerJoursOuvres = (debut: Date, fin: Date): number => {
+  let count = 0;
+  const current = new Date(debut);
+  while (current <= fin) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+};
+
+// Créer une demande de congé
+export const createDemandeConge = async (req: Request, res: Response) => {
+  try {
+    const { employeeId, type, natureSpecial, dateDebut, dateFin, demiJournee, motif, signature, createdBy } = req.body;
+
+    if (!employeeId || !type || !dateDebut || !dateFin) {
+      return res.status(400).json({ success: false, error: 'employeeId, type, dateDebut et dateFin sont requis' });
+    }
+
+    const debut = new Date(dateDebut);
+    const fin = new Date(dateFin);
+    const nbJours = demiJournee ? 0.5 : calculerJoursOuvres(debut, fin);
+
+    const demande = await prisma.demandeConge.create({
+      data: {
+        employeeId,
+        type,
+        natureSpecial: natureSpecial || null,
+        dateDebut: debut,
+        dateFin: fin,
+        nbJours,
+        demiJournee: !!demiJournee,
+        motif: motif || null,
+        statut: 'en_attente',
+        signature: signature || null,
+        signatureAt: signature ? new Date() : null,
+        createdBy: createdBy || null,
+        updatedAt: new Date()
+      },
+      include: {
+        employee: { select: { nom: true, prenom: true, poste: true } }
+      }
+    });
+
+    res.json({ success: true, data: demande });
+  } catch (error: any) {
+    console.error('Erreur createDemandeConge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Lister les demandes de congé
+export const getDemandesConge = async (req: Request, res: Response) => {
+  try {
+    const { employeeId, mois, annee } = req.query;
+
+    const where: any = {};
+    if (employeeId) where.employeeId = employeeId;
+
+    if (mois && annee) {
+      const startDate = new Date(Number(annee), Number(mois) - 1, 1);
+      const endDate = new Date(Number(annee), Number(mois), 0);
+      where.OR = [
+        { dateDebut: { gte: startDate, lte: endDate } },
+        { dateFin: { gte: startDate, lte: endDate } },
+        { AND: [{ dateDebut: { lte: startDate } }, { dateFin: { gte: endDate } }] }
+      ];
+    }
+
+    const demandes = await prisma.demandeConge.findMany({
+      where,
+      orderBy: { dateDebut: 'desc' },
+      include: {
+        employee: { select: { nom: true, prenom: true, poste: true } }
+      }
+    });
+
+    res.json({ success: true, data: demandes });
+  } catch (error: any) {
+    console.error('Erreur getDemandesConge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Mettre à jour une demande de congé (valider/refuser)
+export const updateDemandeConge = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { statut, validePar } = req.body;
+
+    const updateData: any = {};
+    if (statut) {
+      updateData.statut = statut;
+      if (statut === 'validee' || statut === 'refusee') {
+        updateData.valideAt = new Date();
+        if (validePar) updateData.validePar = validePar;
+      }
+    }
+
+    const demande = await prisma.demandeConge.update({
+      where: { id },
+      data: updateData,
+      include: {
+        employee: { select: { nom: true, prenom: true, poste: true } }
+      }
+    });
+
+    res.json({ success: true, data: demande });
+  } catch (error: any) {
+    console.error('Erreur updateDemandeConge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Supprimer une demande de congé
+export const deleteDemandeConge = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.demandeConge.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erreur deleteDemandeConge:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ============================================
 // POINTAGE MOBILE (liens publics avec token)
 // ============================================
 

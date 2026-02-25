@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as insertionController from '../controllers/insertionController';
 
@@ -20,10 +20,24 @@ const upload = multer({
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Type de fichier non autorisé'));
+      cb(new Error(`Type de fichier non autorisé (${file.mimetype}). Formats acceptés : PDF, JPG, PNG, DOC, DOCX`));
     }
   }
 });
+
+// Wrapper pour capturer les erreurs multer et renvoyer un message clair
+const handleUpload = (fieldName: string) => (req: Request, res: Response, next: NextFunction) => {
+  const uploadMiddleware = upload.single(fieldName);
+  uploadMiddleware(req, res, (err: any) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, error: 'Le fichier est trop volumineux (max 10 Mo)' });
+      }
+      return res.status(400).json({ success: false, error: err.message || 'Erreur lors de l\'upload du fichier' });
+    }
+    next();
+  });
+};
 
 // ============================================
 // DASHBOARD & STATISTIQUES
@@ -77,7 +91,7 @@ router.put('/pmsmp/:id', insertionController.updateConventionPMSMP);
 // DOCUMENTS
 // ============================================
 router.get('/employees/:employeeId/documents', insertionController.getDocuments);
-router.post('/employees/:employeeId/documents', upload.single('file'), insertionController.createDocument);
+router.post('/employees/:employeeId/documents', handleUpload('file'), insertionController.createDocument);
 router.get('/documents/:id/download', insertionController.downloadDocument);
 router.delete('/documents/:id', insertionController.deleteDocument);
 
@@ -106,7 +120,7 @@ router.put('/formations/:id', insertionController.updateFormation);
 // FICHES DE PAIE
 // ============================================
 router.get('/employees/:employeeId/fiches-paie', insertionController.getFichesPaie);
-router.post('/employees/:employeeId/fiches-paie', upload.single('file'), insertionController.createFichePaie);
+router.post('/employees/:employeeId/fiches-paie', handleUpload('file'), insertionController.createFichePaie);
 router.get('/fiches-paie/:id/download', insertionController.downloadFichePaie);
 router.delete('/fiches-paie/:id', insertionController.deleteFichePaie);
 

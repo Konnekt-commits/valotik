@@ -38,6 +38,12 @@ router.post('/autorisation-sortie', pointageController.createAutorisationSortie)
 router.get('/autorisation-sortie/:employeeId', pointageController.getAutorisationsSortie);
 router.delete('/autorisation-sortie/:id', pointageController.deleteAutorisationSortie);
 
+// Demandes de congé
+router.post('/demande-conge', pointageController.createDemandeConge);
+router.get('/demandes-conge', pointageController.getDemandesConge);
+router.put('/demande-conge/:id', pointageController.updateDemandeConge);
+router.delete('/demande-conge/:id', pointageController.deleteDemandeConge);
+
 // ============================================
 // POINTAGE MOBILE (liens publics avec token)
 // ============================================

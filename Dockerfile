@@ -1,29 +1,20 @@
-# Frontend Dockerfile
-FROM node:20-alpine AS builder
+# Frontend Dockerfile — deploy rapide, utilise l'image de base pré-construite
+# L'image de base contient : node:20-alpine + npm deps
+# Rebuild la base avec : gcloud beta builds submit --project=valotik-484917 --config=cloudbuild-base.yaml
 
-WORKDIR /app
+# --- Stage builder : Vite build ---
+FROM europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-web-base:latest AS builder
 
-# Copier les fichiers de dépendances
-COPY package*.json ./
-
-# Installer les dépendances
-RUN npm ci
-
-# Copier le code source
 COPY . .
 
-# Build l'application
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
-# Stage de production avec nginx
+# --- Stage production : nginx ---
 FROM nginx:alpine
 
-# Copier la config nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copier les fichiers buildés
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 8080
