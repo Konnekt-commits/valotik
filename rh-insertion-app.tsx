@@ -7480,7 +7480,7 @@ export default function RHInsertionApp() {
                                 ) : isHalfDay ? (
                                   <span
                                     className="inline-block w-12 h-8 relative rounded overflow-hidden cursor-pointer"
-                                    title={`${absMotifMatin ? `Matin: A${absMotifMatin} - ${MOTIFS_ABSENCE[absMotifMatin] || '?'}` : 'Matin: Travail'}\n${absMotifApresmidi ? `PM: A${absMotifApresmidi} - ${MOTIFS_ABSENCE[absMotifApresmidi] || '?'}` : 'PM: Travail'}`}
+                                    title={`${absMotifMatin ? `Matin: A${absMotifMatin} - ${MOTIFS_ABSENCE[absMotifMatin] || '?'}` : `Matin: ${heures}h`}\n${absMotifApresmidi ? `PM: A${absMotifApresmidi} - ${MOTIFS_ABSENCE[absMotifApresmidi] || '?'}` : `PM: ${heures}h`}`}
                                     onClick={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
                                   >
                                     {/* Fond normal (partie travail) */}
@@ -7501,10 +7501,22 @@ export default function RHInsertionApp() {
                                     <svg className="absolute inset-0 w-full h-full" viewBox="0 0 48 32" preserveAspectRatio="none">
                                       <line x1="0" y1="32" x2="48" y2="0" stroke="#ef4444" strokeWidth="1.5" />
                                     </svg>
-                                    {/* Texte */}
-                                    <span className="relative z-10 flex items-center justify-center h-full text-[9px] font-bold text-red-500">
-                                      ½A{absMotifMatin || absMotifApresmidi}
-                                    </span>
+                                    {/* Texte : code absence dans la partie rouge, heures dans la partie travail */}
+                                    {absMotifMatin ? (
+                                      <>
+                                        {/* Matin absent (haut-gauche) : code absence */}
+                                        <span className="absolute top-0 left-0.5 z-10 text-[8px] font-bold text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifMatin}</span>
+                                        {/* Après-midi travail (bas-droite) : heures */}
+                                        <span className={`absolute bottom-0 right-0.5 z-10 text-[8px] font-bold leading-none ${text('text-white', 'text-gray-900')}`} style={{padding:'1px'}}>{heures}h</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {/* Matin travail (haut-gauche) : heures */}
+                                        <span className={`absolute top-0 left-0.5 z-10 text-[8px] font-bold leading-none ${text('text-white', 'text-gray-900')}`} style={{padding:'1px'}}>{heures}h</span>
+                                        {/* Après-midi absent (bas-droite) : code absence */}
+                                        <span className="absolute bottom-0 right-0.5 z-10 text-[8px] font-bold text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifApresmidi}</span>
+                                      </>
+                                    )}
                                   </span>
                                 ) : absMotif ? (
                                   <span
@@ -7694,7 +7706,13 @@ export default function RHInsertionApp() {
                   <span className={text('text-slate-400', 'text-gray-600')}>Absence journée (clic droit pour choisir un motif)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="inline-block px-2 py-1 rounded text-[9px] font-bold bg-red-500/20 text-red-500">½A1</span>
+                  <span className="inline-block w-10 h-6 relative rounded overflow-hidden">
+                    <span className="absolute inset-0 bg-slate-600/30" />
+                    <span className="absolute inset-0" style={{background:'linear-gradient(to bottom right, rgba(239,68,68,0.3) 50%, transparent 50%)'}} />
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 40 24" preserveAspectRatio="none"><line x1="0" y1="24" x2="40" y2="0" stroke="#ef4444" strokeWidth="1.5" /></svg>
+                    <span className="absolute top-0 left-0.5 text-[7px] font-bold text-red-500">A1</span>
+                    <span className="absolute bottom-0 right-0.5 text-[7px] font-bold text-white">3h</span>
+                  </span>
                   <span className={text('text-slate-400', 'text-gray-600')}>Demi-journée d'absence (matin ou après-midi)</span>
                 </div>
               </div>
