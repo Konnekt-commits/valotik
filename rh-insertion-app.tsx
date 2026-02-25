@@ -7507,7 +7507,7 @@ export default function RHInsertionApp() {
                                   <span className="text-xs text-slate-500">-</span>
                                 ) : isHalfDay ? (
                                   <span
-                                    className="inline-block w-12 h-8 relative rounded overflow-hidden cursor-pointer"
+                                    className="inline-block w-14 h-10 relative rounded overflow-hidden cursor-pointer"
                                     title={`${absMotifMatin ? `Matin: A${absMotifMatin} - ${MOTIFS_ABSENCE[absMotifMatin] || '?'}` : `Matin: ${heures}h`}\n${absMotifApresmidi ? `PM: A${absMotifApresmidi} - ${MOTIFS_ABSENCE[absMotifApresmidi] || '?'}` : `PM: ${heures}h`}`}
                                     onClick={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
                                   >
@@ -7526,23 +7526,19 @@ export default function RHInsertionApp() {
                                       }} />
                                     )}
                                     {/* Ligne diagonale */}
-                                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 48 32" preserveAspectRatio="none">
-                                      <line x1="0" y1="32" x2="48" y2="0" stroke="#ef4444" strokeWidth="1.5" />
+                                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 56 40" preserveAspectRatio="none">
+                                      <line x1="0" y1="40" x2="56" y2="0" stroke="#ef4444" strokeWidth="1.5" />
                                     </svg>
                                     {/* Texte : code absence dans la partie rouge, heures dans la partie travail */}
                                     {absMotifMatin ? (
                                       <>
-                                        {/* Matin absent (haut-gauche) : code absence */}
-                                        <span className="absolute top-0 left-0.5 z-10 text-[8px] font-bold text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifMatin}</span>
-                                        {/* Après-midi travail (bas-droite) : heures */}
-                                        <span className={`absolute bottom-0 right-0.5 z-10 text-[8px] font-bold leading-none ${text('text-white', 'text-gray-900')}`} style={{padding:'1px'}}>{heures}h</span>
+                                        <span className="absolute top-0 left-0.5 z-10 text-[12px] text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifMatin}</span>
+                                        <span className={`absolute bottom-0 right-0.5 z-10 text-[12px] leading-none ${text('text-white', 'text-gray-900')}`} style={{padding:'1px'}}>{heures}h</span>
                                       </>
                                     ) : (
                                       <>
-                                        {/* Matin travail (haut-gauche) : heures */}
-                                        <span className={`absolute top-0 left-0.5 z-10 text-[8px] font-bold leading-none ${text('text-white', 'text-gray-900')}`} style={{padding:'1px'}}>{heures}h</span>
-                                        {/* Après-midi absent (bas-droite) : code absence */}
-                                        <span className="absolute bottom-0 right-0.5 z-10 text-[8px] font-bold text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifApresmidi}</span>
+                                        <span className={`absolute top-0 left-0.5 z-10 text-[12px] leading-none ${text('text-white', 'text-gray-900')}`} style={{padding:'1px'}}>{heures}h</span>
+                                        <span className="absolute bottom-0 right-0.5 z-10 text-[12px] text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifApresmidi}</span>
                                       </>
                                     )}
                                   </span>
