@@ -2135,6 +2135,7 @@ export default function RHInsertionApp() {
   const [pointageValues, setPointageValues] = useState<Record<string, Record<string, number>>>({});
   const [absenceValues, setAbsenceValues] = useState<Record<string, Record<string, number | null>>>({});
   const [absenceContextMenu, setAbsenceContextMenu] = useState<{ x: number; y: number; employeeId: string; dateStr: string; pointageMensuelId: string } | null>(null);
+  const [absencePeriodeChoice, setAbsencePeriodeChoice] = useState<'journee' | 'matin' | 'apresmidi' | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
 
   // Mobile link states
@@ -6450,9 +6451,6 @@ export default function RHInsertionApp() {
       e.preventDefault();
       setAbsenceContextMenu({ x: e.clientX, y: e.clientY, employeeId, dateStr, pointageMensuelId });
     };
-
-    // État pour le choix de période d'absence dans le contexte menu
-    const [absencePeriodeChoice, setAbsencePeriodeChoice] = useState<'journee' | 'matin' | 'apresmidi' | null>(null);
 
     // Sélectionner un motif d'absence
     const selectAbsenceMotif = async (motifNum: number) => {
