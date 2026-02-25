@@ -96,6 +96,7 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
       page = '1',
       limit = '20',
       statut,
+      categorie,
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc'
@@ -108,6 +109,10 @@ export const getInsertionEmployees = async (req: Request, res: Response) => {
 
     if (statut) {
       where.statut = statut;
+    }
+
+    if (categorie) {
+      where.categorie = categorie;
     }
 
     if (search) {
@@ -267,7 +272,7 @@ const ALLOWED_EMPLOYEE_CREATE_FIELDS = [
   'inscritFranceTravail', 'numeroFranceTravail', 'beneficiaireRSA', 'beneficiaireASS', 'beneficiaireAAH', 'reconnaissanceTH',
   'passInclusionNumero', 'passInclusionDate', 'passInclusionExpiration', 'eligibiliteIAE',
   'dateEntree', 'dateSortie', 'typeContrat', 'dureeHebdo', 'poste', 'salaireBrut',
-  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes',
+  'statut', 'categorie', 'motifSortie', 'typeSortie', 'photoUrl', 'notes',
   'personneContactNom', 'personneContactTelephone', 'personneContactLien'
 ];
 
@@ -283,6 +288,11 @@ export const createInsertionEmployee = async (req: Request, res: Response) => {
         data[field] = rawData[field];
       }
     }
+
+    // Convertir les entiers et floats
+    if (data.nombreEnfants !== undefined) data.nombreEnfants = parseInt(data.nombreEnfants) || 0;
+    if (data.dureeHebdo !== undefined) data.dureeHebdo = parseFloat(data.dureeHebdo) || 0;
+    if (data.salaireBrut !== undefined) data.salaireBrut = parseFloat(data.salaireBrut) || 0;
 
     // Convertir les dates (fixDate corrige les années à 2 chiffres ex: 0026 -> 2026)
     if (data.dateNaissance) data.dateNaissance = fixDate(data.dateNaissance);
@@ -315,7 +325,7 @@ const ALLOWED_EMPLOYEE_FIELDS = [
   'inscritFranceTravail', 'numeroFranceTravail', 'beneficiaireRSA', 'beneficiaireASS', 'beneficiaireAAH', 'reconnaissanceTH',
   'passInclusionNumero', 'passInclusionDate', 'passInclusionExpiration', 'eligibiliteIAE',
   'dateEntree', 'dateSortie', 'typeContrat', 'dureeHebdo', 'poste', 'salaireBrut',
-  'statut', 'motifSortie', 'typeSortie', 'photoUrl', 'notes',
+  'statut', 'categorie', 'motifSortie', 'typeSortie', 'photoUrl', 'notes',
   'personneContactNom', 'personneContactTelephone', 'personneContactLien'
 ];
 
@@ -335,6 +345,10 @@ export const updateInsertionEmployee = async (req: Request, res: Response) => {
 
     // Convertir les entiers
     if (data.nombreEnfants !== undefined) data.nombreEnfants = parseInt(data.nombreEnfants) || 0;
+
+    // Convertir les floats
+    if (data.dureeHebdo !== undefined) data.dureeHebdo = parseFloat(data.dureeHebdo) || 0;
+    if (data.salaireBrut !== undefined) data.salaireBrut = parseFloat(data.salaireBrut) || 0;
 
     // Convertir les dates (fixDate corrige les années à 2 chiffres)
     if (data.dateNaissance) data.dateNaissance = fixDate(data.dateNaissance);
@@ -586,9 +600,12 @@ export const createDocument = async (req: Request, res: Response) => {
     if (req.file) {
       try {
         fileUrl = await uploadToGCS(req.file, `insertion-documents/${employeeId}`);
-      } catch (uploadError) {
+      } catch (uploadError: any) {
         console.error('Erreur upload GCS:', uploadError);
-        // Continuer sans fichier si l'upload échoue
+        return res.status(500).json({
+          success: false,
+          error: `Erreur lors de l'envoi du fichier vers le stockage: ${uploadError.message || 'erreur inconnue'}`
+        });
       }
     }
 
@@ -605,9 +622,9 @@ export const createDocument = async (req: Request, res: Response) => {
     });
 
     res.status(201).json({ success: true, data: document });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erreur createDocument:', error);
-    res.status(500).json({ success: false, error: 'Erreur serveur' });
+    res.status(500).json({ success: false, error: error.message || 'Erreur serveur' });
   }
 };
 
@@ -1231,7 +1248,7 @@ export const getAgendaEvents = async (req: Request, res: Response) => {
     fin.setDate(fin.getDate() + (dernierJourSemaine === 0 ? 0 : 7 - dernierJourSemaine));
 
     // Récupérer tous les événements
-    const [suivis, pmsmp, formations, contrats, avertissements, documents] = await Promise.all([
+    const [suivis, pmsmp, formations, contrats, avertissements, documents, demandesConge] = await Promise.all([
       // Suivis/Entretiens
       prisma.suiviEntretien.findMany({
         where: {
@@ -1297,6 +1314,19 @@ export const getAgendaEvents = async (req: Request, res: Response) => {
       prisma.insertionDocument.findMany({
         where: {
           dateExpiration: { gte: debut, lte: fin }
+        },
+        include: {
+          employee: { select: { id: true, nom: true, prenom: true, civilite: true } }
+        }
+      }),
+      // Demandes de congé
+      prisma.demandeConge.findMany({
+        where: {
+          OR: [
+            { dateDebut: { gte: debut, lte: fin } },
+            { dateFin: { gte: debut, lte: fin } },
+            { AND: [{ dateDebut: { lte: debut } }, { dateFin: { gte: fin } }] }
+          ]
         },
         include: {
           employee: { select: { id: true, nom: true, prenom: true, civilite: true } }
@@ -1459,6 +1489,43 @@ export const getAgendaEvents = async (req: Request, res: Response) => {
         icon: 'file-warning',
         details: {
           categorie: d.categorie
+        }
+      });
+    });
+
+    // Demandes de congé
+    const congeLabels: Record<string, string> = {
+      conge_paye: 'CP',
+      conge_special: 'CS',
+      sans_solde: 'SS',
+      recuperation: 'Récup',
+      rtt: 'RTT',
+      conge_parental: 'CPar'
+    };
+    demandesConge.forEach((dc: any) => {
+      const label = congeLabels[dc.type] || dc.type;
+      const statutLabel = dc.statut === 'en_attente' ? ' - A valider' : dc.statut === 'refusee' ? ' - Refusé' : '';
+      events.push({
+        id: dc.id,
+        type: 'conge',
+        category: 'RH',
+        title: `${label}${statutLabel}`,
+        description: dc.motif,
+        date: dc.dateDebut,
+        dateEnd: dc.dateFin,
+        employee: dc.employee,
+        color: dc.statut === 'validee' ? '#06B6D4' : dc.statut === 'refusee' ? '#EF4444' : '#F59E0B',
+        icon: 'umbrella',
+        details: {
+          statut: dc.statut,
+          typeConge: dc.type,
+          natureSpecial: dc.natureSpecial,
+          nbJours: dc.nbJours,
+          demiJournee: dc.demiJournee,
+          signature: dc.signature,
+          createdBy: dc.createdBy,
+          validePar: dc.validePar,
+          valideAt: dc.valideAt
         }
       });
     });

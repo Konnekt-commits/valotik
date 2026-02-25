@@ -543,6 +543,7 @@ model InsertionEmployee {
 
   // Statut
   statut              String   @db.VarChar(20) @default("actif") // actif, sorti, suspendu
+  categorie           String   @db.VarChar(30) @default("insertion") // "insertion" | "vie59"
   motifSortie         String?  @db.VarChar(100)
   typeSortie          String?  @db.VarChar(50) // positive, négative, neutre
 
@@ -576,6 +577,7 @@ model InsertionEmployee {
   objectifsIndividuels ObjectifIndividuel[]
   autorisationsSortie AutorisationSortie[]
   fichesPaie          FichePaie[]
+  demandesConge       DemandeConge[]
 
   @@map("insertion_employees")
 }
@@ -1282,4 +1284,28 @@ model SuiviObjectifNegocie {
 
   @@unique([objectifNegocieId, mois, annee])
   @@map("suivis_objectifs_negocies")
+}
+
+// Demandes de congé
+model DemandeConge {
+  id              String   @id @default(cuid())
+  employeeId      String
+  type            String   @db.VarChar(50)
+  natureSpecial   String?  @db.VarChar(100)
+  dateDebut       DateTime @db.Date
+  dateFin         DateTime @db.Date
+  nbJours         Float
+  demiJournee     Boolean  @default(false)
+  motif           String?  @db.Text
+  statut          String   @default("en_attente") @db.VarChar(30)
+  signature       String?  @db.Text
+  signatureAt     DateTime?
+  createdBy       String?  @db.VarChar(100)
+  validePar       String?  @db.VarChar(100)
+  valideAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee        InsertionEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  @@map("demandes_conge")
 }

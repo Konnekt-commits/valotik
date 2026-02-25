@@ -1,33 +1,27 @@
-# Backend Dockerfile - Cloud Run optimisé
-FROM node:20-slim AS builder
+# Backend Dockerfile — deploy rapide, utilise l'image de base pré-construite
+# L'image de base contient : node:20-slim + openssl + npm deps + prisma client
+# Rebuild la base avec : gcloud beta builds submit --project=valotik-484917 --config=backend/cloudbuild-base.yaml ./backend
 
-WORKDIR /app
+# --- Stage builder : compile le TypeScript ---
+FROM europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api-base:latest AS builder
 
-RUN apt-get update && apt-get install -y openssl libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
-
+# Installer les devDependencies pour la compilation
 COPY package*.json ./
-COPY prisma ./prisma/
-
 RUN npm ci
+
+# Regénérer Prisma si le schema a changé
+COPY prisma ./prisma/
 RUN npx prisma generate
 
 COPY . .
 RUN npm run build
 
-# Production
-FROM node:20-slim
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
-
-COPY package*.json ./
-COPY prisma ./prisma/
-
-RUN npm ci --only=production
-RUN npx prisma generate
+# --- Stage production : image finale légère ---
+FROM europe-west1-docker.pkg.dev/valotik-484917/cloud-run-source-deploy/valotik-api-base:latest
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 ENV PORT=8080
 EXPOSE 8080

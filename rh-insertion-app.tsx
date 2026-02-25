@@ -12,7 +12,7 @@ import {
   Home, Menu, Car, Heart, Baby, Globe, Monitor, Euro, CreditCard,
   Building, Landmark, Shield, IdCard, FileSignature, CalendarDays,
   UserCheck, UserX, Banknote, Receipt, Scale, Gavel, BadgeCheck,
-  FileDown, Smartphone, Link2, Copy, QrCode
+  FileDown, Smartphone, Link2, Copy, QrCode, Sun, Moon, CircleOff, Sunrise, Sunset, Check, Umbrella
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -87,6 +87,7 @@ interface InsertionEmployee {
   poste?: string;
   salaireBrut?: number;
   statut: string;
+  categorie?: string;
   motifSortie?: string;
   typeSortie?: string;
   photoUrl?: string;
@@ -2186,6 +2187,7 @@ export default function RHInsertionApp() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<string>('');
+  const [employeeCategorie, setEmployeeCategorie] = useState<'insertion' | 'vie59'>('insertion');
   const [activeTab, setActiveTab] = useState<'info' | 'pro' | 'admin' | 'rh' | 'paie' | 'parcours'>('info');
 
   // Modals
@@ -2222,6 +2224,7 @@ export default function RHInsertionApp() {
   const [absenceValues, setAbsenceValues] = useState<Record<string, Record<string, number | null>>>({});
   const [absenceContextMenu, setAbsenceContextMenu] = useState<{ x: number; y: number; employeeId: string; dateStr: string; pointageMensuelId: string } | null>(null);
   const [absencePeriodeChoice, setAbsencePeriodeChoice] = useState<'journee' | 'matin' | 'apresmidi' | null>(null);
+  const [absenceTooltip, setAbsenceTooltip] = useState<{ x: number; y: number; empId: string; dateStr: string; jour: any } | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
 
   // Mobile link states
@@ -2237,6 +2240,9 @@ export default function RHInsertionApp() {
 
   // Parcours states
   const [parcoursData, setParcoursData] = useState<any>(null);
+  const [employeeConges, setEmployeeConges] = useState<any[]>([]);
+  const [pendingConges, setPendingConges] = useState<any[]>([]);
+  const [showPendingConges, setShowPendingConges] = useState(false);
   const [parcoursLoading, setParcoursLoading] = useState(false);
   const [selectedParcoursEvent, setSelectedParcoursEvent] = useState<any>(null);
 
@@ -2375,10 +2381,11 @@ export default function RHInsertionApp() {
     if (!isAuthenticated) return;
     setLoading(true);
     try {
-      const [employeesRes, statsRes, alertesRes] = await Promise.all([
-        authFetch(`${API_URL}/employees`),
+      const [employeesRes, statsRes, alertesRes, congesRes] = await Promise.all([
+        authFetch(`${API_URL}/employees?limit=200`),
         authFetch(`${API_URL}/stats`),
-        authFetch(`${API_URL}/alertes`)
+        authFetch(`${API_URL}/alertes`),
+        authFetch(`${API_URL.replace('/insertion', '/pointage')}/demandes-conge`)
       ]);
       if (employeesRes.ok) {
         const data = await employeesRes.json();
@@ -2391,6 +2398,40 @@ export default function RHInsertionApp() {
       if (alertesRes.ok) {
         const data = await alertesRes.json();
         setAlertes(data.data);
+      }
+      // Notifications navigateur pour demandes de congé en attente
+      if (congesRes.ok) {
+        const congesData = await congesRes.json();
+        const enAttente = (congesData.data || []).filter((d: any) => d.statut === 'en_attente');
+        if (enAttente.length > 0) {
+          setPendingConges(enAttente);
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+          if ('Notification' in window && Notification.permission === 'granted') {
+            enAttente.forEach((d: any) => {
+              const nom = `${d.employee?.prenom || ''} ${d.employee?.nom || ''}`.trim();
+              const typeLabel: Record<string, string> = { conge_paye: 'Congés payés', conge_special: 'Congés spéciaux', sans_solde: 'Sans solde', recuperation: 'Récupération', rtt: 'RTT', conge_parental: 'Congé parental' };
+              new Notification('Demande de congé en attente', {
+                body: `${nom} - ${typeLabel[d.type] || d.type} (${d.nbJours}j)`,
+                icon: '/favicon.ico',
+                tag: `conge-${d.id}`
+              });
+            });
+          }
+          // Alerte sonore une seule fois
+          try {
+            const audioCtx = new AudioContext();
+            const oscillator = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            oscillator.connect(gain);
+            gain.connect(audioCtx.destination);
+            oscillator.frequency.value = 800;
+            gain.gain.value = 0.3;
+            oscillator.start();
+            setTimeout(() => { oscillator.stop(); audioCtx.close(); }, 300);
+          } catch (e) { /* AudioContext peut échouer si pas d'interaction utilisateur */ }
+        }
       }
     } catch (error) {
       console.error('Erreur chargement:', error);
@@ -2414,6 +2455,14 @@ export default function RHInsertionApp() {
         // Reset parcours when switching employee
         setParcoursData(null);
       }
+      // Charger les demandes de congé
+      try {
+        const congeRes = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demandes-conge?employeeId=${id}`);
+        if (congeRes.ok) {
+          const congeData = await congeRes.json();
+          setEmployeeConges(congeData.data || []);
+        }
+      } catch {}
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -3082,11 +3131,13 @@ export default function RHInsertionApp() {
           setNotification({ type: 'success', message: 'Document enregistré' });
         }
       } else {
-        setNotification({ type: 'error', message: 'Erreur lors de l\'enregistrement' });
+        let errMsg = 'Erreur lors de l\'enregistrement';
+        try { const errData = await res.json(); if (errData.error) errMsg = errData.error; } catch {}
+        setNotification({ type: 'error', message: errMsg });
       }
     } catch (error) {
       console.error('Erreur:', error);
-      setNotification({ type: 'error', message: 'Erreur lors de l\'enregistrement' });
+      setNotification({ type: 'error', message: 'Erreur réseau lors de l\'enregistrement' });
     } finally {
       setSaving(false);
     }
@@ -3509,8 +3560,12 @@ export default function RHInsertionApp() {
     const matchSearch = searchTerm === '' ||
       `${emp.nom} ${emp.prenom}`.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatut = filterStatut === '' || emp.statut === filterStatut;
-    return matchSearch && matchStatut;
+    const matchCategorie = emp.categorie === employeeCategorie || (!emp.categorie && employeeCategorie === 'insertion');
+    return matchSearch && matchStatut && matchCategorie;
   }).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+
+  const countInsertion = employees.filter(e => e.categorie === 'insertion' || !e.categorie).length;
+  const countVie59 = employees.filter(e => e.categorie === 'vie59').length;
 
   const formatDate = (date: string | undefined) => {
     if (!date) return '-';
@@ -4547,7 +4602,8 @@ export default function RHInsertionApp() {
         'contrat-fin': { bg: 'bg-red-500', text: 'text-white', border: 'border-red-600' },
         'avertissement': { bg: 'bg-red-600', text: 'text-white', border: 'border-red-700' },
         'convocation': { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-600' },
-        'document-expiration': { bg: 'bg-rose-500', text: 'text-white', border: 'border-rose-600' }
+        'document-expiration': { bg: 'bg-rose-500', text: 'text-white', border: 'border-rose-600' },
+        'conge': { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-600' }
       };
       return colors[type] || { bg: 'bg-gray-500', text: 'text-white', border: 'border-gray-600' };
     };
@@ -4709,7 +4765,12 @@ export default function RHInsertionApp() {
                     {/* Événements */}
                     <div className="flex-1 px-1 pb-1 overflow-y-auto space-y-0.5">
                       {events.map((event, eIdx) => {
-                        const colors = getEventColor(event.type);
+                        let colors = getEventColor(event.type);
+                        // Override congé colors by statut
+                        if (event.type === 'conge' && event.details?.statut) {
+                          if (event.details.statut === 'en_attente') colors = { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600' };
+                          else if (event.details.statut === 'refusee') colors = { bg: 'bg-red-500', text: 'text-white line-through', border: 'border-red-600' };
+                        }
                         return (
                           <div
                             key={eIdx}
@@ -4818,6 +4879,91 @@ export default function RHInsertionApp() {
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-slate-400" />
                       <span className={`text-sm ${text('text-slate-300', 'text-gray-600')}`}>Tuteur: {selectedEvent.details.tuteur}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Section congé */}
+              {selectedEvent.type === 'conge' && (
+                <div className="space-y-3">
+                  {/* Statut */}
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                      selectedEvent.details?.statut === 'validee' ? 'bg-cyan-500/20 text-cyan-400' :
+                      selectedEvent.details?.statut === 'refusee' ? 'bg-red-500/20 text-red-400' :
+                      'bg-amber-500/20 text-amber-400'
+                    }`}>
+                      {selectedEvent.details?.statut === 'validee' ? 'Validée' : selectedEvent.details?.statut === 'refusee' ? 'Refusée' : 'En attente'}
+                    </span>
+                    <span className={`text-sm ${text('text-slate-300', 'text-gray-600')}`}>
+                      {selectedEvent.details?.nbJours} jour{selectedEvent.details?.nbJours > 1 ? 's' : ''}{selectedEvent.details?.demiJournee ? ' (demi-journée)' : ''}
+                    </span>
+                  </div>
+
+                  {/* Type de congé détaillé */}
+                  <div className={`text-sm ${text('text-slate-300', 'text-gray-600')}`}>
+                    Type: {
+                      { conge_paye: 'Congés payés', conge_special: 'Congés spéciaux', sans_solde: 'Sans solde', recuperation: 'Récupération', rtt: 'RTT', conge_parental: 'Congé parental' }[selectedEvent.details?.typeConge as string] || selectedEvent.details?.typeConge
+                    }
+                    {selectedEvent.details?.natureSpecial && ` (${selectedEvent.details.natureSpecial})`}
+                  </div>
+
+                  {/* Signature du salarié */}
+                  {selectedEvent.details?.signature && (
+                    <div>
+                      <p className={`text-xs mb-1 ${text('text-slate-400', 'text-gray-500')}`}>Signature du salarié</p>
+                      <img src={selectedEvent.details.signature} alt="Signature" className={`w-full h-20 rounded-lg object-contain ${bg('bg-slate-700', 'bg-gray-100')}`} />
+                    </div>
+                  )}
+
+                  {/* Validé par */}
+                  {selectedEvent.details?.validePar && (
+                    <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>
+                      Validé par: {selectedEvent.details.validePar}
+                      {selectedEvent.details?.valideAt && ` le ${new Date(selectedEvent.details.valideAt).toLocaleDateString('fr-FR')}`}
+                    </p>
+                  )}
+
+                  {/* Boutons de validation (si en attente) */}
+                  {selectedEvent.details?.statut === 'en_attente' && (
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demande-conge/${selectedEvent.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ statut: 'validee', validePar: authUser?.username || 'RH' })
+                            });
+                            if (res.ok) {
+                              setSelectedEvent(null);
+                              loadAgenda();
+                            }
+                          } catch (e) { console.error(e); }
+                        }}
+                        className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-1"
+                      >
+                        <Check className="w-4 h-4" /> Valider
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demande-conge/${selectedEvent.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ statut: 'refusee', validePar: authUser?.username || 'RH' })
+                            });
+                            if (res.ok) {
+                              setSelectedEvent(null);
+                              loadAgenda();
+                            }
+                          } catch (e) { console.error(e); }
+                        }}
+                        className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-1"
+                      >
+                        <X className="w-4 h-4" /> Refuser
+                      </button>
                     </div>
                   )}
                 </div>
@@ -6486,8 +6632,8 @@ export default function RHInsertionApp() {
                                       const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
                                       // Collect motifs for this day (can have matin, apresmidi, or full day)
                                       const motifs: {motif: number; periode: string}[] = [];
-                                      if (day.motifAbsenceMatin) motifs.push({ motif: parseInt(day.motifAbsenceMatin) || 0, periode: '☀️' });
-                                      if (day.motifAbsenceApresmidi) motifs.push({ motif: parseInt(day.motifAbsenceApresmidi) || 0, periode: '🌙' });
+                                      if (day.motifAbsenceMatin) motifs.push({ motif: parseInt(day.motifAbsenceMatin) || 0, periode: 'AM' });
+                                      if (day.motifAbsenceApresmidi) motifs.push({ motif: parseInt(day.motifAbsenceApresmidi) || 0, periode: 'PM' });
                                       if (motifs.length === 0 && day.motifAbsence) motifs.push({ motif: parseInt(day.motifAbsence) || 0, periode: '' });
                                       return motifs.map((m, mi) => {
                                         const isDeductible = ABS_INJUSTIFIEES_MOTIFS.includes(m.motif);
@@ -6564,6 +6710,7 @@ export default function RHInsertionApp() {
     // Ouvrir le menu contextuel d'absence (clic droit)
     const handleAbsenceContextMenu = (e: React.MouseEvent, employeeId: string, dateStr: string, pointageMensuelId: string) => {
       e.preventDefault();
+      setAbsenceTooltip(null);
       setAbsenceContextMenu({ x: e.clientX, y: e.clientY, employeeId, dateStr, pointageMensuelId });
     };
 
@@ -7513,28 +7660,22 @@ export default function RHInsertionApp() {
                                 ) : isHalfDay ? (
                                   <span
                                     className="inline-block w-14 h-10 relative rounded overflow-hidden cursor-pointer"
-                                    title={`${absMotifMatin ? `Matin: A${absMotifMatin} - ${MOTIFS_ABSENCE[absMotifMatin] || '?'}` : `Matin: ${heures}h`}\n${absMotifApresmidi ? `PM: A${absMotifApresmidi} - ${MOTIFS_ABSENCE[absMotifApresmidi] || '?'}` : `PM: ${heures}h`}`}
-                                    onClick={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const rect = (e.target as HTMLElement).closest('span')!.getBoundingClientRect();
+                                      setAbsenceTooltip({ x: rect.left + rect.width / 2, y: rect.top, empId: emp.id, dateStr: j.date, jour: j });
+                                    }}
+                                    onContextMenu={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
                                   >
-                                    {/* Fond normal (partie travail) */}
                                     <span className={`absolute inset-0 ${bg('bg-slate-600/30', 'bg-gray-50')}`} />
-                                    {/* Triangle rouge (coin absence) */}
                                     {absMotifMatin ? (
-                                      /* Matin absent = triangle haut-gauche rouge */
-                                      <span className="absolute inset-0" style={{
-                                        background: 'linear-gradient(to bottom right, rgba(239,68,68,0.3) 50%, transparent 50%)'
-                                      }} />
+                                      <span className="absolute inset-0" style={{ background: 'linear-gradient(to bottom right, rgba(239,68,68,0.3) 50%, transparent 50%)' }} />
                                     ) : (
-                                      /* Après-midi absent = triangle bas-droit rouge */
-                                      <span className="absolute inset-0" style={{
-                                        background: 'linear-gradient(to top left, rgba(239,68,68,0.3) 50%, transparent 50%)'
-                                      }} />
+                                      <span className="absolute inset-0" style={{ background: 'linear-gradient(to top left, rgba(239,68,68,0.3) 50%, transparent 50%)' }} />
                                     )}
-                                    {/* Ligne diagonale */}
                                     <svg className="absolute inset-0 w-full h-full" viewBox="0 0 56 40" preserveAspectRatio="none">
                                       <line x1="0" y1="40" x2="56" y2="0" stroke="#ef4444" strokeWidth="1.5" />
                                     </svg>
-                                    {/* Texte : code absence dans la partie rouge, heures dans la partie travail */}
                                     {absMotifMatin ? (
                                       <>
                                         <span className="absolute top-0 left-0.5 z-10 text-[12px] text-red-500 leading-none" style={{padding:'1px'}}>A{absMotifMatin}</span>
@@ -7550,8 +7691,12 @@ export default function RHInsertionApp() {
                                 ) : absMotif ? (
                                   <span
                                     className="inline-block w-12 px-1 py-1 text-center text-xs font-bold rounded bg-red-500/20 text-red-500 cursor-pointer"
-                                    title={`A${absMotif} - ${MOTIFS_ABSENCE[absMotif] || '?'}\nCliquer pour changer`}
-                                    onClick={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                      setAbsenceTooltip({ x: rect.left + rect.width / 2, y: rect.top, empId: emp.id, dateStr: j.date, jour: j });
+                                    }}
+                                    onContextMenu={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
                                   >
                                     A{absMotif}
                                   </span>
@@ -7794,21 +7939,21 @@ export default function RHInsertionApp() {
                         onClick={() => setAbsencePeriodeChoice('matin')}
                         className={`w-full px-3 py-2.5 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2 font-medium`}
                       >
-                        <span className="text-orange-500">☀️</span>
+                        <Sunrise className="w-4 h-4 text-orange-500" />
                         <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>Abs. matin uniquement</span>
                       </button>
                       <button
                         onClick={() => setAbsencePeriodeChoice('apresmidi')}
                         className={`w-full px-3 py-2.5 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2 font-medium`}
                       >
-                        <span className="text-blue-500">🌙</span>
+                        <Sunset className="w-4 h-4 text-indigo-500" />
                         <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>Abs. après-midi uniquement</span>
                       </button>
                       <button
                         onClick={() => setAbsencePeriodeChoice('journee')}
                         className={`w-full px-3 py-2.5 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2 font-medium border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}
                       >
-                        <span className="text-red-500">🔴</span>
+                        <CircleOff className="w-4 h-4 text-red-500" />
                         <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>Abs. journée entière</span>
                       </button>
                     </>
@@ -7832,6 +7977,144 @@ export default function RHInsertionApp() {
                       ))}
                     </>
                   )}
+                </div>
+              </div>,
+              document.body
+            )}
+
+            {/* Popover info absence (clic sur cellule absence) */}
+            {absenceTooltip && createPortal(
+              <div
+                className="fixed inset-0 z-[9998]"
+                onClick={() => setAbsenceTooltip(null)}
+              >
+                <div
+                  className={`fixed z-[9999] w-72 rounded-xl shadow-2xl border overflow-hidden ${darkMode ? 'bg-slate-800/95 border-slate-600/80 backdrop-blur-xl' : 'bg-white/95 border-gray-200 backdrop-blur-xl'}`}
+                  style={{
+                    left: Math.min(Math.max(absenceTooltip.x - 144, 8), window.innerWidth - 296),
+                    top: absenceTooltip.y > window.innerHeight / 2
+                      ? absenceTooltip.y - 12
+                      : absenceTooltip.y + 48,
+                    transform: absenceTooltip.y > window.innerHeight / 2 ? 'translateY(-100%)' : 'none'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {(() => {
+                    const empId = absenceTooltip.empId;
+                    const dateStr = absenceTooltip.dateStr;
+                    const absMotif = absenceValues[empId]?.[dateStr];
+                    const absMotifMatin = absenceValues[empId]?.[`${dateStr}_matin`];
+                    const absMotifApresmidi = absenceValues[empId]?.[`${dateStr}_apresmidi`];
+                    const isHalfDay = (absMotifMatin && !absMotifApresmidi) || (!absMotifMatin && absMotifApresmidi);
+                    const heures = pointageValues[empId]?.[dateStr] || 0;
+                    const dateObj = new Date(dateStr);
+                    const jourStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+                    const MOTIFS_REMUNERES = [1, 4, 5, 8, 10, 13, 14, 15, 16, 17, 18, 19, 20];
+                    const isRemunere = (m: number) => MOTIFS_REMUNERES.includes(m);
+
+                    if (isHalfDay) {
+                      const motifCode = absMotifMatin || absMotifApresmidi || 0;
+                      const motifLabel = MOTIFS_ABSENCE[motifCode] || `Motif ${motifCode}`;
+                      const periodeAbs = absMotifMatin ? 'Matin' : 'Après-midi';
+                      const periodeTrav = absMotifMatin ? 'Après-midi' : 'Matin';
+                      const remunere = isRemunere(motifCode);
+
+                      return (
+                        <>
+                          {/* Header */}
+                          <div className={`px-4 py-3 ${remunere ? 'bg-amber-500/15' : 'bg-red-500/15'}`}>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs font-medium uppercase tracking-wide ${remunere ? 'text-amber-500' : 'text-red-400'}`}>
+                                Demi-journée d'absence
+                              </span>
+                              <button onClick={() => setAbsenceTooltip(null)} className={`text-lg leading-none ${darkMode ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}>&times;</button>
+                            </div>
+                            <p className={`text-sm mt-1 ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                              {jourStr.charAt(0).toUpperCase() + jourStr.slice(1)}
+                            </p>
+                          </div>
+
+                          {/* Body */}
+                          <div className="px-4 py-3 space-y-3">
+                            {/* Période absente */}
+                            <div className={`flex items-start gap-3 p-2.5 rounded-lg ${darkMode ? 'bg-red-500/10' : 'bg-red-50'}`}>
+                              {absMotifMatin ? <Sunrise className="w-5 h-5 mt-0.5 text-orange-400" /> : <Sunset className="w-5 h-5 mt-0.5 text-indigo-400" />}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-red-500">A{motifCode}</span>
+                                  <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{periodeAbs}</span>
+                                </div>
+                                <p className={`text-sm font-medium mt-0.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{motifLabel}</p>
+                                <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${remunere ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                                  {remunere ? 'Rémunérée' : 'Non rémunérée'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Période travaillée */}
+                            <div className={`flex items-start gap-3 p-2.5 rounded-lg ${darkMode ? 'bg-emerald-500/10' : 'bg-green-50'}`}>
+                              {absMotifMatin ? <Sunset className="w-5 h-5 mt-0.5 text-indigo-400" /> : <Sunrise className="w-5 h-5 mt-0.5 text-orange-400" />}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs font-bold ${darkMode ? 'text-emerald-400' : 'text-green-600'}`}>Travail</span>
+                                  <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{periodeTrav}</span>
+                                </div>
+                                <p className={`text-sm font-medium mt-0.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{heures}h travaillées</p>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    } else {
+                      // Journée complète absence
+                      const motifCode = absMotif || 0;
+                      const motifLabel = MOTIFS_ABSENCE[motifCode] || `Motif ${motifCode}`;
+                      const remunere = isRemunere(motifCode);
+
+                      return (
+                        <>
+                          {/* Header */}
+                          <div className={`px-4 py-3 ${remunere ? 'bg-amber-500/15' : 'bg-red-500/15'}`}>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs font-medium uppercase tracking-wide ${remunere ? 'text-amber-500' : 'text-red-400'}`}>
+                                Journée d'absence
+                              </span>
+                              <button onClick={() => setAbsenceTooltip(null)} className={`text-lg leading-none ${darkMode ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}>&times;</button>
+                            </div>
+                            <p className={`text-sm mt-1 ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                              {jourStr.charAt(0).toUpperCase() + jourStr.slice(1)}
+                            </p>
+                          </div>
+
+                          {/* Body */}
+                          <div className="px-4 py-3 space-y-3">
+                            <div className={`flex items-center gap-3 p-3 rounded-lg ${darkMode ? 'bg-red-500/10' : 'bg-red-50'}`}>
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${remunere ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                                A{motifCode}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{motifLabel}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium ${remunere ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    {remunere ? 'Rémunérée' : 'Non rémunérée'}
+                                  </span>
+                                  <span className={`text-[10px] ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>Matin + Après-midi</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Impact */}
+                            <div className={`text-xs px-3 py-2 rounded-lg ${darkMode ? 'bg-slate-700/50 text-slate-400' : 'bg-gray-50 text-gray-500'}`}>
+                              {remunere
+                                ? 'Cette absence est rémunérée et maintenue dans le calcul du salaire.'
+                                : 'Cette absence entraîne une retenue sur le bulletin de paie.'}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    }
+                  })()}
                 </div>
               </div>,
               document.body
@@ -8039,18 +8322,18 @@ export default function RHInsertionApp() {
                 <Input label="Catégorie de sortie (Objectifs Négociés)" name="motifSortie" type="select" value={emp.motifSortie} onChange={handleChange} disabled={!editingEmployee}
                   options={[
                     { value: '', label: '-- Sélectionner --' },
-                    { value: 'CDI', label: '🟢 Emploi durable - CDI' },
-                    { value: 'CDD > 6 mois', label: '🟢 Emploi durable - CDD > 6 mois' },
-                    { value: 'Création entreprise', label: '🟢 Emploi durable - Création entreprise' },
-                    { value: 'CDD < 6 mois', label: '🔵 Emploi transition - CDD < 6 mois' },
-                    { value: 'Intérim', label: '🔵 Emploi transition - Intérim' },
-                    { value: 'Autre SIAE', label: '🔵 Emploi transition - Autre SIAE' },
-                    { value: 'Formation qualifiante', label: '🟣 Formation qualifiante' },
-                    { value: 'Autre positive', label: '🟡 Autre sortie positive' },
-                    { value: 'Abandon', label: '🔴 Négative - Abandon' },
-                    { value: 'Licenciement', label: '🔴 Négative - Licenciement' },
-                    { value: 'Fin de contrat', label: '⚪ Neutre - Fin de contrat' },
-                    { value: 'Autre', label: '⚪ Autre' }
+                    { value: 'CDI', label: '[+] Emploi durable - CDI' },
+                    { value: 'CDD > 6 mois', label: '[+] Emploi durable - CDD > 6 mois' },
+                    { value: 'Création entreprise', label: '[+] Emploi durable - Création entreprise' },
+                    { value: 'CDD < 6 mois', label: '[~] Emploi transition - CDD < 6 mois' },
+                    { value: 'Intérim', label: '[~] Emploi transition - Intérim' },
+                    { value: 'Autre SIAE', label: '[~] Emploi transition - Autre SIAE' },
+                    { value: 'Formation qualifiante', label: '[~] Formation qualifiante' },
+                    { value: 'Autre positive', label: '[~] Autre sortie positive' },
+                    { value: 'Abandon', label: '[-] Négative - Abandon' },
+                    { value: 'Licenciement', label: '[-] Négative - Licenciement' },
+                    { value: 'Fin de contrat', label: '[=] Neutre - Fin de contrat' },
+                    { value: 'Autre', label: '[=] Autre' }
                   ]} />
                 <Input label="Type de sortie (auto-calculé)" name="typeSortie" type="select" value={emp.typeSortie} onChange={handleChange} disabled={!editingEmployee}
                   options={[
@@ -8716,6 +8999,205 @@ export default function RHInsertionApp() {
     );
   };
 
+  // PDF Demande de congé
+  const generateDemandeCongePDF = (demande: any, employee: InsertionEmployee) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const org = organismeData;
+    const docRef = generateDocReference('DC', employee.id);
+
+    const congeLabels: Record<string, string> = {
+      conge_paye: 'Congés payés', conge_special: 'Congés spéciaux', sans_solde: 'Sans solde',
+      recuperation: 'Récupération', rtt: 'RTT', conge_parental: 'Congé parental'
+    };
+    const statutLabels: Record<string, string> = {
+      en_attente: 'En attente de validation', validee: 'Validée', refusee: 'Refusée'
+    };
+
+    // ===== EN-TÊTE =====
+    doc.setFillColor(35, 41, 54);
+    doc.rect(0, 0, pageWidth, 32, 'F');
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(12, 6, 20, 20, 2, 2, 'F');
+    doc.setFontSize(5);
+    doc.setTextColor(150);
+    doc.text('LOGO', 22, 17, { align: 'center' });
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(org?.raisonSociale?.toUpperCase() || 'STRUCTURE D\'INSERTION', 38, 12);
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(200, 200, 200);
+    doc.text(org?.formeJuridique || 'Structure d\'Insertion par l\'Activité Économique', 38, 18);
+    doc.text(`${org?.adresseSiege || ''} - ${org?.codePostalSiege || ''} ${org?.villeSiege || ''}`, 38, 23);
+    doc.text(`SIRET: ${org?.siret || 'N/A'} | Tél: ${org?.telephoneSiege || 'N/A'}`, 38, 28);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Réf. Document', pageWidth - 40, 10);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(docRef, pageWidth - 40, 15);
+    doc.text(`Édité le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - 40, 20);
+
+    // ===== TITRE =====
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 38, pageWidth, 20, 'F');
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DEMANDE DE CONGÉ', pageWidth / 2, 50, { align: 'center' });
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(10, 58, pageWidth - 10, 58);
+
+    let y = 68;
+
+    // ===== STATUT =====
+    const statut = demande.statut || 'en_attente';
+    if (statut === 'validee') {
+      doc.setFillColor(220, 252, 231);
+      doc.roundedRect(margin, y - 5, pageWidth - margin * 2, 12, 2, 2, 'F');
+      doc.setTextColor(22, 101, 52);
+    } else if (statut === 'refusee') {
+      doc.setFillColor(254, 226, 226);
+      doc.roundedRect(margin, y - 5, pageWidth - margin * 2, 12, 2, 2, 'F');
+      doc.setTextColor(153, 27, 27);
+    } else {
+      doc.setFillColor(254, 243, 199);
+      doc.roundedRect(margin, y - 5, pageWidth - margin * 2, 12, 2, 2, 'F');
+      doc.setTextColor(146, 64, 14);
+    }
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Statut : ${statutLabels[statut] || statut}`, pageWidth / 2, y + 2, { align: 'center' });
+    y += 18;
+
+    // ===== INFORMATIONS SALARIÉ =====
+    doc.setFillColor(245, 247, 250);
+    doc.roundedRect(margin, y - 4, pageWidth - margin * 2, 28, 2, 2, 'F');
+    doc.setTextColor(35, 41, 54);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Salarié(e) :', margin + 5, y + 3);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${employee.civilite} ${employee.prenom} ${employee.nom.toUpperCase()}`, margin + 35, y + 3);
+    y += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Poste :', margin + 5, y + 3);
+    doc.setFont('helvetica', 'normal');
+    doc.text(employee.poste || 'Salarié en insertion', margin + 35, y + 3);
+    y += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Contrat :', margin + 5, y + 3);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${employee.typeContrat || 'CDDI'} - ${employee.dureeHebdo || 26}h/semaine`, margin + 35, y + 3);
+    y += 18;
+
+    // ===== DÉTAILS DE LA DEMANDE =====
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 41, 54);
+    doc.text('Détails de la demande', margin, y);
+    y += 2;
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, margin + 50, y);
+    y += 10;
+
+    const rows = [
+      ['Type de congé', congeLabels[demande.type] || demande.type],
+      ...(demande.natureSpecial ? [['Nature', demande.natureSpecial]] : []),
+      ['Date de début', new Date(demande.dateDebut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })],
+      ['Date de fin', new Date(demande.dateFin).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })],
+      ['Nombre de jours', `${demande.nbJours} jour${demande.nbJours > 1 ? 's' : ''} ouvré${demande.nbJours > 1 ? 's' : ''}${demande.demiJournee ? ' (demi-journée)' : ''}`],
+    ];
+    if (demande.motif) rows.push(['Motif', demande.motif]);
+
+    doc.setFontSize(9);
+    for (const [label, value] of rows) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${label} :`, margin + 5, y);
+      doc.setFont('helvetica', 'normal');
+      const lines = doc.splitTextToSize(value as string, 100);
+      doc.text(lines, margin + 55, y);
+      y += lines.length * 5 + 3;
+    }
+    y += 5;
+
+    // ===== VALIDATION =====
+    if (demande.validePar) {
+      doc.setFillColor(245, 247, 250);
+      doc.roundedRect(margin, y - 4, pageWidth - margin * 2, 14, 2, 2, 'F');
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Validé par :', margin + 5, y + 3);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${demande.validePar}${demande.valideAt ? ` le ${new Date(demande.valideAt).toLocaleDateString('fr-FR')}` : ''}`, margin + 35, y + 3);
+      y += 20;
+    }
+
+    // ===== SIGNATURE DU SALARIÉ =====
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Signature du salarié', margin, y);
+    y += 2;
+    doc.setDrawColor(59, 130, 246);
+    doc.line(margin, y, margin + 50, y);
+    y += 5;
+
+    if (demande.signature) {
+      // Fond blanc explicite pour la zone de signature
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(margin, y, 80, 35, 2, 2, 'F');
+      doc.setDrawColor(200, 200, 200);
+      doc.roundedRect(margin, y, 80, 35, 2, 2, 'S');
+      try {
+        doc.addImage(demande.signature, 'PNG', margin + 2, y + 2, 76, 31, undefined, 'FAST');
+      } catch {}
+      y += 40;
+    } else {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(150);
+      doc.text('Aucune signature enregistrée', margin + 5, y + 5);
+      y += 15;
+    }
+
+    if (demande.signatureAt) {
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Signé le ${new Date(demande.signatureAt).toLocaleDateString('fr-FR')} à ${new Date(demande.signatureAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, margin, y);
+      y += 5;
+    }
+
+    // ===== DATE DE LA DEMANDE =====
+    y += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Demande créée le ${new Date(demande.createdAt).toLocaleDateString('fr-FR')}${demande.createdBy ? ` par ${demande.createdBy}` : ''}`, margin, y);
+
+    // ===== PIED DE PAGE =====
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 20, pageWidth - margin, pageHeight - 20);
+    doc.setFontSize(6);
+    doc.setTextColor(150);
+    doc.text(`${org?.raisonSociale || 'Structure'} - ${org?.adresseSiege || ''} ${org?.codePostalSiege || ''} ${org?.villeSiege || ''} - SIRET: ${org?.siret || ''}`, pageWidth / 2, pageHeight - 15, { align: 'center' });
+    doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} - Réf: ${docRef}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+    window.open(doc.output('bloburl'), '_blank');
+  };
+
   // DOSSIER RH
   const renderDossierRH = () => {
     if (!selectedEmployee) return null;
@@ -9116,6 +9598,101 @@ export default function RHInsertionApp() {
             <p className={`text-sm ${text('text-slate-400', 'text-gray-500')} text-center py-8`}>Aucune autorisation de sortie enregistrée</p>
           )}
         </Section>
+
+        {/* Demandes de congé */}
+        <Section title="Demandes de congé" icon={Umbrella}>
+          {employeeConges.length > 0 ? (
+            <div className="space-y-3">
+              {employeeConges.map((dc: any) => {
+                const congeLabelsMap: Record<string, string> = {
+                  conge_paye: 'Congés payés', conge_special: 'Congés spéciaux', sans_solde: 'Sans solde',
+                  recuperation: 'Récupération', rtt: 'RTT', conge_parental: 'Congé parental'
+                };
+                return (
+                  <div key={dc.id} className={`p-4 rounded-lg border ${
+                    dc.statut === 'validee' ? 'bg-cyan-500/10 border-cyan-500/50' :
+                    dc.statut === 'refusee' ? 'bg-red-500/10 border-red-500/50' :
+                    'bg-amber-500/10 border-amber-500/50'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-3">
+                          <span className={`font-medium ${text('text-white', 'text-gray-900')}`}>
+                            {congeLabelsMap[dc.type] || dc.type}
+                            {dc.natureSpecial ? ` (${dc.natureSpecial})` : ''}
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${
+                            dc.statut === 'validee' ? 'bg-cyan-500/20 text-cyan-400' :
+                            dc.statut === 'refusee' ? 'bg-red-500/20 text-red-400' :
+                            'bg-amber-500/20 text-amber-400'
+                          }`}>
+                            {dc.statut === 'validee' ? 'Validée' : dc.statut === 'refusee' ? 'Refusée' : 'En attente'}
+                          </span>
+                        </div>
+                        <p className={`text-sm mt-1 ${text('text-slate-300', 'text-gray-700')}`}>
+                          Du {new Date(dc.dateDebut).toLocaleDateString('fr-FR')} au {new Date(dc.dateFin).toLocaleDateString('fr-FR')} - {dc.nbJours} jour{dc.nbJours > 1 ? 's' : ''}
+                          {dc.demiJournee ? ' (demi-journée)' : ''}
+                        </p>
+                        {dc.motif && <p className={`text-xs mt-1 ${text('text-slate-400', 'text-gray-500')}`}>Motif : {dc.motif}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {dc.statut === 'en_attente' && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demande-conge/${dc.id}`, {
+                                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ statut: 'validee', validePar: authUser?.username || 'RH' })
+                                  });
+                                  if (res.ok && selectedEmployee) {
+                                    const congeRes = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demandes-conge?employeeId=${selectedEmployee.id}`);
+                                    if (congeRes.ok) { const d = await congeRes.json(); setEmployeeConges(d.data || []); }
+                                    setPendingConges(prev => prev.filter(p => p.id !== dc.id));
+                                  }
+                                } catch {}
+                              }}
+                              className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 flex items-center gap-1"
+                            >
+                              <Check className="w-4 h-4" /> Valider
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demande-conge/${dc.id}`, {
+                                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ statut: 'refusee', validePar: authUser?.username || 'RH' })
+                                  });
+                                  if (res.ok && selectedEmployee) {
+                                    const congeRes = await authFetch(`${API_URL.replace('/insertion', '/pointage')}/demandes-conge?employeeId=${selectedEmployee.id}`);
+                                    if (congeRes.ok) { const d = await congeRes.json(); setEmployeeConges(d.data || []); }
+                                    setPendingConges(prev => prev.filter(p => p.id !== dc.id));
+                                  }
+                                } catch {}
+                              }}
+                              className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 flex items-center gap-1"
+                            >
+                              <X className="w-4 h-4" /> Refuser
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => generateDemandeCongePDF(dc, emp)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                          title="Aperçu PDF"
+                        >
+                          <Printer className="w-4 h-4" /> PDF
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={`text-sm ${text('text-slate-400', 'text-gray-500')} text-center py-8`}>Aucune demande de congé</p>
+          )}
+        </Section>
       </div>
     );
   };
@@ -9494,7 +10071,52 @@ export default function RHInsertionApp() {
             <a href="/" className={`text-sm ${text('text-slate-400 hover:text-white', 'text-gray-500 hover:text-gray-900')}`}>Retour CRM</a>
             <div className="flex items-center gap-3">
               {authUser && <span className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{authUser.username}</span>}
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`}>{darkMode ? '☀️' : '🌙'}</button>
+              {/* Cloche notifications congés */}
+              <div className="relative">
+                <button onClick={() => setShowPendingConges(!showPendingConges)} className={`p-2 rounded-lg relative ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`} title="Demandes de congé en attente">
+                  <Bell className="w-5 h-5" />
+                  {pendingConges.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{pendingConges.length}</span>
+                  )}
+                </button>
+                {showPendingConges && (
+                  <div className={`absolute right-0 top-12 w-80 rounded-xl shadow-2xl border z-50 ${bg('bg-slate-800 border-slate-700', 'bg-white border-gray-200')}`}>
+                    <div className={`px-4 py-3 border-b ${bg('border-slate-700', 'border-gray-200')} flex items-center justify-between`}>
+                      <span className="font-semibold text-sm">Demandes de congé en attente</span>
+                      <button onClick={() => setShowPendingConges(false)}><X className="w-4 h-4" /></button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {pendingConges.length === 0 ? (
+                        <p className={`p-4 text-sm ${text('text-slate-400', 'text-gray-500')}`}>Aucune demande en attente</p>
+                      ) : pendingConges.map((dc: any) => {
+                        const nom = `${dc.employee?.prenom || ''} ${dc.employee?.nom || ''}`.trim();
+                        const typeLabel: Record<string, string> = { conge_paye: 'Congés payés', conge_special: 'Congés spéciaux', sans_solde: 'Sans solde', recuperation: 'Récupération', rtt: 'RTT', conge_parental: 'Congé parental' };
+                        return (
+                          <div key={dc.id} className={`px-4 py-3 border-b last:border-0 ${bg('border-slate-700 hover:bg-slate-700/50', 'border-gray-100 hover:bg-gray-50')} cursor-pointer`}
+                            onClick={() => {
+                              const emp = employees.find((e: any) => e.id === dc.employeeId);
+                              if (emp) { setSelectedEmployee(emp); setActiveTab('rh'); setActiveView('employees'); }
+                              setShowPendingConges(false);
+                            }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center text-xs font-bold">
+                                {(dc.employee?.prenom?.[0] || '')}{(dc.employee?.nom?.[0] || '')}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{nom}</p>
+                                <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>{typeLabel[dc.type] || dc.type} - {dc.nbJours}j</p>
+                                <p className={`text-xs ${text('text-slate-400', 'text-gray-500')}`}>{new Date(dc.dateDebut).toLocaleDateString('fr-FR')} - {new Date(dc.dateFin).toLocaleDateString('fr-FR')}</p>
+                              </div>
+                              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-full">A VALIDER</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`}>{darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
               <button onClick={loadData} className={`p-2 rounded-lg ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`}><RefreshCw className="w-5 h-5" /></button>
               <button onClick={handleLogout} className={`p-2 rounded-lg text-red-400 ${bg('hover:bg-slate-700', 'hover:bg-gray-100')}`} title="Déconnexion"><LogOut className="w-5 h-5" /></button>
             </div>
@@ -9558,10 +10180,16 @@ export default function RHInsertionApp() {
         ) : activeView === 'liste' ? (
           <div className="flex-1 overflow-auto p-6">
             <div className="flex items-center justify-between mb-6">
-              <div><h1 className={`text-2xl font-bold ${text('text-white', 'text-gray-900')}`}>Salariés en insertion</h1><p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{filteredEmployees.length} salarié(s)</p></div>
+              <div className="flex items-center gap-4">
+                <div className={`flex rounded-xl ${bg('bg-slate-700/50', 'bg-gray-200')} p-1`}>
+                  <button onClick={() => setEmployeeCategorie('insertion')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${employeeCategorie === 'insertion' ? 'bg-blue-600 text-white' : text('text-slate-400 hover:text-white', 'text-gray-500 hover:text-gray-900')}`}>Insertion ({countInsertion})</button>
+                  <button onClick={() => setEmployeeCategorie('vie59')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${employeeCategorie === 'vie59' ? 'bg-blue-600 text-white' : text('text-slate-400 hover:text-white', 'text-gray-500 hover:text-gray-900')}`}>VIE59 ({countVie59})</button>
+                </div>
+                <p className={`text-sm ${text('text-slate-400', 'text-gray-500')}`}>{filteredEmployees.length} salarié(s)</p>
+              </div>
               <div className="flex gap-2">
                 <button onClick={generateSyntheseEffectifsPDF} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"><FileDown className="w-4 h-4" />Export PDF</button>
-                <button onClick={() => { setFormData({ civilite: 'M.', typeContrat: 'CDDI', dureeHebdo: 26, statut: 'actif', nationalite: 'Française' }); setShowNewEmployeeModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><UserPlus className="w-4 h-4" />Nouveau</button>
+                <button onClick={() => { setFormData({ civilite: 'M.', typeContrat: 'CDDI', dureeHebdo: 26, statut: 'actif', nationalite: 'Française', categorie: employeeCategorie }); setShowNewEmployeeModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><UserPlus className="w-4 h-4" />Nouveau</button>
               </div>
             </div>
             <div className={`${bg('bg-slate-800', 'bg-white')} rounded-xl border ${bg('border-slate-700', 'border-gray-200')} p-4 mb-6`}>
