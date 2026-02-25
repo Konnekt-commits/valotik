@@ -6054,7 +6054,8 @@ export default function RHInsertionApp() {
       const journees = pointage.journees || [];
       const { counts, details, absenceDays } = categorizeAbsences(journees);
       const nbJoursOuvres = getNbJoursOuvres();
-      const heuresParJourContrat = nbJoursOuvres > 0 ? HEURES_CONTRAT_MENSUEL / nbJoursOuvres : 0;
+      const NB_JOURS_TRAVAIL_SEMAINE = 4; // Lundi-Jeudi
+      const heuresParJourContrat = (emp.dureeHebdo || 26) / NB_JOURS_TRAVAIL_SEMAINE;
       const deductionJours = counts.injustifiees;
       const deductionHeures = deductionJours * heuresParJourContrat;
       const heuresDeclarees = Math.round((HEURES_CONTRAT_MENSUEL - deductionHeures) * 100) / 100;
@@ -6303,7 +6304,7 @@ export default function RHInsertionApp() {
                                 <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-red-500/30', 'border-red-200')}`}>
                                   <p className="text-xs text-red-400 font-medium mb-1">Abs. injustifiées</p>
                                   <p className={`text-lg font-bold text-red-500`}>{d.counts.injustifiees}j</p>
-                                  <p className="text-xs text-red-400">Déduction: -{Math.round(d.counts.injustifiees * (HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres) * 100) / 100}h</p>
+                                  <p className="text-xs text-red-400">Déduction: -{Math.round(d.counts.injustifiees * ((d.emp.dureeHebdo || 26) / 4) * 100) / 100}h</p>
                                 </div>
                               </div>
 
@@ -6341,7 +6342,7 @@ export default function RHInsertionApp() {
                                             <td className="px-4 py-2 text-center">{heuresAbs}h</td>
                                             <td className="px-4 py-2 text-center">
                                               {isDeductible ? (
-                                                <span className="text-red-500 font-bold">-{Math.round(nbJours * (HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres) * 100) / 100}h</span>
+                                                <span className="text-red-500 font-bold">-{Math.round(nbJours * ((d.emp.dureeHebdo || 26) / 4) * 100) / 100}h</span>
                                               ) : (
                                                 <span className="text-slate-500">-</span>
                                               )}
@@ -6383,7 +6384,7 @@ export default function RHInsertionApp() {
                                 <p className={`text-sm ${text('text-white', 'text-gray-900')}`}>
                                   {HEURES_CONTRAT_MENSUEL}h (contrat)
                                   {d.counts.injustifiees > 0 && (
-                                    <> - {Math.round(d.counts.injustifiees * (HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres) * 100) / 100}h ({d.counts.injustifiees}j abs. injustifiées × {Math.round(HEURES_CONTRAT_MENSUEL / d.nbJoursOuvres * 100) / 100}h/j)</>
+                                    <> - {Math.round(d.counts.injustifiees * ((d.emp.dureeHebdo || 26) / 4) * 100) / 100}h ({d.counts.injustifiees}j abs. injustifiées × {(d.emp.dureeHebdo || 26) / 4}h/j)</>
                                   )}
                                   {' '}= <span className="text-blue-400 font-bold text-base">{d.heuresDeclarees}h</span>
                                 </p>
