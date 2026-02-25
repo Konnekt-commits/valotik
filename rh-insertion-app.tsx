@@ -6122,17 +6122,37 @@ export default function RHInsertionApp() {
       const details: Record<number, number> = {};
       const absenceDays: any[] = [];
 
+      const addAbsence = (motif: number, fraction: number, jour: any) => {
+        if (motif <= 0) return;
+        details[motif] = (details[motif] || 0) + fraction;
+        if (CONGES_MOTIFS.includes(motif)) counts.conges += fraction;
+        else if (MALADIE_MOTIFS.includes(motif)) counts.maladie += fraction;
+        else if (ABS_JUSTIFIEES_MOTIFS.includes(motif)) counts.justifiees += fraction;
+        else if (ABS_INJUSTIFIEES_MOTIFS.includes(motif)) counts.injustifiees += fraction;
+      };
+
       journees?.forEach((j: any) => {
-        if (j.typeJournee === 'absence' && j.motifAbsence) {
-          const motif = parseInt(j.motifAbsence) || 0;
-          if (motif > 0) {
-            details[motif] = (details[motif] || 0) + 1;
-            absenceDays.push(j);
-            if (CONGES_MOTIFS.includes(motif)) counts.conges++;
-            else if (MALADIE_MOTIFS.includes(motif)) counts.maladie++;
-            else if (ABS_JUSTIFIEES_MOTIFS.includes(motif)) counts.justifiees++;
-            else if (ABS_INJUSTIFIEES_MOTIFS.includes(motif)) counts.injustifiees++;
+        const hasMatinAbs = !!j.motifAbsenceMatin;
+        const hasApresAbs = !!j.motifAbsenceApresmidi;
+        const hasFullDayAbs = j.typeJournee === 'absence' && j.motifAbsence;
+
+        if (hasMatinAbs || hasApresAbs) {
+          // Demi-journées d'absence
+          let added = false;
+          if (hasMatinAbs) {
+            addAbsence(parseInt(j.motifAbsenceMatin) || 0, 0.5, j);
+            added = true;
           }
+          if (hasApresAbs) {
+            addAbsence(parseInt(j.motifAbsenceApresmidi) || 0, 0.5, j);
+            added = true;
+          }
+          if (added) absenceDays.push({ ...j, isHalfDay: hasMatinAbs !== hasApresAbs });
+        } else if (hasFullDayAbs) {
+          // Absence journée entière (ancien système)
+          const motif = parseInt(j.motifAbsence) || 0;
+          addAbsence(motif, 1, j);
+          absenceDays.push(j);
         }
       });
       return { counts, details, absenceDays };
@@ -6203,10 +6223,10 @@ export default function RHInsertionApp() {
           `${HEURES_CONTRAT_MENSUEL}h`,
           `${Math.round(d.pointage.heuresPointees * 100) / 100}h`,
           `${d.taux}%`,
-          `${d.counts.conges}j`,
-          `${d.counts.maladie}j`,
-          `${d.counts.justifiees}j`,
-          `${d.counts.injustifiees}j`,
+          `${d.counts.conges % 1 === 0 ? d.counts.conges : d.counts.conges.toFixed(1)}j`,
+          `${d.counts.maladie % 1 === 0 ? d.counts.maladie : d.counts.maladie.toFixed(1)}j`,
+          `${d.counts.justifiees % 1 === 0 ? d.counts.justifiees : d.counts.justifiees.toFixed(1)}j`,
+          `${d.counts.injustifiees % 1 === 0 ? d.counts.injustifiees : d.counts.injustifiees.toFixed(1)}j`,
           `${d.heuresDeclarees}h`,
           `${d.banque}h`,
           d.taux >= 98 ? 'OK' : d.taux >= 80 ? 'Attention' : 'Alerte'
@@ -6347,16 +6367,16 @@ export default function RHInsertionApp() {
                           </span>
                         </td>
                         <td className="px-3 py-3 text-center">
-                          {d.counts.conges > 0 ? <span className="text-blue-400 font-medium">{d.counts.conges}j</span> : <span className="text-slate-500">-</span>}
+                          {d.counts.conges > 0 ? <span className="text-blue-400 font-medium">{d.counts.conges % 1 === 0 ? d.counts.conges : d.counts.conges.toFixed(1)}j</span> : <span className="text-slate-500">-</span>}
                         </td>
                         <td className="px-3 py-3 text-center">
-                          {d.counts.maladie > 0 ? <span className="text-purple-400 font-medium">{d.counts.maladie}j</span> : <span className="text-slate-500">-</span>}
+                          {d.counts.maladie > 0 ? <span className="text-purple-400 font-medium">{d.counts.maladie % 1 === 0 ? d.counts.maladie : d.counts.maladie.toFixed(1)}j</span> : <span className="text-slate-500">-</span>}
                         </td>
                         <td className="px-3 py-3 text-center">
-                          {d.counts.justifiees > 0 ? <span className="text-yellow-400 font-medium">{d.counts.justifiees}j</span> : <span className="text-slate-500">-</span>}
+                          {d.counts.justifiees > 0 ? <span className="text-yellow-400 font-medium">{d.counts.justifiees % 1 === 0 ? d.counts.justifiees : d.counts.justifiees.toFixed(1)}j</span> : <span className="text-slate-500">-</span>}
                         </td>
                         <td className="px-3 py-3 text-center">
-                          {d.counts.injustifiees > 0 ? <span className="text-red-500 font-bold">{d.counts.injustifiees}j</span> : <span className="text-slate-500">-</span>}
+                          {d.counts.injustifiees > 0 ? <span className="text-red-500 font-bold">{d.counts.injustifiees % 1 === 0 ? d.counts.injustifiees : d.counts.injustifiees.toFixed(1)}j</span> : <span className="text-slate-500">-</span>}
                         </td>
                         <td className="px-3 py-3 text-center">
                           <span className="text-blue-400 font-bold text-base">{d.heuresDeclarees}h</span>
@@ -6385,22 +6405,22 @@ export default function RHInsertionApp() {
                               <div className="grid grid-cols-4 gap-3">
                                 <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-slate-600', 'border-gray-200')}`}>
                                   <p className="text-xs text-blue-400 font-medium mb-1">Congés payés</p>
-                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.conges}j</p>
+                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.conges % 1 === 0 ? d.counts.conges : d.counts.conges.toFixed(1)}j</p>
                                   <p className="text-xs text-slate-500">Rémunérés - pas de déduction</p>
                                 </div>
                                 <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-slate-600', 'border-gray-200')}`}>
                                   <p className="text-xs text-purple-400 font-medium mb-1">Maladie</p>
-                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.maladie}j</p>
+                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.maladie % 1 === 0 ? d.counts.maladie : d.counts.maladie.toFixed(1)}j</p>
                                   <p className="text-xs text-slate-500">Maintien de salaire</p>
                                 </div>
                                 <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-slate-600', 'border-gray-200')}`}>
                                   <p className="text-xs text-yellow-400 font-medium mb-1">Abs. justifiées</p>
-                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.justifiees}j</p>
+                                  <p className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>{d.counts.justifiees % 1 === 0 ? d.counts.justifiees : d.counts.justifiees.toFixed(1)}j</p>
                                   <p className="text-xs text-slate-500">Pas de déduction</p>
                                 </div>
                                 <div className={`${bg('bg-slate-700', 'bg-white')} rounded-lg p-3 border ${bg('border-red-500/30', 'border-red-200')}`}>
                                   <p className="text-xs text-red-400 font-medium mb-1">Abs. injustifiées</p>
-                                  <p className={`text-lg font-bold text-red-500`}>{d.counts.injustifiees}j</p>
+                                  <p className={`text-lg font-bold text-red-500`}>{d.counts.injustifiees % 1 === 0 ? d.counts.injustifiees : d.counts.injustifiees.toFixed(1)}j</p>
                                   <p className="text-xs text-red-400">Déduction: -{Math.round(d.counts.injustifiees * ((d.emp.dureeHebdo || 26) / 4) * 100) / 100}h</p>
                                 </div>
                               </div>
@@ -6424,7 +6444,8 @@ export default function RHInsertionApp() {
                                       {Object.entries(d.details).sort(([a], [b]) => Number(a) - Number(b)).map(([motifStr, jours]) => {
                                         const motif = Number(motifStr);
                                         const nbJours = jours as number;
-                                        const heuresParJour = (d.emp.dureeHebdo || 26) / 5;
+                                        const NB_JOURS_SEMAINE = 4;
+                                        const heuresParJour = (d.emp.dureeHebdo || 26) / NB_JOURS_SEMAINE;
                                         const heuresAbs = Math.round(nbJours * heuresParJour * 100) / 100;
                                         const isDeductible = ABS_INJUSTIFIEES_MOTIFS.includes(motif);
                                         return (
@@ -6435,7 +6456,7 @@ export default function RHInsertionApp() {
                                               </span>
                                               <span className={text('text-white', 'text-gray-900')}>{MOTIFS_ABSENCE[motif] || `Motif ${motif}`}</span>
                                             </td>
-                                            <td className="px-4 py-2 text-center font-medium">{nbJours}j</td>
+                                            <td className="px-4 py-2 text-center font-medium">{nbJours % 1 === 0 ? nbJours : nbJours.toFixed(1)}j</td>
                                             <td className="px-4 py-2 text-center">{heuresAbs}h</td>
                                             <td className="px-4 py-2 text-center">
                                               {isDeductible ? (
@@ -6460,16 +6481,23 @@ export default function RHInsertionApp() {
                                   </div>
                                   <div className="flex flex-wrap gap-2 p-3">
                                     {d.absenceDays.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((day: any, idx: number) => {
-                                      const motif = parseInt(day.motifAbsence) || 0;
                                       const dateObj = new Date(day.date);
                                       const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-                                      const isDeductible = ABS_INJUSTIFIEES_MOTIFS.includes(motif);
-                                      return (
-                                        <span key={idx} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${isDeductible ? 'bg-red-500/20 text-red-400 border border-red-500/30' : bg('bg-slate-600 text-slate-300', 'bg-gray-100 text-gray-700')}`}>
-                                          <span className="font-medium">{dateStr}</span>
-                                          <span className="opacity-70">A{motif}</span>
-                                        </span>
-                                      );
+                                      // Collect motifs for this day (can have matin, apresmidi, or full day)
+                                      const motifs: {motif: number; periode: string}[] = [];
+                                      if (day.motifAbsenceMatin) motifs.push({ motif: parseInt(day.motifAbsenceMatin) || 0, periode: '☀️' });
+                                      if (day.motifAbsenceApresmidi) motifs.push({ motif: parseInt(day.motifAbsenceApresmidi) || 0, periode: '🌙' });
+                                      if (motifs.length === 0 && day.motifAbsence) motifs.push({ motif: parseInt(day.motifAbsence) || 0, periode: '' });
+                                      return motifs.map((m, mi) => {
+                                        const isDeductible = ABS_INJUSTIFIEES_MOTIFS.includes(m.motif);
+                                        return (
+                                          <span key={`${idx}-${mi}`} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${isDeductible ? 'bg-red-500/20 text-red-400 border border-red-500/30' : bg('bg-slate-600 text-slate-300', 'bg-gray-100 text-gray-700')}`}>
+                                            <span className="font-medium">{dateStr}</span>
+                                            <span className="opacity-70">{m.periode ? `${m.periode} ` : ''}A{m.motif}</span>
+                                            {day.isHalfDay && <span className="opacity-50">(½j)</span>}
+                                          </span>
+                                        );
+                                      });
                                     })}
                                   </div>
                                 </div>
@@ -6481,7 +6509,7 @@ export default function RHInsertionApp() {
                                 <p className={`text-sm ${text('text-white', 'text-gray-900')}`}>
                                   {HEURES_CONTRAT_MENSUEL}h (contrat)
                                   {d.counts.injustifiees > 0 && (
-                                    <> - {Math.round(d.counts.injustifiees * ((d.emp.dureeHebdo || 26) / 4) * 100) / 100}h ({d.counts.injustifiees}j abs. injustifiées × {(d.emp.dureeHebdo || 26) / 4}h/j)</>
+                                    <> - {Math.round(d.counts.injustifiees * ((d.emp.dureeHebdo || 26) / 4) * 100) / 100}h ({d.counts.injustifiees % 1 === 0 ? d.counts.injustifiees : d.counts.injustifiees.toFixed(1)}j abs. injustifiées × {(d.emp.dureeHebdo || 26) / 4}h/j)</>
                                   )}
                                   {' '}= <span className="text-blue-400 font-bold text-base">{d.heuresDeclarees}h</span>
                                 </p>
