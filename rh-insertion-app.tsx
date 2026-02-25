@@ -2742,12 +2742,13 @@ export default function RHInsertionApp() {
               absences[p.employee.id][dateStr] = parseInt(j.motifAbsence) || null;
             }
             // Demi-journées d'absence
-            if (j.motifAbsenceMatin && !j.motifAbsenceApresmidi) {
+            if (j.motifAbsenceMatin) {
               absences[p.employee.id][`${dateStr}_matin`] = parseInt(j.motifAbsenceMatin) || null;
             }
-            if (j.motifAbsenceApresmidi && !j.motifAbsenceMatin) {
+            if (j.motifAbsenceApresmidi) {
               absences[p.employee.id][`${dateStr}_apresmidi`] = parseInt(j.motifAbsenceApresmidi) || null;
             }
+            // Si les deux demi-journées sont absentes → absence journée entière
             if (j.motifAbsenceMatin && j.motifAbsenceApresmidi) {
               absences[p.employee.id][dateStr] = parseInt(j.motifAbsenceMatin) || null;
             }
@@ -6621,6 +6622,8 @@ export default function RHInsertionApp() {
             pointages: [pointageEntry]
           })
         });
+        // Recharger les données pour mettre à jour totaux et banque
+        await loadPointages();
       } catch (error) {
         console.error('Erreur save absence:', error);
       }
@@ -6647,6 +6650,8 @@ export default function RHInsertionApp() {
             pointages: [{ date: dateStr, heures: 0, typeJournee: 'travail', motifAbsence: null, motifAbsenceMatin: null, motifAbsenceApresmidi: null }]
           })
         });
+        // Recharger les données pour mettre à jour totaux et banque
+        await loadPointages();
       } catch (error) {
         console.error('Erreur remove absence:', error);
       }
