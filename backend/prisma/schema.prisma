@@ -960,6 +960,8 @@ model PointageJournalier {
   // Type de journée
   typeJournee         String   @db.VarChar(20) @default("travail") // travail, absence, conge, maladie, formation, ferie
   motifAbsence        String?  @db.VarChar(100)
+  motifAbsenceMatin      String?  @db.VarChar(100)
+  motifAbsenceApresmidi  String?  @db.VarChar(100)
   justificatif        Boolean  @default(false)
 
   // Notes

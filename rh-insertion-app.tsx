@@ -2654,6 +2654,16 @@ export default function RHInsertionApp() {
             if (j.typeJournee === 'absence' && j.motifAbsence) {
               absences[p.employee.id][dateStr] = parseInt(j.motifAbsence) || null;
             }
+            // Demi-journées d'absence
+            if (j.motifAbsenceMatin && !j.motifAbsenceApresmidi) {
+              absences[p.employee.id][`${dateStr}_matin`] = parseInt(j.motifAbsenceMatin) || null;
+            }
+            if (j.motifAbsenceApresmidi && !j.motifAbsenceMatin) {
+              absences[p.employee.id][`${dateStr}_apresmidi`] = parseInt(j.motifAbsenceApresmidi) || null;
+            }
+            if (j.motifAbsenceMatin && j.motifAbsenceApresmidi) {
+              absences[p.employee.id][dateStr] = parseInt(j.motifAbsenceMatin) || null;
+            }
           });
         });
         setPointageValues(values);
@@ -6441,28 +6451,62 @@ export default function RHInsertionApp() {
       setAbsenceContextMenu({ x: e.clientX, y: e.clientY, employeeId, dateStr, pointageMensuelId });
     };
 
+    // État pour le choix de période d'absence dans le contexte menu
+    const [absencePeriodeChoice, setAbsencePeriodeChoice] = useState<'journee' | 'matin' | 'apresmidi' | null>(null);
+
     // Sélectionner un motif d'absence
     const selectAbsenceMotif = async (motifNum: number) => {
       if (!absenceContextMenu) return;
       const { employeeId, dateStr, pointageMensuelId } = absenceContextMenu;
-      // Mettre heures à 0 et enregistrer le motif d'absence
-      setPointageValues(prev => ({
-        ...prev,
-        [employeeId]: { ...prev[employeeId], [dateStr]: 0 }
-      }));
-      setAbsenceValues(prev => ({
-        ...prev,
-        [employeeId]: { ...prev[employeeId], [dateStr]: motifNum }
-      }));
+      const periode = absencePeriodeChoice || 'journee';
+
+      if (periode === 'journee') {
+        // Absence journée entière (comportement original)
+        setPointageValues(prev => ({
+          ...prev,
+          [employeeId]: { ...prev[employeeId], [dateStr]: 0 }
+        }));
+        setAbsenceValues(prev => ({
+          ...prev,
+          [employeeId]: { ...prev[employeeId], [dateStr]: motifNum }
+        }));
+      } else if (periode === 'matin') {
+        setAbsenceValues(prev => ({
+          ...prev,
+          [employeeId]: { ...prev[employeeId], [`${dateStr}_matin`]: motifNum }
+        }));
+      } else {
+        setAbsenceValues(prev => ({
+          ...prev,
+          [employeeId]: { ...prev[employeeId], [`${dateStr}_apresmidi`]: motifNum }
+        }));
+      }
+
       setAbsenceContextMenu(null);
+      setAbsencePeriodeChoice(null);
+
       // Sauvegarder immédiatement
       try {
+        const pointageEntry: any = { date: dateStr };
+        if (periode === 'journee') {
+          pointageEntry.heures = 0;
+          pointageEntry.typeJournee = 'absence';
+          pointageEntry.motifAbsence = String(motifNum);
+          pointageEntry.motifAbsenceMatin = String(motifNum);
+          pointageEntry.motifAbsenceApresmidi = String(motifNum);
+        } else if (periode === 'matin') {
+          pointageEntry.motifAbsenceMatin = String(motifNum);
+          pointageEntry.heuresMatin = 0;
+        } else {
+          pointageEntry.motifAbsenceApresmidi = String(motifNum);
+          pointageEntry.heuresApresmidi = 0;
+        }
         await authFetch(`${POINTAGE_API}/journalier/batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pointageMensuelId,
-            pointages: [{ date: dateStr, heures: 0, typeJournee: 'absence', motifAbsence: String(motifNum) }]
+            pointages: [pointageEntry]
           })
         });
       } catch (error) {
@@ -6475,9 +6519,12 @@ export default function RHInsertionApp() {
       setAbsenceValues(prev => {
         const copy = { ...prev, [employeeId]: { ...prev[employeeId] } };
         delete copy[employeeId][dateStr];
+        delete copy[employeeId][`${dateStr}_matin`];
+        delete copy[employeeId][`${dateStr}_apresmidi`];
         return copy;
       });
       setAbsenceContextMenu(null);
+      setAbsencePeriodeChoice(null);
       // Sauvegarder comme travail avec 0h
       try {
         await authFetch(`${POINTAGE_API}/journalier/batch`, {
@@ -6485,7 +6532,7 @@ export default function RHInsertionApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pointageMensuelId,
-            pointages: [{ date: dateStr, heures: 0, typeJournee: 'travail', motifAbsence: null }]
+            pointages: [{ date: dateStr, heures: 0, typeJournee: 'travail', motifAbsence: null, motifAbsenceMatin: null, motifAbsenceApresmidi: null }]
           })
         });
       } catch (error) {
@@ -7336,6 +7383,9 @@ export default function RHInsertionApp() {
                           {pointagesData.joursMois.map((j: any, jourIndex: number) => {
                             const heures = pointageValues[emp.id]?.[j.date] || 0;
                             const absMotif = absenceValues[emp.id]?.[j.date];
+                            const absMotifMatin = absenceValues[emp.id]?.[`${j.date}_matin`];
+                            const absMotifApresmidi = absenceValues[emp.id]?.[`${j.date}_apresmidi`];
+                            const isHalfDay = (absMotifMatin && !absMotifApresmidi) || (!absMotifMatin && absMotifApresmidi);
                             const empIndex = pointagesData.pointages.findIndex((pt: any) => pt.employee.id === emp.id);
                             // TabIndex vertical: colonne par colonne (jour d'abord, puis employé)
                             const tabIdx = jourIndex * pointagesData.pointages.length + empIndex + 1;
@@ -7343,6 +7393,35 @@ export default function RHInsertionApp() {
                               <td key={j.date} className={`px-0 py-1 text-center ${j.estWeekend ? bg('bg-slate-700/30', 'bg-gray-100') : j.estSamedi ? bg('bg-slate-700/15', 'bg-blue-50/50') : ''}`}>
                                 {j.estWeekend ? (
                                   <span className="text-xs text-slate-500">-</span>
+                                ) : isHalfDay ? (
+                                  <span
+                                    className="inline-block w-12 h-8 relative rounded overflow-hidden cursor-pointer"
+                                    title={`${absMotifMatin ? `Matin: A${absMotifMatin} - ${MOTIFS_ABSENCE[absMotifMatin] || '?'}` : 'Matin: Travail'}\n${absMotifApresmidi ? `PM: A${absMotifApresmidi} - ${MOTIFS_ABSENCE[absMotifApresmidi] || '?'}` : 'PM: Travail'}`}
+                                    onClick={(e) => isEditing ? handleAbsenceContextMenu(e, emp.id, j.date, pointage.id) : undefined}
+                                  >
+                                    {/* Fond normal (partie travail) */}
+                                    <span className={`absolute inset-0 ${bg('bg-slate-600/30', 'bg-gray-50')}`} />
+                                    {/* Triangle rouge (coin absence) */}
+                                    {absMotifMatin ? (
+                                      /* Matin absent = triangle haut-gauche rouge */
+                                      <span className="absolute inset-0" style={{
+                                        background: 'linear-gradient(to bottom right, rgba(239,68,68,0.3) 50%, transparent 50%)'
+                                      }} />
+                                    ) : (
+                                      /* Après-midi absent = triangle bas-droit rouge */
+                                      <span className="absolute inset-0" style={{
+                                        background: 'linear-gradient(to top left, rgba(239,68,68,0.3) 50%, transparent 50%)'
+                                      }} />
+                                    )}
+                                    {/* Ligne diagonale */}
+                                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 48 32" preserveAspectRatio="none">
+                                      <line x1="0" y1="32" x2="48" y2="0" stroke="#ef4444" strokeWidth="1.5" />
+                                    </svg>
+                                    {/* Texte */}
+                                    <span className="relative z-10 flex items-center justify-center h-full text-[9px] font-bold text-red-500">
+                                      ½A{absMotifMatin || absMotifApresmidi}
+                                    </span>
+                                  </span>
                                 ) : absMotif ? (
                                   <span
                                     className="inline-block w-12 px-1 py-1 text-center text-xs font-bold rounded bg-red-500/20 text-red-500 cursor-pointer"
@@ -7528,7 +7607,11 @@ export default function RHInsertionApp() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-500">A1</span>
-                  <span className={text('text-slate-400', 'text-gray-600')}>Absence (clic droit en mode édition pour choisir un motif)</span>
+                  <span className={text('text-slate-400', 'text-gray-600')}>Absence journée (clic droit pour choisir un motif)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block px-2 py-1 rounded text-[9px] font-bold bg-red-500/20 text-red-500">½A1</span>
+                  <span className={text('text-slate-400', 'text-gray-600')}>Demi-journée d'absence (matin ou après-midi)</span>
                 </div>
               </div>
               <div className={`mt-3 p-3 rounded-lg ${bg('bg-slate-700/50', 'bg-gray-50')}`}>
@@ -7546,8 +7629,8 @@ export default function RHInsertionApp() {
             {absenceContextMenu && createPortal(
               <div
                 className="fixed inset-0 z-[9999]"
-                onClick={() => setAbsenceContextMenu(null)}
-                onContextMenu={(e) => { e.preventDefault(); setAbsenceContextMenu(null); }}
+                onClick={() => { setAbsenceContextMenu(null); setAbsencePeriodeChoice(null); }}
+                onContextMenu={(e) => { e.preventDefault(); setAbsenceContextMenu(null); setAbsencePeriodeChoice(null); }}
               >
                 <div
                   className={`fixed ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'} border rounded-lg shadow-2xl py-1 max-h-[70vh] overflow-y-auto w-80`}
@@ -7558,9 +7641,14 @@ export default function RHInsertionApp() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className={`px-3 py-2 border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}>
-                    <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Motif d'absence</p>
+                    <p className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {absencePeriodeChoice ? `Motif d'absence (${absencePeriodeChoice === 'matin' ? 'Matin' : absencePeriodeChoice === 'apresmidi' ? 'Après-midi' : 'Journée'})` : 'Type d\'absence'}
+                    </p>
                   </div>
-                  {absenceValues[absenceContextMenu.employeeId]?.[absenceContextMenu.dateStr] && (
+                  {/* Bouton supprimer si absence existante */}
+                  {(absenceValues[absenceContextMenu.employeeId]?.[absenceContextMenu.dateStr] ||
+                    absenceValues[absenceContextMenu.employeeId]?.[`${absenceContextMenu.dateStr}_matin`] ||
+                    absenceValues[absenceContextMenu.employeeId]?.[`${absenceContextMenu.dateStr}_apresmidi`]) && !absencePeriodeChoice && (
                     <button
                       onClick={() => removeAbsence(absenceContextMenu.employeeId, absenceContextMenu.dateStr, absenceContextMenu.pointageMensuelId)}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-green-500/20 text-green-500 font-medium border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}
@@ -7568,16 +7656,51 @@ export default function RHInsertionApp() {
                       Supprimer l'absence (remettre en travail)
                     </button>
                   )}
-                  {Object.entries(MOTIFS_ABSENCE).map(([num, label]) => (
-                    <button
-                      key={num}
-                      onClick={() => selectAbsenceMotif(parseInt(num))}
-                      className={`w-full px-3 py-2 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2`}
-                    >
-                      <span className="inline-block w-8 text-center font-bold text-red-500">A{num}</span>
-                      <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>{label}</span>
-                    </button>
-                  ))}
+                  {/* Choix de la période si pas encore choisi */}
+                  {!absencePeriodeChoice ? (
+                    <>
+                      <button
+                        onClick={() => setAbsencePeriodeChoice('matin')}
+                        className={`w-full px-3 py-2.5 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2 font-medium`}
+                      >
+                        <span className="text-orange-500">☀️</span>
+                        <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>Abs. matin uniquement</span>
+                      </button>
+                      <button
+                        onClick={() => setAbsencePeriodeChoice('apresmidi')}
+                        className={`w-full px-3 py-2.5 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2 font-medium`}
+                      >
+                        <span className="text-blue-500">🌙</span>
+                        <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>Abs. après-midi uniquement</span>
+                      </button>
+                      <button
+                        onClick={() => setAbsencePeriodeChoice('journee')}
+                        className={`w-full px-3 py-2.5 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2 font-medium border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}
+                      >
+                        <span className="text-red-500">🔴</span>
+                        <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>Abs. journée entière</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setAbsencePeriodeChoice(null)}
+                        className={`w-full px-3 py-1.5 text-left text-xs ${darkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-100 text-gray-500'} border-b ${darkMode ? 'border-slate-600' : 'border-gray-200'}`}
+                      >
+                        ← Retour au choix de période
+                      </button>
+                      {Object.entries(MOTIFS_ABSENCE).map(([num, label]) => (
+                        <button
+                          key={num}
+                          onClick={() => selectAbsenceMotif(parseInt(num))}
+                          className={`w-full px-3 py-2 text-left text-sm ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} flex items-center gap-2`}
+                        >
+                          <span className="inline-block w-8 text-center font-bold text-red-500">A{num}</span>
+                          <span className={darkMode ? 'text-slate-300' : 'text-gray-700'}>{label}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>,
               document.body

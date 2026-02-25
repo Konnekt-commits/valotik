@@ -35,6 +35,8 @@ interface PointageJournalier {
   pauseMinutes: number;
   typeJournee: string;
   motifAbsence?: string;
+  motifAbsenceMatin?: string;
+  motifAbsenceApresmidi?: string;
   notes?: string;
 }
 
@@ -65,6 +67,8 @@ interface LocalPointage {
   apresmidiSigne: boolean;
   signatureMatinAt?: string;
   signatureApresmidiAt?: string;
+  motifAbsenceMatin?: string;
+  motifAbsenceApresmidi?: string;
 }
 
 // Format de date
@@ -142,6 +146,8 @@ export default function PointageMobileApp() {
 
   // État pour le bottom sheet des motifs d'absence
   const [absenceSheetEmployeeId, setAbsenceSheetEmployeeId] = useState<string | null>(null);
+  // Période cible pour le choix de motif d'absence : 'matin', 'apresmidi', ou null (journée entière)
+  const [absenceSheetPeriode, setAbsenceSheetPeriode] = useState<'matin' | 'apresmidi' | null>(null);
 
   // États pour autorisation de sortie
   const [showAutorisationForm, setShowAutorisationForm] = useState<string | null>(null);
@@ -204,14 +210,16 @@ export default function PointageMobileApp() {
 
               initialLocal[ep.employee.id] = {
                 // Si signé, utiliser la valeur stockée, sinon la valeur par défaut
-                matin: matinSigne ? journee.heuresMatin.toString() : defaultMatin,
-                apresmidi: apresmidiSigne ? journee.heuresApresmidi.toString() : defaultApresmidi,
+                matin: matinSigne ? journee.heuresMatin.toString() : (journee.motifAbsenceMatin ? '0' : defaultMatin),
+                apresmidi: apresmidiSigne ? journee.heuresApresmidi.toString() : (journee.motifAbsenceApresmidi ? '0' : defaultApresmidi),
                 typeJournee: localType,
                 notes: journee.notes || '',
                 matinSigne,
                 apresmidiSigne,
                 signatureMatinAt: journee.signatureMatinAt,
-                signatureApresmidiAt: journee.signatureApresmidiAt
+                signatureApresmidiAt: journee.signatureApresmidiAt,
+                motifAbsenceMatin: journee.motifAbsenceMatin || undefined,
+                motifAbsenceApresmidi: journee.motifAbsenceApresmidi || undefined
               };
             } else {
               initialLocal[ep.employee.id] = {
@@ -640,9 +648,17 @@ export default function PointageMobileApp() {
                         </div>
                       </div>
                       <div className="text-right">
-                        {local.typeJournee !== 'travail' ? (
+                        {local.typeJournee !== 'travail' && !local.motifAbsenceMatin && !local.motifAbsenceApresmidi ? (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
                             {absenceLabel}
+                          </span>
+                        ) : (local.motifAbsenceMatin && local.motifAbsenceApresmidi) ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                            Absence
+                          </span>
+                        ) : (local.motifAbsenceMatin || local.motifAbsenceApresmidi) ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">
+                            ½ absent
                           </span>
                         ) : toutSigne ? (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
@@ -664,10 +680,57 @@ export default function PointageMobileApp() {
                       </div>
                     </div>
 
-                    {/* Inputs inline matin/après-midi avec boutons de signature */}
-                    {local.typeJournee === 'travail' && (
-                      <div className="space-y-3" onClick={e => e.stopPropagation()}>
-                        {/* MATIN */}
+                    {/* Inputs inline matin/après-midi avec boutons de signature — toujours affichés */}
+                    <div className="space-y-3" onClick={e => e.stopPropagation()}>
+                      {/* MATIN */}
+                      {local.motifAbsenceMatin ? (
+                        <div className={`flex gap-2 items-center p-2 rounded-lg bg-red-500/10`}>
+                          <div className="flex-1">
+                            <label className="text-xs text-red-400 mb-1 flex items-center gap-1">
+                              <Sun size={12} /> Matin - Absence
+                            </label>
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bg('bg-red-500/20', 'bg-red-100')}`}>
+                              <AlertCircle size={14} className="text-red-500" />
+                              <span className={`text-xs font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                                A{local.motifAbsenceMatin} - {MOTIFS_ABSENCE_LIST.find(m => m.num === parseInt(local.motifAbsenceMatin!))?.label || 'Absence'}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              // Retirer l'absence matin
+                              const saveRemoveAbsenceMatin = async () => {
+                                setSaving(prev => ({ ...prev, [`${ep.employee.id}_matin`]: true }));
+                                try {
+                                  const payload = {
+                                    pointageMensuelId: ep.pointage.id,
+                                    date: formatDateISO(selectedDate),
+                                    motifAbsenceMatin: null,
+                                    typeJournee: 'travail'
+                                  };
+                                  const res = await fetch(`${API_URL}/pointage/journalier`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                  });
+                                  if (res.ok) {
+                                    setLocalPointages(prev => ({
+                                      ...prev,
+                                      [ep.employee.id]: { ...prev[ep.employee.id], motifAbsenceMatin: undefined, matin: '3', typeJournee: prev[ep.employee.id].motifAbsenceApresmidi ? prev[ep.employee.id].typeJournee : 'travail' }
+                                    }));
+                                  }
+                                } finally {
+                                  setSaving(prev => ({ ...prev, [`${ep.employee.id}_matin`]: false }));
+                                }
+                              };
+                              saveRemoveAbsenceMatin();
+                            }}
+                            className="px-2 py-1 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
                         <div className={`flex gap-2 items-end p-2 rounded-lg ${local.matinSigne ? 'bg-emerald-500/10' : bg('bg-slate-700/50', 'bg-gray-50')}`}>
                           <div className="flex-1">
                             <label className={`text-xs ${local.matinSigne ? 'text-emerald-500' : text('text-gray-400', 'text-gray-500')} mb-1 flex items-center gap-1`}>
@@ -692,6 +755,23 @@ export default function PointageMobileApp() {
                               <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${text('text-gray-500', 'text-gray-400')}`}>h</span>
                             </div>
                           </div>
+                          {local.matinSigne ? (
+                            <button
+                              onClick={() => { setAbsenceSheetPeriode('matin'); setAbsenceSheetEmployeeId(ep.employee.id); }}
+                              className="px-2 py-2 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                              title="Requalifier en absence"
+                            >
+                              ABS
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { setAbsenceSheetPeriode('matin'); setAbsenceSheetEmployeeId(ep.employee.id); }}
+                              className="px-2 py-2 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                              title="Marquer absence matin"
+                            >
+                              ABS
+                            </button>
+                          )}
                           <button
                             onClick={() => setActiveSheet(`${ep.employee.id}_matin`)}
                             disabled={local.matinSigne || isSavingMatin}
@@ -704,8 +784,57 @@ export default function PointageMobileApp() {
                             {local.matinSigne ? 'Signé' : 'Signer'}
                           </button>
                         </div>
+                      )}
 
-                        {/* APRÈS-MIDI */}
+                      {/* APRÈS-MIDI */}
+                      {local.motifAbsenceApresmidi ? (
+                        <div className={`flex gap-2 items-center p-2 rounded-lg bg-red-500/10`}>
+                          <div className="flex-1">
+                            <label className="text-xs text-red-400 mb-1 flex items-center gap-1">
+                              <Moon size={12} /> Après-midi - Absence
+                            </label>
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bg('bg-red-500/20', 'bg-red-100')}`}>
+                              <AlertCircle size={14} className="text-red-500" />
+                              <span className={`text-xs font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                                A{local.motifAbsenceApresmidi} - {MOTIFS_ABSENCE_LIST.find(m => m.num === parseInt(local.motifAbsenceApresmidi!))?.label || 'Absence'}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              // Retirer l'absence après-midi
+                              const saveRemoveAbsenceApresmidi = async () => {
+                                setSaving(prev => ({ ...prev, [`${ep.employee.id}_apresmidi`]: true }));
+                                try {
+                                  const payload = {
+                                    pointageMensuelId: ep.pointage.id,
+                                    date: formatDateISO(selectedDate),
+                                    motifAbsenceApresmidi: null,
+                                    typeJournee: 'travail'
+                                  };
+                                  const res = await fetch(`${API_URL}/pointage/journalier`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                  });
+                                  if (res.ok) {
+                                    setLocalPointages(prev => ({
+                                      ...prev,
+                                      [ep.employee.id]: { ...prev[ep.employee.id], motifAbsenceApresmidi: undefined, apresmidi: '3.5', typeJournee: prev[ep.employee.id].motifAbsenceMatin ? prev[ep.employee.id].typeJournee : 'travail' }
+                                    }));
+                                  }
+                                } finally {
+                                  setSaving(prev => ({ ...prev, [`${ep.employee.id}_apresmidi`]: false }));
+                                }
+                              };
+                              saveRemoveAbsenceApresmidi();
+                            }}
+                            className="px-2 py-1 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
                         <div className={`flex gap-2 items-end p-2 rounded-lg ${local.apresmidiSigne ? 'bg-emerald-500/10' : bg('bg-slate-700/50', 'bg-gray-50')}`}>
                           <div className="flex-1">
                             <label className={`text-xs ${local.apresmidiSigne ? 'text-emerald-500' : text('text-gray-400', 'text-gray-500')} mb-1 flex items-center gap-1`}>
@@ -730,6 +859,23 @@ export default function PointageMobileApp() {
                               <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${text('text-gray-500', 'text-gray-400')}`}>h</span>
                             </div>
                           </div>
+                          {local.apresmidiSigne ? (
+                            <button
+                              onClick={() => { setAbsenceSheetPeriode('apresmidi'); setAbsenceSheetEmployeeId(ep.employee.id); }}
+                              className="px-2 py-2 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                              title="Requalifier en absence"
+                            >
+                              ABS
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { setAbsenceSheetPeriode('apresmidi'); setAbsenceSheetEmployeeId(ep.employee.id); }}
+                              className="px-2 py-2 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                              title="Marquer absence après-midi"
+                            >
+                              ABS
+                            </button>
+                          )}
                           <button
                             onClick={() => setActiveSheet(`${ep.employee.id}_apresmidi`)}
                             disabled={local.apresmidiSigne || isSavingApresmidi}
@@ -742,20 +888,8 @@ export default function PointageMobileApp() {
                             {local.apresmidiSigne ? 'Signé' : 'Signer'}
                           </button>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Tags rapides pour absences */}
-                    {local.typeJournee !== 'travail' && (
-                      <div className="flex items-center justify-center">
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bg('bg-red-500/20', 'bg-red-100')}`}>
-                          <AlertCircle size={16} className="text-red-500" />
-                          <span className={`text-sm font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
-                            {absenceLabel}
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -922,46 +1056,143 @@ export default function PointageMobileApp() {
                       <span className={text('text-white', 'text-gray-900')}>{formatDate(selectedDate)}</span>
                     </div>
 
-                    {/* Type de journée */}
-                    <div className="mb-6">
-                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-3 block`}>
-                        Type de journée
+                    {/* Demi-journée : Matin */}
+                    <div className="mb-4">
+                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-3 block flex items-center gap-2`}>
+                        <Sun size={16} /> Matin
                       </label>
                       <div className="grid grid-cols-2 gap-3">
-                        {/* Bouton Travail */}
                         <button
-                          onClick={() => saveTypeAndNotes('travail')}
+                          onClick={() => {
+                            if (local.motifAbsenceMatin) {
+                              // Retirer l'absence matin
+                              const payload = {
+                                pointageMensuelId: ep.pointage.id,
+                                date: formatDateISO(selectedDate),
+                                motifAbsenceMatin: null,
+                                typeJournee: 'travail'
+                              };
+                              setSaving(prev => ({ ...prev, [employeeId]: true }));
+                              fetch(`${API_URL}/pointage/journalier`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                              }).then(res => {
+                                if (res.ok) {
+                                  setLocalPointages(prev => ({
+                                    ...prev,
+                                    [employeeId]: { ...prev[employeeId], motifAbsenceMatin: undefined, matin: '3' }
+                                  }));
+                                }
+                              }).finally(() => setSaving(prev => ({ ...prev, [employeeId]: false })));
+                            }
+                          }}
                           disabled={saving[employeeId]}
-                          className={`p-4 rounded-xl flex flex-col items-center gap-2 transition-all ${local.typeJournee === 'travail'
+                          className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${!local.motifAbsenceMatin
                             ? 'bg-emerald-500 text-white'
                             : bg('bg-slate-700 text-gray-400 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')
                           }`}
                         >
-                          <Briefcase size={24} />
-                          <span className="text-sm font-medium">Travail</span>
+                          <Briefcase size={20} />
+                          <span className="text-xs font-medium">Travail</span>
+                          {local.matinSigne && !local.motifAbsenceMatin && <span className="text-[10px]">{local.matin}h - Signé</span>}
                         </button>
-
-                        {/* Bouton Absence → ouvre le bottom sheet des motifs */}
                         <button
-                          onClick={() => setAbsenceSheetEmployeeId(employeeId)}
-                          className={`p-4 rounded-xl flex flex-col items-center gap-2 transition-all ${local.typeJournee !== 'travail'
+                          onClick={() => { setAbsenceSheetPeriode('matin'); setAbsenceSheetEmployeeId(employeeId); }}
+                          disabled={saving[employeeId]}
+                          className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${local.motifAbsenceMatin
                             ? 'bg-red-500 text-white'
                             : bg('bg-slate-700 text-gray-400 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')
                           }`}
                         >
-                          <AlertCircle size={24} />
-                          <span className="text-sm font-medium">Absence</span>
+                          <AlertCircle size={20} />
+                          <span className="text-xs font-medium">Absence</span>
                         </button>
                       </div>
-
-                      {/* Afficher le motif sélectionné si absence */}
-                      {local.typeJournee !== 'travail' && (
-                        <div className={`mt-3 px-4 py-3 rounded-xl ${bg('bg-red-500/10', 'bg-red-50')} border ${bg('border-red-500/30', 'border-red-200')}`}>
-                          <p className={`text-sm font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
-                            {getAbsenceLabel(local.typeJournee)}
+                      {local.motifAbsenceMatin && (
+                        <div className={`mt-2 px-3 py-2 rounded-lg ${bg('bg-red-500/10', 'bg-red-50')} border ${bg('border-red-500/30', 'border-red-200')}`}>
+                          <p className={`text-xs font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                            A{local.motifAbsenceMatin} - {MOTIFS_ABSENCE_LIST.find(m => m.num === parseInt(local.motifAbsenceMatin!))?.label || 'Absence'}
                           </p>
                         </div>
                       )}
+                    </div>
+
+                    {/* Demi-journée : Après-midi */}
+                    <div className="mb-6">
+                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} mb-3 block flex items-center gap-2`}>
+                        <Moon size={16} /> Après-midi
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => {
+                            if (local.motifAbsenceApresmidi) {
+                              // Retirer l'absence après-midi
+                              const payload = {
+                                pointageMensuelId: ep.pointage.id,
+                                date: formatDateISO(selectedDate),
+                                motifAbsenceApresmidi: null,
+                                typeJournee: 'travail'
+                              };
+                              setSaving(prev => ({ ...prev, [employeeId]: true }));
+                              fetch(`${API_URL}/pointage/journalier`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                              }).then(res => {
+                                if (res.ok) {
+                                  setLocalPointages(prev => ({
+                                    ...prev,
+                                    [employeeId]: { ...prev[employeeId], motifAbsenceApresmidi: undefined, apresmidi: '3.5' }
+                                  }));
+                                }
+                              }).finally(() => setSaving(prev => ({ ...prev, [employeeId]: false })));
+                            }
+                          }}
+                          disabled={saving[employeeId]}
+                          className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${!local.motifAbsenceApresmidi
+                            ? 'bg-emerald-500 text-white'
+                            : bg('bg-slate-700 text-gray-400 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+                          }`}
+                        >
+                          <Briefcase size={20} />
+                          <span className="text-xs font-medium">Travail</span>
+                          {local.apresmidiSigne && !local.motifAbsenceApresmidi && <span className="text-[10px]">{local.apresmidi}h - Signé</span>}
+                        </button>
+                        <button
+                          onClick={() => { setAbsenceSheetPeriode('apresmidi'); setAbsenceSheetEmployeeId(employeeId); }}
+                          disabled={saving[employeeId]}
+                          className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${local.motifAbsenceApresmidi
+                            ? 'bg-red-500 text-white'
+                            : bg('bg-slate-700 text-gray-400 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+                          }`}
+                        >
+                          <AlertCircle size={20} />
+                          <span className="text-xs font-medium">Absence</span>
+                        </button>
+                      </div>
+                      {local.motifAbsenceApresmidi && (
+                        <div className={`mt-2 px-3 py-2 rounded-lg ${bg('bg-red-500/10', 'bg-red-50')} border ${bg('border-red-500/30', 'border-red-200')}`}>
+                          <p className={`text-xs font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                            A{local.motifAbsenceApresmidi} - {MOTIFS_ABSENCE_LIST.find(m => m.num === parseInt(local.motifAbsenceApresmidi!))?.label || 'Absence'}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Bouton absence journée entière */}
+                      <div className="mt-4">
+                        <button
+                          onClick={() => { setAbsenceSheetPeriode(null); setAbsenceSheetEmployeeId(employeeId); }}
+                          disabled={saving[employeeId]}
+                          className={`w-full p-3 rounded-xl flex items-center justify-center gap-2 transition-all ${(local.typeJournee !== 'travail' && !local.motifAbsenceMatin && !local.motifAbsenceApresmidi)
+                            ? 'bg-red-500 text-white'
+                            : bg('bg-slate-700 text-gray-400 hover:bg-slate-600', 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+                          }`}
+                        >
+                          <AlertCircle size={18} />
+                          <span className="text-sm font-medium">Absence journée entière</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Notes */}
@@ -991,14 +1222,25 @@ export default function PointageMobileApp() {
                       )}
                     </div>
 
-                    {/* Boutons de signature matin/après-midi (si type = travail) */}
-                    {local.typeJournee === 'travail' && (
-                      <div className="mb-6 space-y-3">
-                        <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} block`}>
-                          Signatures
-                        </label>
+                    {/* Boutons de signature matin/après-midi */}
+                    <div className="mb-6 space-y-3">
+                      <label className={`text-sm font-medium ${text('text-gray-300', 'text-gray-700')} block`}>
+                        Signatures
+                      </label>
 
-                        {/* Bouton Signer Matin */}
+                      {/* Bouton Signer Matin */}
+                      {local.motifAbsenceMatin ? (
+                        <div className="w-full p-4 rounded-xl bg-red-500/20 border-2 border-red-500 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Sun size={24} className="text-red-500" />
+                            <div className="text-left">
+                              <p className="font-semibold text-red-500">Matin - Absence</p>
+                              <p className="text-xs text-red-400">A{local.motifAbsenceMatin}</p>
+                            </div>
+                          </div>
+                          <AlertCircle size={24} className="text-red-500" />
+                        </div>
+                      ) : (
                         <button
                           onClick={() => setActiveSheet(`${employeeId}_matin`)}
                           disabled={local.matinSigne}
@@ -1025,8 +1267,21 @@ export default function PointageMobileApp() {
                             <PenTool size={24} className="text-white" />
                           )}
                         </button>
+                      )}
 
-                        {/* Bouton Signer Après-midi */}
+                      {/* Bouton Signer Après-midi */}
+                      {local.motifAbsenceApresmidi ? (
+                        <div className="w-full p-4 rounded-xl bg-red-500/20 border-2 border-red-500 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Moon size={24} className="text-red-500" />
+                            <div className="text-left">
+                              <p className="font-semibold text-red-500">Après-midi - Absence</p>
+                              <p className="text-xs text-red-400">A{local.motifAbsenceApresmidi}</p>
+                            </div>
+                          </div>
+                          <AlertCircle size={24} className="text-red-500" />
+                        </div>
+                      ) : (
                         <button
                           onClick={() => setActiveSheet(`${employeeId}_apresmidi`)}
                           disabled={local.apresmidiSigne}
@@ -1053,8 +1308,8 @@ export default function PointageMobileApp() {
                             <PenTool size={24} className="text-white" />
                           )}
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     {/* Section Autorisation de sortie */}
                     {local.typeJournee === 'travail' && (
@@ -1837,26 +2092,51 @@ export default function PointageMobileApp() {
         const local = localPointages[absenceSheetEmployeeId];
 
         const selectMotif = async (motifNum: number) => {
-          const motifValue = `absence_${motifNum}`;
           setSaving(prev => ({ ...prev, [absenceSheetEmployeeId]: true }));
           try {
             const payload: any = {
               pointageMensuelId: ep.pointage.id,
               date: formatDateISO(selectedDate),
-              typeJournee: 'absence',
-              motifAbsence: String(motifNum),
               notes: local?.notes || ''
             };
+
+            if (absenceSheetPeriode === 'matin') {
+              payload.motifAbsenceMatin = String(motifNum);
+              payload.typeJournee = local?.motifAbsenceApresmidi ? 'absence' : 'travail';
+            } else if (absenceSheetPeriode === 'apresmidi') {
+              payload.motifAbsenceApresmidi = String(motifNum);
+              payload.typeJournee = local?.motifAbsenceMatin ? 'absence' : 'travail';
+            } else {
+              // Journée entière
+              payload.motifAbsenceMatin = String(motifNum);
+              payload.motifAbsenceApresmidi = String(motifNum);
+              payload.typeJournee = 'absence';
+              payload.motifAbsence = String(motifNum);
+            }
+
             const res = await fetch(`${API_URL}/pointage/journalier`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
             if (res.ok) {
-              setLocalPointages(prev => ({
-                ...prev,
-                [absenceSheetEmployeeId]: { ...prev[absenceSheetEmployeeId], typeJournee: motifValue }
-              }));
+              setLocalPointages(prev => {
+                const updated = { ...prev[absenceSheetEmployeeId] };
+                if (absenceSheetPeriode === 'matin') {
+                  updated.motifAbsenceMatin = String(motifNum);
+                  updated.matin = '0';
+                } else if (absenceSheetPeriode === 'apresmidi') {
+                  updated.motifAbsenceApresmidi = String(motifNum);
+                  updated.apresmidi = '0';
+                } else {
+                  updated.motifAbsenceMatin = String(motifNum);
+                  updated.motifAbsenceApresmidi = String(motifNum);
+                  updated.matin = '0';
+                  updated.apresmidi = '0';
+                  updated.typeJournee = `absence_${motifNum}`;
+                }
+                return { ...prev, [absenceSheetEmployeeId]: updated };
+              });
               setSaveSuccess(absenceSheetEmployeeId);
               setTimeout(() => setSaveSuccess(null), 2000);
             }
@@ -1865,14 +2145,17 @@ export default function PointageMobileApp() {
           } finally {
             setSaving(prev => ({ ...prev, [absenceSheetEmployeeId]: false }));
             setAbsenceSheetEmployeeId(null);
+            setAbsenceSheetPeriode(null);
           }
         };
+
+        const periodeLabel = absenceSheetPeriode === 'matin' ? ' (Matin)' : absenceSheetPeriode === 'apresmidi' ? ' (Après-midi)' : ' (Journée entière)';
 
         return (
           <div className="fixed inset-0 z-[60] flex items-end">
             <div
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setAbsenceSheetEmployeeId(null)}
+              onClick={() => { setAbsenceSheetEmployeeId(null); setAbsenceSheetPeriode(null); }}
             />
             <div className={`relative w-full max-h-[80vh] rounded-t-3xl ${bg('bg-slate-800', 'bg-white')} animate-slide-up`}>
               {/* Handle */}
@@ -1883,7 +2166,7 @@ export default function PointageMobileApp() {
               {/* Header */}
               <div className={`px-6 pb-4 border-b ${bg('border-slate-700', 'border-gray-200')}`}>
                 <h3 className={`text-lg font-bold ${text('text-white', 'text-gray-900')}`}>
-                  Motif d'absence
+                  Motif d'absence{periodeLabel}
                 </h3>
                 <p className={`text-sm ${text('text-gray-400', 'text-gray-500')}`}>
                   {ep.employee.prenom} {ep.employee.nom} - {formatDate(selectedDate)}
@@ -1893,7 +2176,8 @@ export default function PointageMobileApp() {
               {/* Liste des motifs */}
               <div className="overflow-y-auto px-4 py-3" style={{ maxHeight: 'calc(80vh - 120px)' }}>
                 {MOTIFS_ABSENCE_LIST.map(motif => {
-                  const isSelected = local?.typeJournee === `absence_${motif.num}`;
+                  const currentMotif = absenceSheetPeriode === 'matin' ? local?.motifAbsenceMatin : absenceSheetPeriode === 'apresmidi' ? local?.motifAbsenceApresmidi : null;
+                  const isSelected = currentMotif === String(motif.num) || (!absenceSheetPeriode && local?.typeJournee === `absence_${motif.num}`);
                   return (
                     <button
                       key={motif.num}

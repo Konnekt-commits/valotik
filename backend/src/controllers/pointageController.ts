@@ -4,25 +4,9 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Fonction utilitaire pour calculer les heures contractuelles d'un mois
-const calculerHeuresContratMois = (dureeHebdo: number, mois: number, annee: number): number => {
-  // Nombre de jours dans le mois
-  const premierJour = new Date(annee, mois - 1, 1);
-  const dernierJour = new Date(annee, mois, 0);
-  const nbJours = dernierJour.getDate();
-
-  // Compter les jours ouvrés (lundi à vendredi)
-  let joursOuvres = 0;
-  for (let d = 1; d <= nbJours; d++) {
-    const date = new Date(annee, mois - 1, d);
-    const jour = date.getDay();
-    if (jour !== 0 && jour !== 6) {
-      joursOuvres++;
-    }
-  }
-
-  // Heures par jour = dureeHebdo / 5
-  const heuresParJour = dureeHebdo / 5;
-  return Math.round(heuresParJour * joursOuvres * 100) / 100;
+// Heures contrat mensuel statique : 112.67h (26h hebdo × 52 / 12)
+const calculerHeuresContratMois = (_dureeHebdo: number, _mois: number, _annee: number): number => {
+  return 112.67;
 };
 
 // Fonction pour obtenir les jours du mois avec leurs informations
@@ -93,10 +77,10 @@ export const getPointagesMensuels = async (req: Request, res: Response) => {
         }
       });
 
+      const heuresContrat = calculerHeuresContratMois(emp.dureeHebdo, moisNum, anneeNum);
+
       // Si pas de pointage, le créer
       if (!pointageMensuel) {
-        const heuresContrat = calculerHeuresContratMois(emp.dureeHebdo, moisNum, anneeNum);
-
         // Récupérer la banque d'heures du mois précédent
         let heuresBanqueEntree = 0;
         const moisPrecedent = moisNum === 1 ? 12 : moisNum - 1;
@@ -124,6 +108,17 @@ export const getPointagesMensuels = async (req: Request, res: Response) => {
             heuresContrat,
             heuresBanqueEntree
           },
+          include: {
+            journees: {
+              orderBy: { date: 'asc' }
+            }
+          }
+        });
+      } else if (pointageMensuel.heuresContrat !== heuresContrat) {
+        // Mettre à jour heuresContrat si la formule a changé
+        pointageMensuel = await prisma.pointageMensuel.update({
+          where: { id: pointageMensuel.id },
+          data: { heuresContrat },
           include: {
             journees: {
               orderBy: { date: 'asc' }
@@ -213,10 +208,10 @@ export const getPointageEmployee = async (req: Request, res: Response) => {
       }
     });
 
+    const heuresContrat = calculerHeuresContratMois(employee.dureeHebdo, moisNum, anneeNum);
+
     // Créer si n'existe pas
     if (!pointageMensuel) {
-      const heuresContrat = calculerHeuresContratMois(employee.dureeHebdo, moisNum, anneeNum);
-
       // Récupérer la banque d'heures du mois précédent
       let heuresBanqueEntree = 0;
       const moisPrecedent = moisNum === 1 ? 12 : moisNum - 1;
@@ -250,6 +245,17 @@ export const getPointageEmployee = async (req: Request, res: Response) => {
           }
         }
       });
+    } else if (pointageMensuel.heuresContrat !== heuresContrat) {
+      // Mettre à jour heuresContrat si la formule a changé
+      pointageMensuel = await prisma.pointageMensuel.update({
+        where: { id: pointageMensuel.id },
+        data: { heuresContrat },
+        include: {
+          journees: {
+            orderBy: { date: 'asc' }
+          }
+        }
+      });
     }
 
     res.json({
@@ -275,7 +281,7 @@ export const getPointageEmployee = async (req: Request, res: Response) => {
 // Cette API respecte les signatures existantes et ne modifie pas les heures signées.
 export const savePointageJournalier = async (req: Request, res: Response) => {
   try {
-    const { pointageMensuelId, date, heureDebut, heureFin, pauseMinutes, typeJournee, motifAbsence, notes } = req.body;
+    const { pointageMensuelId, date, heureDebut, heureFin, pauseMinutes, typeJournee, motifAbsence, motifAbsenceMatin, motifAbsenceApresmidi, notes } = req.body;
 
     const dateObj = new Date(date);
 
@@ -302,27 +308,44 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
     let heuresApresmidi: number;
     let heuresTravaillees: number;
 
-    if (existant) {
-      const matinSigne = !!existant.signatureMatin;
-      const apresmidiSigne = !!existant.signatureApresmidi;
+    // Gérer les demi-journées d'absence
+    const finalMotifAbsenceMatin = motifAbsenceMatin !== undefined ? motifAbsenceMatin : (existant?.motifAbsenceMatin || null);
+    const finalMotifAbsenceApresmidi = motifAbsenceApresmidi !== undefined ? motifAbsenceApresmidi : (existant?.motifAbsenceApresmidi || null);
 
-      // Respecter les heures signées
-      if (matinSigne && apresmidiSigne) {
-        // Les deux sont signés : ne rien modifier
-        return res.status(400).json({
-          success: false,
-          error: 'Les heures matin et après-midi sont déjà signées et ne peuvent pas être modifiées.'
-        });
+    if (existant) {
+      // On autorise la modification du type (travail→absence) même sur un créneau signé
+      heuresMatin = existant.heuresMatin;
+      heuresApresmidi = existant.heuresApresmidi;
+
+      // Si matin absence → heures matin = 0
+      if (finalMotifAbsenceMatin) {
+        heuresMatin = 0;
+      } else if (!existant.signatureMatin) {
+        heuresMatin = Math.min(heuresCalculees, 4);
       }
 
-      heuresMatin = matinSigne ? existant.heuresMatin : Math.min(heuresCalculees, 4);
-      heuresApresmidi = apresmidiSigne ? existant.heuresApresmidi : Math.max(0, heuresCalculees - (matinSigne ? existant.heuresMatin : Math.min(heuresCalculees, 4)));
+      // Si après-midi absence → heures après-midi = 0
+      if (finalMotifAbsenceApresmidi) {
+        heuresApresmidi = 0;
+      } else if (!existant.signatureApresmidi) {
+        heuresApresmidi = Math.max(0, heuresCalculees - (existant.signatureMatin ? existant.heuresMatin : Math.min(heuresCalculees, 4)));
+      }
+
       heuresTravaillees = heuresMatin + heuresApresmidi;
     } else {
-      // Nouveau pointage : répartir entre matin et après-midi
-      heuresMatin = Math.min(heuresCalculees, 4);
-      heuresApresmidi = Math.max(0, heuresCalculees - 4);
-      heuresTravaillees = heuresCalculees;
+      heuresMatin = finalMotifAbsenceMatin ? 0 : Math.min(heuresCalculees, 4);
+      heuresApresmidi = finalMotifAbsenceApresmidi ? 0 : Math.max(0, heuresCalculees - 4);
+      heuresTravaillees = heuresMatin + heuresApresmidi;
+    }
+
+    // Recalculer typeJournee : si les 2 motifs set → 'absence', sinon 'travail'
+    let finalTypeJournee = typeJournee || 'travail';
+    let finalMotifAbsence = motifAbsence;
+    if (finalMotifAbsenceMatin && finalMotifAbsenceApresmidi) {
+      finalTypeJournee = 'absence';
+      finalMotifAbsence = finalMotifAbsence || finalMotifAbsenceMatin;
+    } else if (!finalMotifAbsenceMatin && !finalMotifAbsenceApresmidi && typeJournee !== 'absence') {
+      finalTypeJournee = typeJournee || 'travail';
     }
 
     // Upsert le pointage journalier
@@ -342,8 +365,10 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
         heuresMatin,
         heuresApresmidi,
         heuresTravaillees,
-        typeJournee: typeJournee || 'travail',
-        motifAbsence,
+        typeJournee: finalTypeJournee,
+        motifAbsence: finalMotifAbsence,
+        motifAbsenceMatin: finalMotifAbsenceMatin,
+        motifAbsenceApresmidi: finalMotifAbsenceApresmidi,
         notes
       },
       update: {
@@ -353,8 +378,10 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
         heuresMatin,
         heuresApresmidi,
         heuresTravaillees,
-        typeJournee: typeJournee || 'travail',
-        motifAbsence,
+        typeJournee: finalTypeJournee,
+        motifAbsence: finalMotifAbsence,
+        motifAbsenceMatin: finalMotifAbsenceMatin,
+        motifAbsenceApresmidi: finalMotifAbsenceApresmidi,
         notes
       }
     });
@@ -372,10 +399,11 @@ export const savePointageJournalier = async (req: Request, res: Response) => {
 // Signer le pointage matin ou après-midi (nouvelle API)
 export const signerPointage = async (req: Request, res: Response) => {
   try {
-    const { pointageMensuelId, date, periode, heures, signature } = req.body;
+    const { pointageMensuelId, date, periode, heures, signature, motifAbsence } = req.body;
     // periode = 'matin' ou 'apresmidi'
     // heures = nombre d'heures pour cette période
     // signature = base64 de la signature
+    // motifAbsence = optionnel, si fourni → absence pour cette période
 
     if (!['matin', 'apresmidi'].includes(periode)) {
       return res.status(400).json({ success: false, error: 'Période invalide (matin ou apresmidi)' });
@@ -397,9 +425,14 @@ export const signerPointage = async (req: Request, res: Response) => {
 
     if (periode === 'matin') {
       // Signer le matin
-      const heuresMatin = parseFloat(heures) || 0;
+      const heuresMatin = motifAbsence ? 0 : (parseFloat(heures) || 0);
       const heuresApresmidi = pointageExistant?.heuresApresmidi || 0;
       const heuresTravaillees = heuresMatin + heuresApresmidi;
+      const motifAbsenceMatin = motifAbsence || null;
+      const motifAbsenceApresmidi = pointageExistant?.motifAbsenceApresmidi || null;
+
+      // Recalculer typeJournee
+      const typeJournee = (motifAbsenceMatin && motifAbsenceApresmidi) ? 'absence' : 'travail';
 
       const pointageJour = await prisma.pointageJournalier.upsert({
         where: {
@@ -416,13 +449,16 @@ export const signerPointage = async (req: Request, res: Response) => {
           heuresTravaillees: heuresMatin,
           signatureMatin: signature,
           signatureMatinAt: now,
-          typeJournee: 'travail'
+          motifAbsenceMatin,
+          typeJournee: motifAbsenceMatin ? typeJournee : 'travail'
         },
         update: {
           heuresMatin,
           heuresTravaillees,
           signatureMatin: signature,
-          signatureMatinAt: now
+          signatureMatinAt: now,
+          motifAbsenceMatin,
+          typeJournee
         }
       });
 
@@ -431,9 +467,14 @@ export const signerPointage = async (req: Request, res: Response) => {
 
     } else {
       // Signer l'après-midi
-      const heuresApresmidi = parseFloat(heures) || 0;
+      const heuresApresmidi = motifAbsence ? 0 : (parseFloat(heures) || 0);
       const heuresMatin = pointageExistant?.heuresMatin || 0;
       const heuresTravaillees = heuresMatin + heuresApresmidi;
+      const motifAbsenceApresmidi = motifAbsence || null;
+      const motifAbsenceMatin = pointageExistant?.motifAbsenceMatin || null;
+
+      // Recalculer typeJournee
+      const typeJournee = (motifAbsenceMatin && motifAbsenceApresmidi) ? 'absence' : 'travail';
 
       const pointageJour = await prisma.pointageJournalier.upsert({
         where: {
@@ -450,13 +491,16 @@ export const signerPointage = async (req: Request, res: Response) => {
           heuresTravaillees: heuresApresmidi,
           signatureApresmidi: signature,
           signatureApresmidiAt: now,
-          typeJournee: 'travail'
+          motifAbsenceApresmidi,
+          typeJournee: motifAbsenceApresmidi ? typeJournee : 'travail'
         },
         update: {
           heuresApresmidi,
           heuresTravaillees,
           signatureApresmidi: signature,
-          signatureApresmidiAt: now
+          signatureApresmidiAt: now,
+          motifAbsenceApresmidi,
+          typeJournee
         }
       });
 
@@ -539,6 +583,21 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
           motifAbsence = existant.motifAbsence;
         }
 
+        // Demi-journée d'absence
+        const motifAbsenceMatin = p.motifAbsenceMatin !== undefined ? p.motifAbsenceMatin : existant.motifAbsenceMatin;
+        const motifAbsenceApresmidi = p.motifAbsenceApresmidi !== undefined ? p.motifAbsenceApresmidi : existant.motifAbsenceApresmidi;
+
+        // Si demi-journée absence → mettre heures à 0 pour cette période
+        if (motifAbsenceMatin) heuresMatin = 0;
+        if (motifAbsenceApresmidi) heuresApresmidi = 0;
+        const finalHeuresTravaillees = heuresMatin + heuresApresmidi;
+
+        // Recalculer typeJournee si demi-journées set
+        if (motifAbsenceMatin && motifAbsenceApresmidi) {
+          typeJournee = 'absence';
+          motifAbsence = motifAbsence || motifAbsenceMatin;
+        }
+
         await prisma.pointageJournalier.update({
           where: {
             pointageMensuelId_date: {
@@ -549,9 +608,11 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
           data: {
             heuresMatin,
             heuresApresmidi,
-            heuresTravaillees,
+            heuresTravaillees: finalHeuresTravaillees,
             typeJournee,
-            motifAbsence
+            motifAbsence,
+            motifAbsenceMatin: motifAbsenceMatin || null,
+            motifAbsenceApresmidi: motifAbsenceApresmidi || null
           }
         });
       } else {
@@ -568,8 +629,20 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
         const heuresTravaillees = heuresMatin + heuresApresmidi;
 
         // Déterminer typeJournee et motifAbsence
-        const typeJournee = p.typeJournee || (heuresTravaillees > 0 ? 'travail' : 'travail');
-        const motifAbsence = p.motifAbsence || null;
+        const motifAbsenceMatin = p.motifAbsenceMatin || null;
+        const motifAbsenceApresmidi = p.motifAbsenceApresmidi || null;
+
+        // Si demi-journée absence → mettre heures à 0 pour cette période
+        if (motifAbsenceMatin) heuresMatin = 0;
+        if (motifAbsenceApresmidi) heuresApresmidi = 0;
+        const finalHeuresTravaillees = heuresMatin + heuresApresmidi;
+
+        let typeJournee = p.typeJournee || (finalHeuresTravaillees > 0 ? 'travail' : 'travail');
+        let motifAbsence = p.motifAbsence || null;
+        if (motifAbsenceMatin && motifAbsenceApresmidi) {
+          typeJournee = 'absence';
+          motifAbsence = motifAbsence || motifAbsenceMatin;
+        }
 
         await prisma.pointageJournalier.create({
           data: {
@@ -577,9 +650,11 @@ export const savePointagesMultiples = async (req: Request, res: Response) => {
             date: dateObj,
             heuresMatin,
             heuresApresmidi,
-            heuresTravaillees,
+            heuresTravaillees: finalHeuresTravaillees,
             typeJournee,
-            motifAbsence
+            motifAbsence,
+            motifAbsenceMatin,
+            motifAbsenceApresmidi
           }
         });
       }
