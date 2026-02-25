@@ -6066,8 +6066,8 @@ export default function RHInsertionApp() {
       return { emp, pointage, counts, details, absenceDays, heuresDeclarees, totalAbsences, taux, banque, nbJoursOuvres };
     };
 
-    // Agrégation pour les KPI
-    const allDecl = declData?.pointages?.map(computeEmployeeDecl) || [];
+    // Agrégation pour les KPI (exclure salariés non pointés : 0h et aucune absence)
+    const allDecl = (declData?.pointages?.map(computeEmployeeDecl) || []).filter((d: any) => d.pointage.heuresPointees > 0 || d.totalAbsences > 0);
     const nbSalaries = allDecl.length;
     const totalHeuresContrat = Math.round(HEURES_CONTRAT_MENSUEL * nbSalaries * 100) / 100;
     const totalHeuresPointees = Math.round(allDecl.reduce((s: number, d: any) => s + (d.pointage.heuresPointees || 0), 0) * 100) / 100;
